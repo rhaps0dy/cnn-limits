@@ -4,6 +4,12 @@
 \usepackage{amssymb,amsthm}
 \usepackage{adria-fancyref}
 
+% Remove for final rendering
+\usepackage{geometry}
+\geometry{paperwidth=\dimexpr\textwidth+3mm,
+  paperheight=\dimexpr\textheight+3mm,
+  margin=1.5mm}
+
 % Optional math commands from https://github.com/goodfeli/dlbook_notation.
 \input{math_commands.tex}
 
@@ -12,6 +18,8 @@
 \newcommand{\cb}{\bracket{\{}{\}}}
 \newcommand{\sqb}{\bracket{[}{]}}
 \newcommand{\abs}{\bracket{|}{|}}
+\newcommand{\ceil}{\bracket{\lceil}{\rceil}}
+\newcommand{\floor}{\bracket{\lfloor}{\rfloor}}
 
 \newcommand{\ssup}[1]{^\bra{#1}}
 \newcommand{\GP}[1]{{\text{GP}\bra{#1}}}
@@ -28,6 +36,10 @@
 \usepackage{import}
 \usepackage{graphicx}
 
+% Theorem environments
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{corollary}{Corollary}[theorem]
+\newtheorem{lemma}[theorem]{Lemma}
 
 \title{The Baby and the Bathwater: 
 Desirable Properties in Infinite Limits of CNNs}
@@ -89,7 +101,7 @@ vector.
 
 \section{Convolutional GPs}
 
-In convolutional GPs \cite{markvdw2017convolutional} the prior over functions is
+In convolutional GPs \citep{markvdw2017convolutional} the prior over functions is
 \begin{equation}
   f(\mX) = \sum_{p=1}^P u_p g(\mX^\sqb{p}) \text{ with } g \sim \GP{0, k(\vx^\sqb{p}, \vx^\sqb{p'})}.
 \end{equation}
@@ -111,21 +123,28 @@ network
   \sum_{j=1}^{C\ssup{\ell}} \ \sum_{\nu\in\patch{\mu}} \etW\ssup{\ell+1}_{i,j,\mu,\nu}\, \emZ\ssup{\ell}_{j,\nu}(\mX).
   \label{eq:convgp-network-recursive} \\
   \emA_{i,\mu}\ssup{L+1}(\mX) &\eqdef \evb_i\ssup{L+1} +
-                                   \sum_{j=1}^{C\ssup{L}} \ \sum_{\nu=1}^{D\ssup{L}} u_\nu \etW\ssup{L+1}_{i,j,\mu,\nu}\, \emZ\ssup{L}_{j,\nu}(\mX).
+                                   \sum_{j=1}^{C\ssup{L}} \ \sum_{\nu=1}^{D\ssup{L}} u_\nu \etW\ssup{L+1}_{i,j,\mu}\, \emZ\ssup{L}_{j,\nu}(\mX).
                                    \label{eq:convgp-network-final}
 \end{align}
 
-Sadly when we take the covariance of \fref{eq:convgp-network-final}, we find
-(remember $\mu=1$ always because the output is a scalar)
-that $\E\sqb{u_\nu\etW\ssup{L+1}_{i,j,\mu,\nu}\; u_{\nu'}\etW\ssup{L+1}_{i',j',\mu,\nu'}} =
-\frac{1}{C\ssup{L}}\delta_{ii'}\delta_{jj'}\delta_{\nu\nu'}u_\nu^2$.
+Note that the tensors $\etW$ in the last layer only have 3 dimensions. Remember that
+$\mu=1$ always, because the output is a scalar for each channel,
+$\E\sqb{u_\nu\etW\ssup{L+1}_{i,j,\mu}\! u_{\nu'}\etW\ssup{L+1}_{i',j',\mu}} =
+\frac{1}{C\ssup{L}}\delta_{ii'}\delta_{jj'}\evu_\nu \evu_{\nu'}$.
 
-To  obtain the desired
-$\frac{1}{C\ssup{L}}\delta_{ii'}\delta_{jj'}u_\nu u_{\nu'}$, we need to make the
-covariance matrix of $\tW\ssup{L+1}_{i,j,\mu, :}$ be $\delta_{ii'}\delta_{jj'}\vu\vu^\tp$
-(recall \fref{fig:conv-as-linear}). This outer product is positive definite but
-singular, so the Gaussian is degenerate. But that's fine because we sum it up in
-the end.
+But this presents the problem of computing
+$\E\sqb{\emZ\ssup{L}_{i,\mu}(\mX)\, \emZ\ssup{L}_{i,\mu'}(\mX)}$ for $\mu\neq
+\mu'$.
+
+\begin{equation}
+\begin{aligned}
+  \E\sqb{\emA\ssup{L}_{i,\mu}(\mX)\, \emA\ssup{L}_{i,\mu'}(\mX')} &= \sigma_\text{b}^2
+  + \sum_{j=1}^{C\ssup{L-1}} \sum_{\nu\in \patch{\mu}}\sum_{\nu'\in \patch{\mu'}} \E\sqb{\etW_{i,j,\mu,\nu} \etW_{i,j,\mu',\nu'}}\\
+  &\E\sqb{Z\ssup{L-1}_{j,\nu}(\mX)Z\ssup{L-1}_{j,\nu'}(\mX')} \\
+  &= \sigma_\text{b}^2 + \sum_{\nu=1}^P \E\sqb{Z\ssup{L-1}_{j,p_\mu(\nu)}(\mX), Z\ssup{L-1}_{j,p_{\mu'}(\nu)}(\mX')}
+\end{aligned}
+\end{equation}
+
 
 
 \begin{figure}%[ht]
@@ -135,7 +154,80 @@ the end.
     The $\mu$th row of $\emW\ssup{0}_{i,j}$ corresponds to applying the filter to the
     $\mu$th convolutional patch of the channel $\vx_j$. \label{fig:conv-as-linear}}
 \end{figure}
+
 \section{TICK-GPs}
+In TICK-GPs \citep{dutordoir2019tick}, which are a generalization of Conv-GPs, the kernel is given by
+\begin{equation}
+\Cov\sqb{f(\vx), f(\vx')} = \sum_{p=1}^P\sum_{p'=1}^P k\bra{\text{loc}\bra{p}, \text{loc}\bra{p'}} k(\vx^\sqb{p}, \vx^\sqb{p'}).
+\end{equation}
+
+We construct the same network as before, but the last layer is
+\begin{align}
+\emA_{i,\mu}\ssup{L+1}(\mX) &\eqdef \evb_i\ssup{L+1} +
+\sum_{j=1}^{C\ssup{L}} \ \sum_{\nu=1}^{D\ssup{L}} \etW\ssup{L+1}_{i,j,\mu,\nu}\, \emZ\ssup{L}_{j,\nu}(\mX).
+\label{eq:tickgp-network-final}
+\end{align}
+where the weights are drawn such that their covariance is
+$\Cov\sqb{\etW\ssup{L+1}_{i,j,\mu,\nu},\, \etW\ssup{L+1}_{i,j,\mu,\nu'}} =
+k(\text{loc}(\nu), \text{loc}(\nu'))$. Note that this is a generalization of
+Conv-GPs, if $k(\text{loc}(\nu), \text{loc}(\nu')) = \evu_\nu \evu_{\nu'}$.
+
+
+Define the patch function $p\ssup{\ell}_\mu: [0, F\ssup{\ell}_\text{w}F\ssup{\ell}_\text{h}) \cap \mathbb{N} \to [0,
+I\ssup{\ell}_\text{w}I\ssup{\ell}_\text{h}) \cap \mathbb{N}$. A patch function $p\ssup{\ell}_\mu(\lambda)$ takes the
+$\lambda$th element of the $\mu$th patch into the image space of the activation
+below. For 2D convolutions, it is defined as
+\begin{equation}
+  p\ssup{\ell}_\mu(\lambda) = \bra{\lambda \mod F\ssup{\ell}_\text{w}} + S\ssup{\ell}_\text{w}\bra{\mu\mod I\ssup{\ell+1}_\text{w}}
+  + I\ssup{\ell}_\text{w}\bra{\frac{\lambda}{F\ssup{\ell}_\text{w}} + S\ssup{\ell}_\text{h} \frac{\mu}{I\ssup{\ell+1}_\text{w}}}.
+\end{equation}
+
+\begin{lemma}
+  Consider a layer $\ell$ and two patches $\mu$, $\mu'$. For all $i$, the
+  covariance between the corresponding elements $p\ssup{\ell}_\mu(i)$ and
+  $p\ssup{\ell}_{\mu'}(i)$ is in the same diagonal of the covariance matrix of
+  the filter below. That is, $p\ssup{\ell}_\mu(i) - p\ssup{\ell}_{\mu'}(i) = d$. 
+\end{lemma}
+\begin{proof}
+  \begin{align*}
+p\ssup{\ell}_\mu(i) - p\ssup{\ell}_{\mu'}(i) &= 
+\bra{\lambda \mod F\ssup{\ell}_\text{w}} + S\ssup{\ell}_\text{w}\bra{\mu\mod I\ssup{\ell+1}_\text{w}} + I\ssup{\ell}_\text{w}\bra{\frac{\lambda}{F\ssup{\ell}_\text{w}} + S\ssup{\ell}_\text{h} \frac{\mu}{I\ssup{\ell+1}_\text{w}}} \\
+                                               &\hspace{1em}- 
+\bra{\lambda \mod F\ssup{\ell}_\text{w}} - S\ssup{\ell}_\text{w}\bra{\mu'\mod I\ssup{\ell+1}_\text{w}} - I\ssup{\ell}_\text{w}\bra{\frac{\lambda}{F\ssup{\ell}_\text{w}} + S\ssup{\ell}_\text{h} \frac{\mu'}{I\ssup{\ell+1}_\text{w}}} \\
+                                             &=  S\ssup{\ell}_\text{w}\bra{\bra{\mu\mod I\ssup{\ell+1}_\text{w}} - \bra{\mu'\mod I\ssup{\ell+1}_\text{w}}} + 
+                                               I\ssup{\ell}_\text{w}\bra{S\ssup{\ell}_\text{h} \frac{\mu}{I\ssup{\ell+1}_\text{w}} - S\ssup{\ell}_\text{h} \frac{\mu'}{I\ssup{\ell+1}_\text{w}}}.
+    \end{align*}
+\end{proof}
+
+
+\begin{lemma}
+  Consider $\ell$. Consider $\nu$, $\nu'$ such that
+  $\nu=p\ssup{\ell}_{\mu}(i)$ and $\nu'=p\ssup{\ell}_{\mu'}(\lambda)$ for some
+  $\lambda$, $\mu$ and $\mu'$. Then, for all $\lambda$, the pairs
+  $p\ssup{\ell-1}_{p\ssup{\ell}_\mu(\lambda)}$ and
+  $p\ssup{\ell-1}_{p\ssup{\ell}_{\mu'}(\lambda)}$ are in the same diagonal.
+\end{lemma}
+\begin{proof}
+  Notice that
+  \begin{align}
+    p\ssup{\ell}_\mu(i) \mod I\ssup{\ell}_\text{w} &= \bra{\lambda \mod F\ssup{\ell}_\text{w}} + S\ssup{\ell}_\text{w}\bra{\mu\mod I\ssup{\ell+1}_\text{w}} \\
+    \frac{p\ssup{\ell}_\mu(i)}{I\ssup{\ell}_\text{w}} &= \frac{\lambda}{F\ssup{\ell}_\text{w}} + S\ssup{\ell}_\text{h} \frac{\mu}{I\ssup{\ell+1}_\text{w}}.
+  \end{align}
+  This implies we can cancel out the $\lambda$ terms and write
+{
+  \newcommand{\p}[2]{{p\ssup{\ell{#1}}_{\mu{#2}}(\lambda)}}
+  \newcommand{\Iw}[1]{{I\ssup{\ell{#1}}_\text{w}}}
+  \newcommand{\Ih}[1]{{I\ssup{\ell{#1}}_\text{h}}}
+  \newcommand{\Sw}[1]{{S\ssup{\ell{#1}}_\text{w}}}
+  \newcommand{\Sh}[1]{{S\ssup{\ell{#1}}_\text{h}}}
+  \begin{align*}
+    p\ssup{\ell-1}_\p{}{} -   p\ssup{\ell-1}_{\p{}{}} &=
+\Sw{-1}\Sw{} \bra{\bra{\mu \mod \Iw{+1}} - \bra{\mu \mod \Iw{+1}}} \\
+&+ \Iw{-1}\Sh{-1} \bra{\floor{\frac{\p{}{}}{\Iw{}}} - \floor{\frac{\p{}{'}}{\Iw{}}}}
+  \end{align*}
+  }
+  TO BE FIXED but the lemma is true.
+\end{proof}
 
 \bibliography{iclr2020_conference}
 \bibliographystyle{iclr2020_conference}
