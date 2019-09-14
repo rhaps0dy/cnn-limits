@@ -79,4 +79,35 @@ theorem\fancyrefdefaultspacing#1 on page~#2%
 Theorem\fancyrefdefaultspacing#1 on page~#2%
 }
 
+% Definition (def:)
+\newcommand*{\fancyrefdeflabelprefix}{def}
+\frefformat{plain}{\fancyrefdeflabelprefix}{%
+  definition\fancyrefdefaultspacing#1%
+}
+\Frefformat{plain}{\fancyrefdeflabelprefix}{%
+  Definition\fancyrefdefaultspacing#1%
+}
+\frefformat{vario}{\fancyrefdeflabelprefix}{%
+  definition\fancyrefdefaultspacing#1 on page~#2%
+}
+\Frefformat{vario}{\fancyrefdeflabelprefix}{%
+  Definition\fancyrefdefaultspacing#1 on page~#2%
+}
+
+% Lemma (lemma:)
+\newcommand*{\fancyreflemmalabelprefix}{lemma}
+\frefformat{plain}{\fancyreflemmalabelprefix}{%
+  lemma\fancyrefdefaultspacing#1%
+}
+\Frefformat{plain}{\fancyreflemmalabelprefix}{%
+  Lemma\fancyrefdefaultspacing#1%
+}
+\frefformat{vario}{\fancyreflemmalabelprefix}{%
+  lemma\fancyrefdefaultspacing#1 on page~#2%
+}
+\Frefformat{vario}{\fancyreflemmalabelprefix}{%
+  Lemma\fancyrefdefaultspacing#1 on page~#2%
+}
+
+
 \endinput
