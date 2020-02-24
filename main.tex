@@ -176,7 +176,7 @@ constant weights ${u_1, \dots, u_{I\ssup{L}}}$, we can define a network
 
 Note that the tensors $\etW$ in the last layer only have 3 dimensions. Usually
 $\mu=1$, because the last layer is fully connected, that is, the output is a
-scalar for each channel. The covariance of the weights inhe last channel is
+scalar for each channel. The covariance of the weights in the last channel is
 $\E\sqb{u_\nu\etW\ssup{L+1}_{i,j,\mu}\ u_{\nu'}\etW\ssup{L+1}_{i',j',\mu}} =
 \frac{1}{C\ssup{L}}\delta_{ii'}\delta_{jj'}\evu_\nu \evu_{\nu'}$.
 
@@ -188,7 +188,7 @@ $\E\sqb{\emZ\ssup{L}_{i,\mu}(\mX)\, \emZ\ssup{L}_{i,\mu'}(\mX)}$ for $\mu\neq
 \begin{aligned}
   \E\sqb{\emA\ssup{L}_{i,\mu}(\mX)\, \emA\ssup{L}_{i,\mu'}(\mX')} &= \sigma_\text{b}^2
   + \sum_{j=1}^{C\ssup{L-1}} \sum_{\nu\in \patch{\ell}{\mu}}\sum_{\nu'\in \patch{\ell}{\mu'}} \E\sqb{\etW_{i,j,\mu,\nu} \etW_{i,j,\mu',\nu'}}\\
-  &\E\sqb{Z\ssup{L-1}_{j,\nu}(\mX)Z\ssup{L-1}_{j,\nu'}(\mX')} \\
+  &\hspace{4em}\E\sqb{Z\ssup{L-1}_{j,\nu}(\mX)Z\ssup{L-1}_{j,\nu'}(\mX')} \\
   &= \sigma_\text{b}^2 + \sum_{\nu=1}^P \E\sqb{Z\ssup{L-1}_{j,p_\mu(\nu)}(\mX), Z\ssup{L-1}_{j,p_{\mu'}(\nu)}(\mX')}
 \end{aligned}
 \end{equation}
