@@ -36,10 +36,11 @@ def _config():
     num_inducing = 1000
     patch_size = (5, 5)
     lr_init = 0.01
-    lr_time_decay = -0.2
+    lr_time_decay = 0.
+    lr_minimum = 0.0001
     loc_lengthscale_init = 3.
 
-    epochs = 100
+    epochs = 10000
     learn_inducing_locations = True
     batch_size = 128
 
@@ -88,9 +89,9 @@ def init_inducing_patches(train_set, N, patch_size):
 
 class ConvDomainVStrat(nigp.variational.TrueWhitenedVariationalStrategy):
     def __init__(self, model, image_size, patch_size, inducing_patches,
-                 variational_distribution, learn_inducing_locations=False):
+                 variational_distribution, learn_inducing_locations):
         super().__init__(model, inducing_patches, variational_distribution,
-                         learn_inducing_locations=False)
+                         learn_inducing_locations=learn_inducing_locations)
         self.patch_size = patch_size
         self.image_size = image_size
 
@@ -173,7 +174,7 @@ class ConvDomainVStrat(nigp.variational.TrueWhitenedVariationalStrategy):
 
 
 class ConvSVGP(gpytorch.models.ApproximateGP):
-    def __init__(self, image_size, num_classes, patch_size, inducing_patches, learn_inducing_locations):
+    def __init__(self, image_size, num_classes, patch_size, inducing_patches, learn_inducing_locations, loc_lengthscale_init):
         batch_shape = torch.Size([num_classes])
         v_dist = gpytorch.variational.CholeskyVariationalDistribution(
             inducing_patches.size(-2), batch_shape=batch_shape)
@@ -187,7 +188,7 @@ class ConvSVGP(gpytorch.models.ApproximateGP):
         self.mean_module = gpytorch.means.ZeroMean()
         self.covar_module_loc = gpytorch.kernels.ScaleKernel(
             gpytorch.kernels.MaternKernel(
-                nu=3/2, batch_shape=kernel_batch_shape, ard_num_dims=2, lengthscale=3.),
+                nu=3/2, batch_shape=kernel_batch_shape, ard_num_dims=2, lengthscale=loc_lengthscale_init),
             batch_shape=kernel_batch_shape)
         self.covar_module_f = gpytorch.kernels.RBFKernel(
             ard_num_dims=patch_size.numel(), batch_shape=kernel_batch_shape)
@@ -208,7 +209,7 @@ class ConvSVGP(gpytorch.models.ApproximateGP):
 @experiment.automain
 def main(patch_size, num_inducing, use_cuda, lr_init, epochs,
          learn_inducing_locations, model_type, load_model_from, batch_size,
-         lr_time_decay):
+         lr_time_decay, lr_minimum, loc_lengthscale_init):
     train_set, test_set = dataset()
     num_classes = len(train_set.classes)
 
@@ -224,7 +225,8 @@ def main(patch_size, num_inducing, use_cuda, lr_init, epochs,
                          num_classes=num_classes,
                          patch_size=patch_size,
                          inducing_patches=inducing_patches,
-                         learn_inducing_locations=learn_inducing_locations)
+                         learn_inducing_locations=learn_inducing_locations,
+                         loc_lengthscale_init=loc_lengthscale_init)
     elif model_type == "rbf":
         idx = torch.randint(low=0, high=len(train_set), size=(num_inducing,))
         inducing_points = torch.stack([train_set[i][0].view(-1) for i in idx], dim=0)
@@ -267,7 +269,7 @@ def main(patch_size, num_inducing, use_cuda, lr_init, epochs,
         likelihood.train()
         for step, (train_x, train_y) in zip(next_range, print_timings(loader)):
             for g in optimizer.param_groups:
-                g['lr'] = lr_init * (step**lr_time_decay)  # Amend learning rate as 1/t
+                g['lr'] = max(lr_minimum, lr_init * (step**lr_time_decay))  # Amend learning rate as 1/t
 
             if use_cuda:
                 train_x = train_x.cuda()
@@ -290,7 +292,14 @@ def main(patch_size, num_inducing, use_cuda, lr_init, epochs,
                            f"model_and_lik_{epoch:03d}.pkl.gz")
 
         model.eval()
-        likelihood.eval()
+        # Keep the likelihood at training: since we're only taking the marginal
+        # log-probabilities, this will sample from an independent Gaussian and
+        # be cheaper.
+        #
+        # In our case it is also incorrect to sample from the full Gaussian,
+        # since we don't calculate it properly (because it requires a double
+        # sum over patches).
+        likelihood.train()
 
         lpp = 0.
         acc_top1 = 0
@@ -317,10 +326,10 @@ def main(patch_size, num_inducing, use_cuda, lr_init, epochs,
         acc_top2 = (acc_top1 + acc_top2)/len(test_set)
         acc_top1 = acc_top1/len(test_set)
 
-        tbx.add_scalar("test/lpp", lpp, step)
-        tbx.add_scalar("test/acc_top1", acc_top1, step)
-        tbx.add_scalar("test/acc_top2", acc_top2, step)
-        tbx.add_scalar("test/acc_top3", acc_top3, step)
+        tbx.add_scalar("test/nlpp", -lpp/len(test_set), step)
+        tbx.add_scalar("test/err_top1", (1-acc_top1)*100, step)
+        tbx.add_scalar("test/err_top2", (1-acc_top2)*100, step)
+        tbx.add_scalar("test/err_top3", (1-acc_top3)*100, step)
 
 
 
