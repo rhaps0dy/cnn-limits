@@ -52,6 +52,11 @@ def _config():
 
     load_model_from = None
 
+    # L = R * 299/1000 + G * 587/1000 + B * 114/1000
+
+
+    # By default use 16 lengthscale for the Matern 3/2
+    # Calculate kernel for every few layers
 
 
 @experiment.capture
