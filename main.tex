@@ -1,6 +1,7 @@
 \documentclass{article} % For LaTeX2e
 \usepackage{iclr2020_conference,times}
-
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
 \usepackage{amssymb,amsthm}
 \usepackage{adria-fancyref}
 
@@ -9,6 +10,9 @@
 \geometry{paperwidth=\dimexpr\textwidth+3mm,
   paperheight=\dimexpr\textheight+3mm,
   margin=1.5mm}
+  
+ \newcommand{\marknote}[1]{{\color{red}#1}}
+ \newcommand{\adrianote}[1]{{\color{blue}#1}}
 
 % Optional math commands from https://github.com/goodfeli/dlbook_notation.
 \input{math_commands.tex}
@@ -130,6 +134,27 @@ $\chan{0} = 3$ for RGB), flattened to form a vector. Thus, for a layer $\ell$, $
 For a layer $\ell$, the patches taken from it are of height $\Fhl{}$ and width
 $\Fwl{}$, with total number of elements $F\ssup{\ell} \eqdef \Fhl{}\Fwl{}$.
 
+\section{Overview \& Motivation}
+Our core contribution to modelling is the idea of \emph{weight correlations} in the prior.
+\begin{itemize}
+    \item This leads to a more general way to retain correlations between outputs from different parts of the image input.
+    \item We get a more general infinite-limit kernel than than previously considered. The closest papers are \citet{arora2019exact,li2019enhanced,shankar2020} who consider average pooling. We can interpolate between average pooling and no correlation.
+    \item Previous work argues that taking the infinite limit destroys patch correlations. \citet{arora2019exact,li2019enhanced,shankar2020} need to change the architecture to regain the correlations. We show that the correlations can be regained by correlations in the weights, even while taking the infinite limit. Can this argue for different priors in the finite case?
+    \item We show theoretical relations to other convolutional GP constructions \citep{markvdw2017convolutional,dutordoir2019tick}.
+    \item We can look at correlations in intermediate layers. Mean pooling can conceptually be done in intermediate layers and \adrianote{has been done by \citet{shankar2020} in the infinite-width setting.}\footnote{There is some old-ish work in computer vision showing that max-pooling in intermediate layers (not mean-) can be substituted for strided convolutions \citep{springenberg14allconv}. Additionally, the current state of the art in ImageNet and CIFAR100  (without extra training data, using established data augmentation schemes) is obtained by EfficientNet \citep{tan19efficientnet}, a variant of ResNet, which only has mean-pooling at the end.} We provide a better justification too \adrianote{are you talking about the convolutional filters being smooth a posteriori here?}.
+\end{itemize}
+The interestingness of weight correlations depends on how much they improve the overall performance of the kernel.
+
+Another possible strand of enquiry is to improve the \emph{computational} aspects of NN limit kernels through inducing variables. Nobody has looked into this yet.
+\begin{itemize}
+    \item Inducing patch approximation.
+    \item Data augmentations (straightforward augmentation of data) or invariance approach.
+\end{itemize}
+This will likely give performance a significant improvement.
+
+\section{Possible experiments}
+
+
 \section{Convolutional GPs}
 
 In convolutional GPs \citep{markvdw2017convolutional} the prior over functions is
@@ -211,7 +236,37 @@ $\Cov\sqb{\etW\ssup{L+1}_{i,j,\mu,\nu},\, \etW\ssup{L+1}_{i,j,\mu,\nu'}} =
 k(\text{loc}(\nu), \text{loc}(\nu'))$. Note that this is a generalization of
 Conv-GPs, if $k(\text{loc}(\nu), \text{loc}(\nu')) = \evu_\nu \evu_{\nu'}$.
 
-\appendix{Proofs}
+\subsection{Kernel for correlated weights}
+
+The output of the network usually has only one spatial location, so we only need to care about its covariance between two inputs. Assuming the mean function is $\E\sqb{\emA_{i,\mu}\ssup{L+1}(\mX)} = 0$, we have that $k(\mX, \mX') = \E\sqb{\emA_{i,\mu}\ssup{L+1}(\mX)\emA_{i,\mu}\ssup{L+1}(\mX')}$. For the TICK-GP this is
+\begin{align}
+\E\sqb{\emA_{i,\mu}\ssup{L+1}(\mX)\emA_{i,\mu}\ssup{L+1}(\mX')} &=
+\sum_{\nu=1}^{I^L} \sum_{\nu'=1}^{I^L} \sum_{j=1}^{C^L} \sum_{j'=1}^{C^L} \E\sqb{\etW\ssup{L+1}_{i,j,\mu,\nu}\etW\ssup{L+1}_{i,j',\mu,\nu'}}
+\E\sqb{\emZ\ssup{L}_{j,\nu}(\mX) \emZ\ssup{L}_{j',\nu'}(\mX')} \\
+&= \sum_{\nu=1}^{I^L} \sum_{\nu'=1}^{I^L}k(\text{loc}(\nu), \text{loc}(\nu')) V_\phi\bra{\emA\ssup{L}_{\cdot,\nu}(\mX), \emA\ssup{L}_{\cdot,\nu'}(\mX')}.
+\end{align}
+
+We can remove the channel double sum $(j, j')$ because the channels are independent, the spatial correlation between weights is given by the location kernel, and the $V_\phi$ functional that takes in a bivariate Gaussian and passes it through an elementwise nonlinearity. We abuse notation here and write it as a function of the random variable. To know these bivariate Gaussians, we need to know the covariances between activations $\emA_{\cdot,\mu}\ssup{L}(\mX)$, with different channels $\mu$ and $\mu'$.
+
+\begin{align}
+\E\sqb{\emA_{\cdot,\mu}\ssup{L}(\mX)\emA_{\cdot,\mu'}\ssup{L}(\mX')} &=
+\sum_{\nu \in p_\mu^{L-1}} \sum_{\nu'\in p_{\mu'}^{L-1}} \E\sqb{\etW\ssup{L}_{\cdot,\cdot,\mu,\nu}\etW\ssup{L}_{\cdot,\cdot,\mu',\nu'}} V_\phi\bra{\emA\ssup{L-1}_{\cdot,\nu}(\mX), \emA\ssup{L-1}_{\cdot,\nu'}(\mX')}.
+\end{align}
+
+In the expression above the tensors $\tW$ are the convolutional filters $\tU$ laid out in ``rows''. Writing the above as a more convenient convolution expression, with a patch of size $F^{L-1}$:
+\begin{align}
+\E\sqb{\emA_{\cdot,\mu}\ssup{L}(\mX)\emA_{\cdot,\mu'}\ssup{L}(\mX')} &=
+\sum_{\lambda=1}^{F^{L-1}} \sum_{\lambda'=1}^{F^{L-1}}
+\E\sqb{\etU\ssup{L}_{\cdot,\cdot,\lambda}\etU\ssup{L}_{\cdot,\cdot,\lambda'}}
+V_\phi\bra{\emA\ssup{L-1}_{\cdot,p_{\mu}^{L-1}(\lambda)}(\mX), \emA\ssup{L-1}_{\cdot,p_{\mu'}^{L-1}(\lambda')}(\mX')}.
+\end{align}
+
+From here it can be seen that, if the elements of $\tU$ are independent, the double sum above can be reduced to a single sum over subsets of the ``diagonals'' of the covariance matrix.
+
+It doesn't seem like a Nyström approximation can save you computation here, since you still have to sum over the entries of the covariance matrix even if it is low rank.
+\appendix
+
+\section{Proofs}
 
 \begin{lemma}[Patch covariance depends on diagonals]
   Consider a layer $\ell$ and two patches $\nu$, $\nu'$. For all patch elements $\lambda$, the covariance between the corresponding elements
@@ -292,5 +347,6 @@ That is, the elements of one diagonal of the
 
 \bibliography{iclr2020_conference}
 \bibliographystyle{iclr2020_conference}
+
 
 \end{document}
