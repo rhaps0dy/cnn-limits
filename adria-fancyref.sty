@@ -1,0 +1,113 @@
+\PassOptionsToPackage{plain}{fancyref}
+\RequirePackage{fancyref}
+
+% Algorithm (alg:)
+\newcommand*{\fancyrefalglabelprefix}{alg}
+\frefformat{plain}{\fancyrefalglabelprefix}{%
+algorithm\fancyrefdefaultspacing#1%
+}
+\Frefformat{plain}{\fancyrefalglabelprefix}{%
+Algorithm\fancyrefdefaultspacing#1%
+}
+\frefformat{vario}{\fancyrefalglabelprefix}{%
+algorithm\fancyrefdefaultspacing#1 on page~#2%
+}
+\Frefformat{vario}{\fancyrefalglabelprefix}{%
+Algorithm\fancyrefdefaultspacing#1 on page~#2%
+}
+
+% Appendix (ap:)
+\newcommand*{\fancyrefaplabelprefix}{ap}
+\frefformat{plain}{\fancyrefaplabelprefix}{%
+appendix\fancyrefdefaultspacing#1%
+}
+\Frefformat{plain}{\fancyrefaplabelprefix}{%
+Appendix\fancyrefdefaultspacing#1%
+}
+\frefformat{vario}{\fancyrefaplabelprefix}{%
+appendix\fancyrefdefaultspacing#1 on page~#2%
+}
+\Frefformat{vario}{\fancyrefaplabelprefix}{%
+Appendix\fancyrefdefaultspacing#1 on page~#2%
+}
+
+%Chapter (ch:)
+\newcommand*{\fancyrefchlabelprefix}{ch}
+\frefformat{plain}{\fancyrefchlabelprefix}{%
+chapter\fancyrefdefaultspacing#1%
+}
+\Frefformat{plain}{\fancyrefchlabelprefix}{%
+Chapter\fancyrefdefaultspacing#1%
+}
+\frefformat{vario}{\fancyrefchlabelprefix}{%
+chapter\fancyrefdefaultspacing#1 on page~#2%
+}
+\Frefformat{vario}{\fancyrefchlabelprefix}{%
+Chapter\fancyrefdefaultspacing#1 on page~#2%
+}
+
+
+% Subsection (subsec:)
+% We call it "section" anyways
+\newcommand*{\fancyrefsubseclabelprefix}{subsec}
+\frefformat{plain}{\fancyrefsubseclabelprefix}{%
+section\fancyrefdefaultspacing#1
+}
+\Frefformat{plain}{\fancyrefsubseclabelprefix}{%
+Section\fancyrefdefaultspacing#1
+}
+
+\frefformat{vario}{\fancyrefsubseclabelprefix}{%
+section\fancyrefdefaultspacing#1 on page~#2%
+}
+\Frefformat{vario}{\fancyrefsubseclabelprefix}{%
+section\fancyrefdefaultspacing#1 on page~#2%
+}
+
+% Theorem (thm:)
+\newcommand*{\fancyrefthmlabelprefix}{thm}
+\frefformat{plain}{\fancyrefthmlabelprefix}{%
+theorem\fancyrefdefaultspacing#1%
+}
+\Frefformat{plain}{\fancyrefthmlabelprefix}{%
+Theorem\fancyrefdefaultspacing#1%
+}
+\frefformat{vario}{\fancyrefthmlabelprefix}{%
+theorem\fancyrefdefaultspacing#1 on page~#2%
+}
+\Frefformat{vario}{\fancyrefthmlabelprefix}{%
+Theorem\fancyrefdefaultspacing#1 on page~#2%
+}
+
+% Definition (def:)
+\newcommand*{\fancyrefdeflabelprefix}{def}
+\frefformat{plain}{\fancyrefdeflabelprefix}{%
+  definition\fancyrefdefaultspacing#1%
+}
+\Frefformat{plain}{\fancyrefdeflabelprefix}{%
+  Definition\fancyrefdefaultspacing#1%
+}
+\frefformat{vario}{\fancyrefdeflabelprefix}{%
+  definition\fancyrefdefaultspacing#1 on page~#2%
+}
+\Frefformat{vario}{\fancyrefdeflabelprefix}{%
+  Definition\fancyrefdefaultspacing#1 on page~#2%
+}
+
+% Lemma (lemma:)
+\newcommand*{\fancyreflemmalabelprefix}{lemma}
+\frefformat{plain}{\fancyreflemmalabelprefix}{%
+  lemma\fancyrefdefaultspacing#1%
+}
+\Frefformat{plain}{\fancyreflemmalabelprefix}{%
+  Lemma\fancyrefdefaultspacing#1%
+}
+\frefformat{vario}{\fancyreflemmalabelprefix}{%
+  lemma\fancyrefdefaultspacing#1 on page~#2%
+}
+\Frefformat{vario}{\fancyreflemmalabelprefix}{%
+  Lemma\fancyrefdefaultspacing#1 on page~#2%
+}
+
+
+\endinput
