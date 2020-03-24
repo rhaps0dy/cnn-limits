@@ -11,22 +11,12 @@ import math
 import sacred
 from nigp import artifacts, tbx, plot
 import nigp.variational, nigp.models
+import cnn_limits
 
 experiment = sacred.Experiment('tick_gp', [artifacts.ingredient, tbx.ingredient,])
 if __name__ == '__main__':
    experiment.observers.append(sacred.observers.FileStorageObserver("logs"))
-
-
-@experiment.pre_run_hook
-def hook(num_likelihood_samples, default_dtype):
-    gpytorch.settings.num_likelihood_samples._set_value(num_likelihood_samples)
-    gpytorch.settings.max_cholesky_size._set_value(100000)  # disable CG, it makes eigenvalues negative :(
-    torch.set_default_dtype(getattr(torch, default_dtype))
-
-
-@experiment.post_run_hook
-def hook(_run):
-    print(f"This was run {_run._id}")
+experiment.pre_run_hook(cnn_limits.gpytorch_pre_run_hook)
 
 
 @experiment.config
@@ -61,19 +51,12 @@ def _config():
 
 @experiment.capture
 def dataset(dataset_name, dataset_base_path):
-    if dataset_name == "CIFAR10":
-        dataset_base_path = os.path.join(dataset_base_path, dataset_name)
-        trans = torchvision.transforms.Compose([
-            torchvision.transforms.Grayscale(),
-            torchvision.transforms.ToTensor(),
-        ])
-    else:
-        trans = torchvision.transforms.ToTensor()
-
-    _dset = getattr(torchvision.datasets, dataset_name)
-    train = _dset(dataset_base_path, train=True, download=True, transform=trans)
-    test = _dset(dataset_base_path, train=False, transform=trans)
-    return train, test
+   if dataset_name == "CIFAR10":
+      additional_transforms = [torchvision.transforms.Grayscale()]
+   else:
+      additional_transforms = []
+   return cnn_limits.load_dataset(dataset_name, dataset_base_path,
+                                  additional_transforms)
 
 
 def init_inducing_patches(train_set, N, patch_size):
