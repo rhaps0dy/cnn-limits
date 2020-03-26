@@ -94,17 +94,36 @@ def save_K(kern, kern_name, X, X2, diag, batch_size, worker_rank, n_workers,
 load_dataset = experiment.capture(cnn_limits.load_dataset)
 
 
-def model():
+## JAX Model
+def jax_model():
+    return cnn_limits.models.NaiveConv(21)
+    no_pooling_net = cnn_limits.models.PreResNetNoPooling(32)
+    # return cnn_limits.models.PreResNet(no_pooling_net, 10)
     return stax.serial(
-        cnn_limits.models.PreResNetNoPooling(20),
+        no_pooling_net,
         stax.Flatten(),
+        stax.Relu(),
+        stax.Dense(1),
     )
+def jitted_kernel_fn(kernel_fn):
+    def kern_(x1, x2, same, diag):
+        get = ("var1" if diag else "nngp")
+        x1 = np.moveaxis(x1, 1, -1)
+        x2 = (None if same else np.moveaxis(x2, 1, -1))
+        y = kernel_fn(x1, x2, get=get)
+        return y
+    kern_ = jax.jit(kern_, static_argnums=(2, 3))
+    def kern(x1, x2, same, diag):
+        x1 = np.asarray(x1.numpy())
+        x2 = (None if same else np.asarray(x2.numpy()))
+        return kern_(x1, x2, same, diag)
+    return kern
 
 
 @experiment.command
 def mc_approx(max_n_functions):
     train_set, test_set = load_dataset()
-    init_fn, _apply_fn, _ = model()
+    init_fn, _apply_fn, _ = jax_model()
     apply_fn = jax.jit(lambda params, x: _apply_fn(params, np.moveaxis(x, 1, -1)))
     init_fn = jax.jit(init_fn)
 
@@ -112,39 +131,19 @@ def mc_approx(max_n_functions):
         loader = torch.utils.data.DataLoader()
 
 
-
-
-
-@experiment.automain
+@experiment.main
 def main(worker_rank):
     train_set, test_set = load_dataset()
-    # train_set = Subset(train_set, range(40000))
-    _, _, kernel_fn = model()
-    # _, _, kernel_fn = cnn_limits.models.Myrtle5()
-    # def kernel_fn(x1, x2, **kwargs):
-    #     x1 = np.mean(x1, -1)
-    #     x2 = (x1 if x2 is None else np.mean(x2, -1))
-    #     x1 = np.reshape(x1, (-1, 1, 32, 32, 1, 1))
-    #     x2 = np.reshape(x2, (1, -1, 1, 1, 32, 32))
-    #     return np.mean(x1 * x2, (-4, -3, -2, -1))
+    train_set = Subset(train_set, range(1000))
 
-    value_and_grad_kernel_fn = jax.value_and_grad(lambda x, y, get: np.sum(kernel_fn(x, y, get=get)), (0, 1))
-    def kern_(x1, x2, same, diag):
-        get = ("var1" if diag else "nngp")
-        x1 = np.moveaxis(x1, 1, -1)
-        x2 = (None if same else np.moveaxis(x2, 1, -1))
-        #y = kernel_fn(x1, x2, get=get) #, marginalization={'marginal': M.NO, 'cross': M.NO, 'spec': 'NHWC'})
-        y, grad = value_and_grad_kernel_fn(x1, x2, get)
-        return grad
-    kern_ = jax.jit(kern_, static_argnums=(2, 3))
-
-    def kern(x1, x2, same, diag):
-        x1 = np.asarray(x1.numpy())
-        x2 = (None if same else np.asarray(x2.numpy()))
-        return kern_(x1, x2, same, diag)
-
+    _, _, kernel_fn = jax_model()
+    kern = jitted_kernel_fn(kernel_fn)
     save_K(kern,     kern_name="Kxx",     X=train_set, X2=None,      diag=False)
-    save_K(kern,     kern_name="Kxtx",    X=test_set,  X2=train_set, diag=False)
+    # save_K(kern,     kern_name="Kxtx",    X=test_set,  X2=train_set, diag=False)
 
-    if worker_rank == 0:
-        save_K(kern, kern_name="Kt_diag", X=test_set,  X2=None,      diag=True)
+    # if worker_rank == 0:
+    #     save_K(kern, kern_name="Kt_diag", X=test_set,  X2=None,      diag=True)
+
+
+if __name__ == '__main__':
+    experiment.run_commandline()

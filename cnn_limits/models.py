@@ -149,3 +149,16 @@ def myrtle_checkpoint_serial(*layers):
             ]
         return per_layer_kernels
     return init_fn, apply_fn, kernel_fn
+
+
+def NaiveConv(layers, channels=10):
+    l = []
+    for _ in range(layers):
+        l.append(Conv(channels, (3, 3), strides=(1, 1), padding='SAME'))
+        l.append(ABRelu(0, 2**.5))
+    return stax.serial(
+        *l,
+        # AvgPool((32, 32)),
+        Flatten(),
+        Dense(1),
+    )
