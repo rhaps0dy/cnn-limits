@@ -24,24 +24,30 @@ def covariance_test(v_apply_fn, params, kernel_fn, x1, x2):
 
 class CorrelatedConvTest(unittest.TestCase):
     def setUp(self):
-        self.key = jax.random.PRNGKey(1234)
-        self.key, k1, k2 = jax.random.split(self.key, 3)
-        self.x1 = jax.random.normal(k1, (2, 5, 5, 1))
-        self.x2 = jax.random.normal(k2, (1, 5, 5, 1))
-        # self.x1 = np.reshape(np.arange(1*3*3).astype(np.float32)*3, (1, 3, 3, 1))
-        # self.x2 = np.reshape(np.arange(1, 1*3*3+1).astype(np.float32)*3, (1, 3, 3, 1))
+        self.key, self.x1, self.x2 = self.random_inputs((5, 5))
+    def random_inputs(self, x_shape):
+        key = jax.random.PRNGKey(1234)
+        key, k1, k2 = jax.random.split(key, 3)
+        x1 = jax.random.normal(k1, (2, *x_shape, 1))
+        x2 = jax.random.normal(k2, (1, *x_shape, 1))
+        return key, x1, x2
 
     def test_uncorrelated_with_neural_tangents(self):
-        kwargs = dict(out_chan=1, filter_shape=(3, 3), strides=(1, 2),
-                      padding='VALID', W_std=1.3)
+        shape = (5, 5)
+        x1 = np.reshape(np.arange(1*np.prod(shape)).astype(np.float32)*3, (1, *shape, 1))
+        x2 = np.reshape(np.arange(1, 1*np.prod(shape)+1).astype(np.float32)*3, (1, *shape, 1))
+
+        kwargs = dict(out_chan=1, filter_shape=(3, 3), strides=(1, 1),
+                      padding='SAME', W_std=1.3)
         init_uncorr, _, kernel_uncorr = stax.Conv(**kwargs)
         init_corr, _, kernel_corr = CorrelatedConv(**kwargs)
-        umat, is_height_width = kernel_uncorr(self.x1, self.x2, ('nngp', 'is_height_width'),
+        umat, is_height_width = kernel_uncorr(x1, x2, ('nngp', 'is_height_width'),
                                               NO_MARGINAL_ARG)
         if not is_height_width:
-            umat = umat.reshape((2, 1, 2, 2, 3, 3)).transpose((0, 1, 4, 5, 2, 3))
+            # .reshape((2, 1, 3, 3, 3, 3))
+            umat = umat.transpose((0, 1, 4, 5, 2, 3))
 
-        cmat, is_height_width = kernel_corr(self.x1, self.x2, ('nngp', 'is_height_width'))
+        cmat, is_height_width = kernel_corr(x1, x2, ('nngp', 'is_height_width'))
         assert is_height_width
         assert np.allclose(umat, cmat)
 
