@@ -1,6 +1,6 @@
 from neural_tangents import stax
-from neural_tangents.stax import (AvgPool, Conv, Dense, FanInSum, FanOut,
-                                  Flatten, GeneralConv, Identity, Relu)
+from neural_tangents.stax import (AvgPool, Dense, FanInSum, FanOut,
+                                  Flatten, Identity, Relu, ABRelu, Conv, GlobalAvgPool)
 import jax.experimental.stax as ostax
 import jax.numpy as np
 
@@ -158,7 +158,7 @@ def NaiveConv(layers, channels=10):
         l.append(ABRelu(0, 2**.5))
     return stax.serial(
         *l,
-        # AvgPool((32, 32)),
+        GlobalAvgPool(),
         Flatten(),
         Dense(1),
     )
