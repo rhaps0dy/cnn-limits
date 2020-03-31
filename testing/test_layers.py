@@ -3,8 +3,9 @@ import jax.numpy as np
 import jax
 
 from neural_tangents import stax
+from neural_tangents.stax import Padding
 from neural_tangents.utils.kernel import Marginalisation as M
-from cnn_limits.layers import CorrelatedConv
+from cnn_limits.layers import CorrelatedConv, conv4d_for_5or6d, naive_conv4d_for_5or6d
 
 NO_MARGINAL_ARG = {'marginal': M.NO, 'cross': M.NO, 'spec': "NHWC"}
 
@@ -72,7 +73,7 @@ class CorrelatedConvTest(unittest.TestCase):
         assert np.allclose(W_cov_reshaped, W_cov_tensor)
 
         init_fn, apply_fn, kernel_fn = CorrelatedConv(
-            1, filter_shape, (1, 1), 'VALID', W_std_tensor, 'ntk')
+            1, filter_shape, (1, 1), 'VALID', W_std_tensor, parameterization='ntk')
 
         _, params_from_init_fn = init_fn(kparams, self.x1.shape)
         params_from_init_fn = np.reshape(params_from_init_fn, filter_shape)
@@ -87,5 +88,25 @@ class CorrelatedConvTest(unittest.TestCase):
         covariance_test(v_apply_fn, params, kernel_fn, self.x1, self.x2)
 
 
+class Conv4dTest(unittest.TestCase):
+    @staticmethod
+    def one_shape_test(x_size, strides, padding):
+        mat = np.arange(np.prod(x_size)**2 * 2)\
+                .astype(np.float32)\
+                .reshape((1, 2, x_size[0], x_size[0], x_size[1], x_size[1]))
+        W_cov_tensor = np.arange(5, 5+3**4)\
+                         .reshape((3, 3, 3, 3))\
+                         .astype(np.float32)
+        res1 = naive_conv4d_for_5or6d(mat, W_cov_tensor, strides, padding)
+        res2 = conv4d_for_5or6d(mat, W_cov_tensor, strides, padding)
+        assert np.allclose(res1, res2)
 
+    def test_conv_same(self):
+        for sz in [(4, 4), (8, 8), (7, 4), (6, 4)]:
+            for st in [(1, 1), (2, 2), (3, 1)]:
+                self.one_shape_test(sz, st, Padding.SAME)
 
+    def test_conv_valid(self):
+        for sz in [(4, 4), (8, 8), (7, 4), (6, 4)]:
+            for st in [(1, 1), (2, 2), (3, 1)]:
+                self.one_shape_test(sz, st, Padding.VALID)
