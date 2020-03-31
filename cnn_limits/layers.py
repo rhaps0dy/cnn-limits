@@ -214,7 +214,9 @@ def TickSerialCheckpoint(*layers):
                 kernel._replace(nngp=tick_nngp, var1=None, var2=None, ntk=None),
             ]
         return per_layer_kernels
-    _set_input_req_attr(kernel_fn, kernel_fns)
+    setattr(kernel_fn, _INPUT_REQ, {'marginal': M.OVER_POINTS,
+                                    'cross': M.NO,
+                                    'spec': "NHWC"})
     return init_fn, apply_fn, kernel_fn
 
 

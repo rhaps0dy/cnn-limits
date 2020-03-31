@@ -3,7 +3,7 @@ import torch
 import torchvision
 import os
 
-__all__ = ["gpytorch_pre_run_hook", "load_dataset"]
+__all__ = ["gpytorch_pre_run_hook", "load_dataset", "interlaced_argsort"]
 
 def gpytorch_pre_run_hook(num_likelihood_samples, default_dtype):
     gpytorch.settings.num_likelihood_samples._set_value(num_likelihood_samples)
@@ -25,3 +25,27 @@ def load_dataset(dataset_name, dataset_base_path, additional_transforms=[]):
     train = _dset(dataset_base_path, train=True, download=True, transform=trans)
     test = _dset(dataset_base_path, train=False, transform=trans)
     return train, test
+
+def interlaced_argsort(dset):
+    y = torch.tensor(dset.targets)
+    starting_for_class = [None]* len(dset.classes)
+    argsort_y = torch.argsort(y)
+    for i, idx in enumerate(argsort_y):
+        if starting_for_class[y[idx]] is None:
+            starting_for_class[y[idx]] = i
+
+    for i in range(len(starting_for_class)-1):
+        assert starting_for_class[i] < starting_for_class[i+1]
+    assert starting_for_class[0] == 0
+
+    init_starting = [a for a in starting_for_class] + [len(dset)]
+
+    res = []
+    while len(res) < len(dset):
+        for i in range(len(starting_for_class)):
+            if starting_for_class[i] < init_starting[i+1]:
+                res.append(argsort_y[starting_for_class[i]].item())
+                starting_for_class[i] += 1
+    assert len(set(res)) == len(dset)
+    assert len(res) == len(dset)
+    return res

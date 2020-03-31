@@ -3,6 +3,8 @@ from neural_tangents.stax import (AvgPool, Dense, FanInSum, FanOut,
                                   Flatten, Identity, Relu, ABRelu, Conv, GlobalAvgPool)
 import jax.experimental.stax as ostax
 import jax.numpy as np
+from .layers import CorrelatedConv, TickSerialCheckpoint, covariance_tensor
+import gpytorch
 
 
 def BasicBlock(out_chan, filter_shape=(3, 3), strides=(1, 1)):
@@ -112,45 +114,6 @@ def Myrtle10(channels=16):
         convrelu(channels),
     )
 
-# @stax.layer
-def myrtle_checkpoint_serial(*layers):
-    init_fns, apply_fns, kernel_fns = zip(*layers)
-    o_init_fn, o_apply_fn = ostax.serial(*zip(init_fns, apply_fns))
-
-    n_outputs = 2*len(init_fns)
-
-    def init_fn(rng, input_shape):
-        output_shape, params = o_init_fn(rng, input_shape)
-        return ([output_shape]*n_outputs,
-                [params] + [()]*(n_outputs-1))
-
-    def apply_fn(params, inputs, **kwargs):
-        apply_out = o_apply_fn(params[0], inputs, **kwargs)
-        return [apply_out] + [None]*(n_outputs-1)
-
-    def kernel_fn(kernel):
-        per_layer_kernels = []
-        for f in kernel_fns:
-            kernel = f(kernel)
-
-            meanpool_cov1 = np.mean(kernel.cov1, (-4, -3, -2, -1))
-            meanpool_cov2 = (None if kernel.cov2 is None else
-                             np.mean(kernel.cov2, (-4, -3, -2, -1)))
-            meanpool_nngp = np.mean(kernel.nngp, (-4, -3, -2, -1))
-
-            tick_cov1 = np.mean(kernel.cov1, (-4, -3, -2, -1)) + 1
-            tick_cov2 = (None if kernel.cov2 is None else
-                         np.mean(kernel.cov2, (-4, -3, -2, -1)) + 1)
-            tick_nngp = np.mean(kernel.nngp, (-4, -3, -2, -1)) + 1
-
-            per_layer_kernels = per_layer_kernels + [
-                kernel._replace(cov1=meanpool_cov1, cov2=meanpool_cov2, nngp=meanpool_nngp),
-                kernel._replace(cov1=tick_cov1, cov2=tick_cov2, nngp=tick_nngp),
-            ]
-        return per_layer_kernels
-    return init_fn, apply_fn, kernel_fn
-
-
 def NaiveConv(layers, channels=10):
     l = []
     for _ in range(layers):
@@ -161,4 +124,30 @@ def NaiveConv(layers, channels=10):
         GlobalAvgPool(),
         Flatten(),
         Dense(1),
+    )
+
+def CorrelatedConvRelu(channels, W_cov, strides, W_cov_global):
+    return (*stax.serial(
+        CorrelatedConv(channels, (3, 3), strides, padding='SAME',
+                       W_cov_tensor=W_cov),
+        Relu(),
+    ), W_cov_global)
+
+
+def Myrtle5Correlated(channels=16):
+    kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
+    W_cov = covariance_tensor(3, 3, kern)
+
+    Wcg = {}
+    for sz in [32, 16, 8, 4, 2]:
+        kern.lengthscale = sz/2
+        Wcg[sz] = covariance_tensor(sz, sz, kern)
+
+    return TickSerialCheckpoint(
+        CorrelatedConvRelu(channels, W_cov, (1, 1), Wcg[32]),
+        CorrelatedConvRelu(channels, W_cov, (1, 1), Wcg[32]),
+        CorrelatedConvRelu(channels, W_cov, (2, 2), Wcg[16]),
+        CorrelatedConvRelu(channels, W_cov, (2, 2), Wcg[8]),
+        CorrelatedConvRelu(channels, W_cov, (2, 2), Wcg[4]),
+        CorrelatedConvRelu(channels, W_cov, (2, 2), Wcg[2]),
     )

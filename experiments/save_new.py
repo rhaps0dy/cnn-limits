@@ -4,9 +4,11 @@ Save a kernel matrix to disk
 import os
 import sacred
 import contextlib
+import itertools
 
 import jax.numpy as np
 import jax
+import pickle
 
 from cnn_gp import DiagIterator, ProductIterator
 from nigp.tbx import PrintTimings
@@ -27,7 +29,10 @@ if __name__ == '__main__':
 def config():
     dataset_base_path = "/scratch/ag919/datasets/"
 
-    batch_size = 200
+    batch_size = 12
+    N_train = 1200
+    N_test = 2004
+    sorted_dataset_path = os.path.join(dataset_base_path, "interlaced_argsort")
     dataset_name = "CIFAR10"
     max_n_functions = 50
 
@@ -53,12 +58,7 @@ def new_file(relative_path):
 
 
 @experiment.capture
-def save_K(kern, kern_name, X, X2, diag, batch_size, worker_rank, n_workers,
-           print_interval):
-    """
-    Saves a kernel to the h5py file `f`. Creates its dataset with name `name`
-    if necessary.
-    """
+def kern_iterator(kern_name, X, X2, diag, batch_size, worker_rank, n_workers):
     this_dir = os.path.join(base_dir(), kern_name)
     if os.path.exists(this_dir):
         print("Skipping {} (directory exists)".format(kern_name))
@@ -71,46 +71,65 @@ def save_K(kern, kern_name, X, X2, diag, batch_size, worker_rank, n_workers,
     else:
         it = ProductIterator(batch_size, X, X2, worker_rank=worker_rank,
                              n_workers=n_workers)
-    timings = PrintTimings(desc=f"{kern_name} (worker {worker_rank}/{n_workers})",
-                           print_interval=print_interval)
     N = len(X)
     N2 = N if X2 is None else len(X2)
     zN = len(str(N))
     zN2 = len(str(N2))
 
-    for same, (i, (x, _y)), (j, (x2, _y2)) in timings(it):
-        k = kern(x, x2, same, diag)
-        # if np.any(np.isinf(k)) or np.any(np.isnan(k)):
-        #     print(f"About to write a nan or inf for {i},{j}")
-        #     import ipdb; ipdb.set_trace()
-        if diag:
-            name = f"{kern_name}/{str(i).zfill(zN)}.npy"
-        else:
-            name = f"{kern_name}/{str(i).zfill(zN)}_{str(j).zfill(zN)}.npy"
-        with new_file(name) as f:
-            np.save(f, k)
+    if diag:
+        def path_fn(i, j):
+            return f"{kern_name}/{str(i).zfill(zN)}.npy"
+    else:
+        def path_fn(i, j):
+            return f"{kern_name}/{str(i).zfill(zN)}_{str(j).zfill(zN)}.npy"
+    return iter(it), path_fn
+
+
+def kern_save(iterate, kernel_fn, path_fn):
+    same, (i, (x, _y)), (j, (x2, _y2)) = iterate
+    k = kernel_fn(x, x2, same, False)
+    with new_file(path_fn(i, j)) as f:
+        np.save(f, k)
 
 
 load_dataset = experiment.capture(cnn_limits.load_dataset)
 
+@experiment.command
+def generate_sorted_dataset_idx(sorted_dataset_path):
+    train_set, test_set = load_dataset()
+    os.makedirs(sorted_dataset_path, exist_ok=True)
+    train_idx = cnn_limits.interlaced_argsort(train_set)
+    with new_file(os.path.join(sorted_dataset_path, "train.pkl")) as f:
+        pickle.dump(train_idx, f)
+    test_idx = cnn_limits.interlaced_argsort(test_set)
+    with new_file(os.path.join(sorted_dataset_path, "test.pkl")) as f:
+        pickle.dump(test_idx, f)
+
+
+@experiment.capture
+def load_sorted_dataset(sorted_dataset_path, N_train, N_test):
+    with experiment.open_resource(os.path.join(sorted_dataset_path, "train.pkl"), "rb") as f:
+        train_idx = pickle.load(f)
+    with experiment.open_resource(os.path.join(sorted_dataset_path, "test.pkl"), "rb") as f:
+        test_idx = pickle.load(f)
+    train_set, test_set = load_dataset()
+    return (Subset(train_set, train_idx[:N_train]),
+            Subset(test_set, test_idx[:N_test]))
+
 
 ## JAX Model
 def jax_model():
-    return cnn_limits.models.NaiveConv(21)
-    no_pooling_net = cnn_limits.models.PreResNetNoPooling(32)
-    # return cnn_limits.models.PreResNet(no_pooling_net, 10)
-    return stax.serial(
-        no_pooling_net,
-        stax.Flatten(),
-        stax.Relu(),
-        stax.Dense(1),
-    )
+    return cnn_limits.models.Myrtle5Correlated()
+
+
 def jitted_kernel_fn(kernel_fn):
     def kern_(x1, x2, same, diag):
         get = ("var1" if diag else "nngp")
         x1 = np.moveaxis(x1, 1, -1)
         x2 = (None if same else np.moveaxis(x2, 1, -1))
         y = kernel_fn(x1, x2, get=get)
+        if isinstance(y, list):
+            return np.stack(y)
         return y
     kern_ = jax.jit(kern_, static_argnums=(2, 3))
     def kern(x1, x2, same, diag):
@@ -120,29 +139,26 @@ def jitted_kernel_fn(kernel_fn):
     return kern
 
 
-@experiment.command
-def mc_approx(max_n_functions):
-    train_set, test_set = load_dataset()
-    init_fn, _apply_fn, _ = jax_model()
-    apply_fn = jax.jit(lambda params, x: _apply_fn(params, np.moveaxis(x, 1, -1)))
-    init_fn = jax.jit(init_fn)
-
-    for _ in range(max_n_functions):
-        loader = torch.utils.data.DataLoader()
-
-
 @experiment.main
-def main(worker_rank):
-    train_set, test_set = load_dataset()
-    train_set = Subset(train_set, range(1000))
-
+def main(worker_rank, print_interval, n_workers):
+    train_set, test_set = load_sorted_dataset()
     _, _, kernel_fn = jax_model()
     kern = jitted_kernel_fn(kernel_fn)
-    save_K(kern,     kern_name="Kxx",     X=train_set, X2=None,      diag=False)
-    # save_K(kern,     kern_name="Kxtx",    X=test_set,  X2=train_set, diag=False)
 
-    # if worker_rank == 0:
-    #     save_K(kern, kern_name="Kt_diag", X=test_set,  X2=None,      diag=True)
+    Kxx, Kxx_path_fn = kern_iterator(kern_name="Kxx", X=train_set, X2=None,     diag=False)
+    Kxt, Kxt_path_fn = kern_iterator(kern_name="Kxt", X=train_set, X2=test_set, diag=False)
+    timings = PrintTimings(desc=f"Kxx+Kxt (worker {worker_rank}/{n_workers})",
+                           print_interval=print_interval)(itertools.count(), len(Kxx) + len(Kxt))
+    try:
+        while True:
+            kern_save(next(Kxx), kern, Kxx_path_fn)
+            next(timings)
+            kern_save(next(Kxt), kern, Kxt_path_fn)
+            next(timings)
+            kern_save(next(Kxt), kern, Kxt_path_fn)
+            next(timings)
+    except StopIteration:
+        pass
 
 
 if __name__ == '__main__':

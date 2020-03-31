@@ -5,7 +5,8 @@ import jax
 from neural_tangents import stax
 from neural_tangents.stax import Padding
 from neural_tangents.utils.kernel import Marginalisation as M
-from cnn_limits.layers import CorrelatedConv, conv4d_for_5or6d, naive_conv4d_for_5or6d
+from cnn_limits.layers import CorrelatedConv, conv4d_for_5or6d, naive_conv4d_for_5or6d, covariance_tensor, TickSerialCheckpoint
+import gpytorch
 
 NO_MARGINAL_ARG = {'marginal': M.NO, 'cross': M.NO, 'spec': "NHWC"}
 
@@ -88,15 +89,17 @@ class CorrelatedConvTest(unittest.TestCase):
         covariance_test(v_apply_fn, params, kernel_fn, self.x1, self.x2)
 
 
+def make_tensor_with_shape(shape):
+    n = np.prod(shape)
+    return np.arange(n).reshape(shape).astype(np.float32)
+
+
 class Conv4dTest(unittest.TestCase):
     @staticmethod
     def one_shape_test(x_size, strides, padding):
-        mat = np.arange(np.prod(x_size)**2 * 2)\
-                .astype(np.float32)\
-                .reshape((1, 2, x_size[0], x_size[0], x_size[1], x_size[1]))
-        W_cov_tensor = np.arange(5, 5+3**4)\
-                         .reshape((3, 3, 3, 3))\
-                         .astype(np.float32)
+        mat = make_tensor_with_shape(
+            (1, 2, x_size[0], x_size[0], x_size[1], x_size[1]))
+        W_cov_tensor = make_tensor_with_shape((3, 3, 3, 3)) + 5
         res1 = naive_conv4d_for_5or6d(mat, W_cov_tensor, strides, padding)
         res2 = conv4d_for_5or6d(mat, W_cov_tensor, strides, padding)
         assert np.allclose(res1, res2)
@@ -110,3 +113,35 @@ class Conv4dTest(unittest.TestCase):
         for sz in [(4, 4), (8, 8), (7, 4), (6, 4)]:
             for st in [(1, 1), (2, 2), (3, 1)]:
                 self.one_shape_test(sz, st, Padding.VALID)
+
+
+class TickSerialCheckpointTest(unittest.TestCase):
+    def test_equal_to_separate(self):
+        x1 = make_tensor_with_shape((2, 5, 5, 1))
+        x2 = make_tensor_with_shape((1, 5, 5, 1)) + x1.max()
+
+        kern = gpytorch.kernels.MaternKernel(nu=3/2)
+        Wcg = []
+        for l in (1, 2, 3):
+            kern.lengthscale = l
+            Wcg.append(covariance_tensor(5, 5, kern))
+
+        init_fns, apply_fns, kernel_fns = zip(
+            stax.serial(stax.Conv(3, (3, 3), padding='SAME'), stax.Relu()),
+            stax.serial(stax.Conv(3, (3, 3), padding='SAME'), stax.Relu()),
+            stax.serial(stax.Conv(3, (3, 3), padding='SAME'), stax.Relu()),
+        )
+
+        _, _, checkpoint_kern = TickSerialCheckpoint(
+            *zip(init_fns, apply_fns, kernel_fns, Wcg))
+
+        kernels_checkpointed = checkpoint_kern(x1, x2, get='nngp')
+        kernels_avg_checkpointed = kernels_checkpointed[::2]
+
+        for i, k_checkpointed in enumerate(kernels_avg_checkpointed):
+            _, _, kfn = stax.serial(
+                *zip(init_fns[:i+1], apply_fns[:i+1], kernel_fns[:i+1]),
+                stax.GlobalAvgPool())
+            k = kfn(x1, x2, get='nngp')
+            assert np.allclose(k_checkpointed, k)
+
