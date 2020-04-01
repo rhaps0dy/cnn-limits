@@ -21,8 +21,10 @@ from neural_tangents import stax
 
 experiment = sacred.Experiment("save_new")
 if __name__ == '__main__':
+    log_dir = (os.environ['LOG_DIR'] if 'LOG_DIR' in os.environ
+               else "/scratch/ag919/logs/save_new")
     experiment.observers.append(
-        sacred.observers.FileStorageObserver("/scratch/ag919/logs/save_new"))
+        sacred.observers.FileStorageObserver(log_dir))
 
 
 @experiment.config
