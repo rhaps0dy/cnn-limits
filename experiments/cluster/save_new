@@ -3,14 +3,15 @@
 #SBATCH -J save_new.py
 #SBATCH -A RASMUSSEN-SL3-GPU
 #! %A means slurm job ID and %a means array index
-#SBATCH --output=Programacio/cnn-limits/slurm/%A_%a.out
-#SBATCH --error=Programacio/cnn-limits/slurm/%A_%a.err
+#! #SBATCH --output=$DIR/slurm/%A_%a.out
+#! #SBATCH --error=$DIR/slurm/%A_%a.err
 
 #! How many whole nodes should be allocated?
 #SBATCH --nodes=1
 #! How many (MPI) tasks will there be in total?
 #! Note probably this should not exceed the total number of GPUs in use.
 #SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
 #! Specify the number of GPUs per node (between 1 and 4; must be 4 if nodes>1).
 #! Note that the job submission script will enforce no more than 3 cpus per GPU.
 #SBATCH --gres=gpu:1
@@ -23,12 +24,16 @@
 #! interrupted by node failure or system downtime):
 ##SBATCH --no-requeue
 #! Array of jobs
-#SBATCH --array=0-1
+#SBATCH --array=0-2
 
 #! Do not change:
 #SBATCH -p pascal
 
+#! IMPORTANT: no bash commands above this line
 #! sbatch directives end here (put any additional directives above this line)
+
+
+DIR="/home/ag919/Programacio/cnn-limits/"
 
 #! Number of nodes and tasks per node allocated by SLURM (do not change):
 numnodes=$SLURM_JOB_NUM_NODES
@@ -41,28 +46,21 @@ mpi_tasks_per_node=$(echo "$SLURM_TASKS_PER_NODE" | sed -e  's/^\([0-9][0-9]*\).
 #! Optionally modify the environment seen by the application
 #! (note that SLURM reproduces the environment at submission irrespective of ~/.bashrc):
 . /etc/profile.d/modules.sh                # Leave this line (enables the module command)
-module purge                               # Removes all modules still loaded
-module load rhel7/default-gpu              # REQUIRED - loads the basic environment
-module unload cuda/8.0
-module load cuda/10.1
-module load cudnn/7.6_cuda-10.1
-module load python/3.7
-. "$HOME/Programacio/cnn-limits/venv/bin/activate"
+. "$DIR/experiments/cluster/enter-env.sh"
 
 #! Insert additional module load commands after this line if needed:
 
 #! Full path to application executable: 
-application="python3.7"
+application="python3"
 
 #! Run options for the application:
-HPC_WORK="/rds/user/ag919/hpc-work/"
-LOG_DIR="$HPC_WORK/save_new"
-mkdir -p $LOG_DIR
-options="experiments/save_new.py with n_workers=2 worker_rank=$SLURM_ARRAY_TASK_ID dataset_base_path=$HPC_WORK"
+HPC_WORK="$HOME/rds/hpc-work"
+LOG_DIR="$HPC_WORK/logs/save_new"
+options="$DIR/experiments/save_new.py with n_workers=$SLURM_ARRAY_TASK_COUNT worker_rank=$SLURM_ARRAY_TASK_ID $DIR/experiments/cluster/config.json"
 
 #! Work directory (i.e. where the job will run):
-workdir="$HPC_WORK"  # The value of SLURM_SUBMIT_DIR sets workdir to the directory
-                             # in which sbatch is run.
+workdir="$DIR"  # The value of SLURM_SUBMIT_DIR sets workdir to the directory
+                      # in which sbatch is run.
 
 #! Are you using OpenMP (NB this is unrelated to OpenMPI)? If so increase this
 #! safe value to no more than 12:

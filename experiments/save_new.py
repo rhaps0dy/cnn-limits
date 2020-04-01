@@ -31,9 +31,9 @@ if __name__ == '__main__':
 def config():
     dataset_base_path = "/scratch/ag919/datasets/"
 
-    batch_size = 12
-    N_train = 1200
-    N_test = 2004
+    batch_size = 15
+    N_train = batch_size*100
+    N_test = (2000// batch_size + 1)*batch_size
     sorted_dataset_path = os.path.join(dataset_base_path, "interlaced_argsort")
     dataset_name = "CIFAR10"
     max_n_functions = 50

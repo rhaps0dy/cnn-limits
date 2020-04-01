@@ -1,0 +1,4 @@
+{"dataset_base_path": "/home/ag919/rds/hpc-work/datasets",
+ "sorted_dataset_path": "/home/ag919/rds/hpc-work/datasets/interlaced_argsort",
+ "print_interval": 5,
+ "batch_size": 13}
