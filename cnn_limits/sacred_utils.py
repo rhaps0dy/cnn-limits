@@ -2,6 +2,7 @@ import gpytorch
 import torch
 import torchvision
 import os
+import sacred
 
 __all__ = ["gpytorch_pre_run_hook", "load_dataset", "interlaced_argsort"]
 
@@ -49,3 +50,12 @@ def interlaced_argsort(dset):
     assert len(set(res)) == len(dset)
     assert len(res) == len(dset)
     return res
+
+
+def add_file_observer(experiment, name):
+    if name == "__main__":
+        log_dir = (os.environ['LOG_DIR'] if 'LOG_DIR' in os.environ
+                   else f"/scratch/ag919/logs/{experiment.path}")
+        print("Resulting log dir: ", log_dir)
+        experiment.observers.append(
+            sacred.observers.FileStorageObserver(log_dir))

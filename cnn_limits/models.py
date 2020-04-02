@@ -3,7 +3,7 @@ from neural_tangents.stax import (AvgPool, Dense, FanInSum, FanOut,
                                   Flatten, Identity, Relu, ABRelu, Conv, GlobalAvgPool)
 import jax.experimental.stax as ostax
 import jax.numpy as np
-from .layers import CorrelatedConv, TickSerialCheckpoint, covariance_tensor
+from .layers import CorrelatedConv, TickSerialCheckpoint, covariance_tensor, DenseSerialCheckpoint
 import gpytorch
 
 
@@ -150,4 +150,15 @@ def Myrtle5Correlated(channels=16):
         CorrelatedConvRelu(channels, W_cov, (2, 2), Wcg[8]),
         CorrelatedConvRelu(channels, W_cov, (2, 2), Wcg[4]),
         CorrelatedConvRelu(channels, W_cov, (2, 2), Wcg[2]),
+    )
+
+
+def Myrtle5Uncorrelated(channels=16):
+    return DenseSerialCheckpoint(
+        stax.serial(Conv(channels, (3, 3), (1, 1), 'SAME'), Relu()),
+        stax.serial(Conv(channels, (3, 3), (1, 1), 'SAME'), Relu()),
+        stax.serial(Conv(channels, (3, 3), (2, 2), 'SAME'), Relu()),
+        stax.serial(Conv(channels, (3, 3), (2, 2), 'SAME'), Relu()),
+        stax.serial(Conv(channels, (3, 3), (2, 2), 'SAME'), Relu()),
+        stax.serial(Conv(channels, (3, 3), (2, 2), 'SAME'), Relu()),
     )

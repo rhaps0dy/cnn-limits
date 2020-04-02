@@ -20,11 +20,7 @@ from neural_tangents import stax
 
 
 experiment = sacred.Experiment("save_new")
-if __name__ == '__main__':
-    log_dir = (os.environ['LOG_DIR'] if 'LOG_DIR' in os.environ
-               else "/scratch/ag919/logs/save_new")
-    experiment.observers.append(
-        sacred.observers.FileStorageObserver(log_dir))
+cnn_limits.sacred_utils.add_file_observer(experiment, __name__)
 
 
 @experiment.config
@@ -41,6 +37,7 @@ def config():
     n_workers = 1
     worker_rank = 0
     print_interval = 2.
+    model = "uncorrelated-myrtle5"
 
 
 @experiment.capture
@@ -120,8 +117,14 @@ def load_sorted_dataset(sorted_dataset_path, N_train, N_test):
 
 
 ## JAX Model
-def jax_model():
-    return cnn_limits.models.Myrtle5Correlated()
+@experiment.capture
+def jax_model(model):
+    if model == "tick-myrtle5":
+        return cnn_limits.models.Myrtle5Correlated()
+    elif model == "uncorrelated-myrtle5":
+        return cnn_limits.models.Myrtle5Uncorrelated()
+    else:
+        raise ValueError(model)
 
 
 def jitted_kernel_fn(kernel_fn):

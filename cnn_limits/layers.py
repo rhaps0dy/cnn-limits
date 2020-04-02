@@ -219,6 +219,36 @@ def TickSerialCheckpoint(*layers):
                                     'spec': "NHWC"})
     return init_fn, apply_fn, kernel_fn
 
+@_layer
+def DenseSerialCheckpoint(*layers):
+    init_fns, apply_fns, kernel_fns = zip(*layers)
+
+    readout_init_fn, readout_apply_fn, readout_kernel_fn = stax.serial(
+        stax.Flatten(), stax.Dense(1))
+
+    o_init_fn, o_apply_fn = ostax.serial(
+        *zip(init_fns, apply_fns),
+        (readout_init_fn, readout_kernel_fn))
+
+    n_outputs = len(init_fns)
+
+    def init_fn(rng, input_shape):
+        output_shape, params = o_init_fn(rng, input_shape)
+        return ([output_shape]*n_outputs,
+                [params] + [()]*(n_outputs-1))
+
+    def apply_fn(params, inputs, **kwargs):
+        apply_out = o_apply_fn(params[0], inputs, **kwargs)
+        return [apply_out] + [None]*(n_outputs-1)
+
+    def kernel_fn(kernel):
+        per_layer_kernels = []
+        for f in kernel_fns:
+            kernel = f(kernel)
+            per_layer_kernels.append(readout_kernel_fn(kernel))
+        return per_layer_kernels
+    _set_input_req_attr(kernel_fn, kernel_fns + (readout_kernel_fn,))
+    return init_fn, apply_fn, kernel_fn
 
 
 def covariance_tensor(height, width, kern):
