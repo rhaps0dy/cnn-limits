@@ -3,8 +3,9 @@ import torch
 import torchvision
 import os
 import sacred
+import contextlib
 
-__all__ = ["gpytorch_pre_run_hook", "load_dataset", "interlaced_argsort"]
+__all__ = ["gpytorch_pre_run_hook", "load_dataset", "interlaced_argsort", "base_dir", "def_new_file"]
 
 def gpytorch_pre_run_hook(num_likelihood_samples, default_dtype):
     gpytorch.settings.num_likelihood_samples._set_value(num_likelihood_samples)
@@ -59,3 +60,19 @@ def add_file_observer(experiment, name):
         print("Resulting log dir: ", log_dir)
         experiment.observers.append(
             sacred.observers.FileStorageObserver(log_dir))
+
+def base_dir(_run, _log):
+    try:
+        return _run.observers[0].dir
+    except IndexError:
+        _log.warning("This run has no associated directory, using `/tmp`")
+        return "/tmp"
+
+
+def def_new_file(base_dir):
+    @contextlib.contextmanager
+    def new_file(relative_path, mode="wb"):
+        full_path = os.path.join(base_dir(), relative_path)
+        with open(full_path, mode) as f:
+            yield f
+    return new_file

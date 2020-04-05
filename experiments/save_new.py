@@ -3,7 +3,6 @@ Save a kernel matrix to disk
 """
 import os
 import sacred
-import contextlib
 import itertools
 
 import jax.numpy as np
@@ -21,6 +20,9 @@ from neural_tangents import stax
 
 experiment = sacred.Experiment("save_new")
 cnn_limits.sacred_utils.add_file_observer(experiment, __name__)
+load_dataset = experiment.capture(cnn_limits.load_dataset)
+base_dir = experiment.capture(cnn_limits.base_dir)
+new_file = cnn_limits.new_file
 
 
 @experiment.config
@@ -37,23 +39,7 @@ def config():
     n_workers = 1
     worker_rank = 0
     print_interval = 2.
-    model = "uncorrelated-myrtle5"
-
-
-@experiment.capture
-def base_dir(_run, _log):
-    try:
-        return _run.observers[0].dir
-    except IndexError:
-        _log.warning("This run has no associated directory, using `/tmp`")
-        return "/tmp"
-
-
-@contextlib.contextmanager
-def new_file(relative_path):
-    full_path = os.path.join(base_dir(), relative_path)
-    with open(full_path, "wb") as f:
-        yield f
+    model = "google_NNGP"
 
 
 @experiment.capture
@@ -91,8 +77,6 @@ def kern_save(iterate, kernel_fn, path_fn):
         np.save(f, k)
 
 
-load_dataset = experiment.capture(cnn_limits.load_dataset)
-
 @experiment.command
 def generate_sorted_dataset_idx(sorted_dataset_path):
     train_set, test_set = load_dataset()
@@ -119,12 +103,7 @@ def load_sorted_dataset(sorted_dataset_path, N_train, N_test):
 ## JAX Model
 @experiment.capture
 def jax_model(model):
-    if model == "tick-myrtle5":
-        return cnn_limits.models.Myrtle5Correlated()
-    elif model == "uncorrelated-myrtle5":
-        return cnn_limits.models.Myrtle5Uncorrelated()
-    else:
-        raise ValueError(model)
+    return getattr(cnn_limits.models, model)()
 
 
 def jitted_kernel_fn(kernel_fn):
@@ -154,16 +133,20 @@ def main(worker_rank, print_interval, n_workers):
     Kxt, Kxt_path_fn = kern_iterator(kern_name="Kxt", X=train_set, X2=test_set, diag=False)
     timings = PrintTimings(desc=f"Kxx+Kxt (worker {worker_rank}/{n_workers})",
                            print_interval=print_interval)(itertools.count(), len(Kxx) + len(Kxt))
-    try:
-        while True:
-            kern_save(next(Kxx), kern, Kxx_path_fn)
-            next(timings)
-            kern_save(next(Kxt), kern, Kxt_path_fn)
-            next(timings)
-            kern_save(next(Kxt), kern, Kxt_path_fn)
-            next(timings)
-    except StopIteration:
-        pass
+
+    Kxx_ongoing = Kxt_ongoing = True
+    while Kxx_ongoing or Kxt_ongoing:
+        if Kxx_ongoing:
+            try:
+                kern_save(next(Kxx), kern, Kxx_path_fn); next(timings)
+            except StopIteration:
+                Kxx_ongoing = False
+        if Kxt_ongoing:
+            try:
+                kern_save(next(Kxt), kern, Kxt_path_fn); next(timings)
+                kern_save(next(Kxt), kern, Kxt_path_fn); next(timings)
+            except StopIteration:
+                Kxt_ongoing = False
 
 
 if __name__ == '__main__':
