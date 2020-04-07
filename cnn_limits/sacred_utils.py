@@ -4,6 +4,7 @@ import torchvision
 import os
 import sacred
 import contextlib
+from pathlib import Path
 
 __all__ = ["gpytorch_pre_run_hook", "load_dataset", "interlaced_argsort", "base_dir", "def_new_file"]
 
@@ -63,10 +64,10 @@ def add_file_observer(experiment, name):
 
 def base_dir(_run, _log):
     try:
-        return _run.observers[0].dir
+        return Path(_run.observers[0].dir)
     except IndexError:
         _log.warning("This run has no associated directory, using `/tmp`")
-        return "/tmp"
+        return Path("/tmp")
 
 
 def def_new_file(base_dir):
