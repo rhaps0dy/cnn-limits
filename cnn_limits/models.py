@@ -168,8 +168,13 @@ def Myrtle5Uncorrelated(channels=16):
     )
 
 
-def google_NNGP(channels=16):
+def google_NNGP(channels):
     block = stax.serial(Conv(channels, (3, 3), (1, 1), 'SAME'), Relu())
-    return DenseSerialCheckpoint(
-        stax.serial(*([block]*20)),
-        *([block]*16))
+    return DenseSerialCheckpoint(*([block]*36))
+
+def google_NNGP_sampling(channels):
+    kern = gpytorch.kernels.MaternKernel(nu=3/2)
+    kern.lengthscale = 10
+    W_cov = covariance_tensor(32, 32, kern)
+    block = (*stax.serial(Conv(channels, (3, 3), (1, 1), 'SAME'), Relu()), W_cov)
+    return TickSerialCheckpoint(*([block]*36))

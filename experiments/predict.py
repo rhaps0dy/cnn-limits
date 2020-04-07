@@ -38,9 +38,8 @@ def config():
 
     kernel_matrix_path = "/scratch/ag919/logs/save_new/166"
 
-    N_train = 50000
-    N_test = 10000
-    layer_step = 12
+    N_train = None
+    N_test = None
 
 
 

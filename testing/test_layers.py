@@ -140,8 +140,9 @@ class TickSerialCheckpointTest(unittest.TestCase):
         init_fns, apply_fns, kernel_fns = self.init_fns, self.apply_fns, self.kernel_fns
 
         kernels_checkpointed = self.checkpoint_kern(x1, x2, get='nngp')
-        kernels_avg_checkpointed = kernels_checkpointed[::2]
-        kernels_tick_checkpointed = kernels_checkpointed[1::2]
+        kernels_avg_checkpointed = kernels_checkpointed[::3]
+        kernels_tick_checkpointed = kernels_checkpointed[1::3]
+        kernels_dense_checkpointed = kernels_checkpointed[2::3]
 
         for i, k_checkpointed in enumerate(kernels_avg_checkpointed):
             _, _, kfn = stax.serial(
@@ -157,9 +158,17 @@ class TickSerialCheckpointTest(unittest.TestCase):
             k = (W * k).sum((-4, -3, -2, -1))
             assert np.allclose(k_checkpointed, k)
 
-    def test_init(self, N=3):
+        for i, k_checkpointed in enumerate(kernels_dense_checkpointed):
+            _, _, kfn = stax.serial(
+                *zip(init_fns[:i+1], apply_fns[:i+1], kernel_fns[:i+1]),
+                stax.Flatten())
+            k = kfn(x1, x2, get='nngp')
+            assert np.allclose(k_checkpointed, k)
+
+
+    def test_init(self, N=2):
         output_shape, _ = self.checkpoint_init(jax.random.PRNGKey(123), (N, 5, 5, 2))
-        assert output_shape == [(2, N, 1)]*3
+        assert output_shape == [(3, N, 1)]*3
 
     def test_apply(self):
         all_shapes, all_params = self.checkpoint_init(jax.random.PRNGKey(123), self.x1.shape)
@@ -169,17 +178,20 @@ class TickSerialCheckpointTest(unittest.TestCase):
         params, readout_params = zip(*all_params)
 
         for i, out_ck in enumerate(out_checkpointed):
-            out_ck_avg, out_ck_tick = out_ck[0, ...], out_ck[1, ...]
+            out_ck_avg, out_ck_tick, out_ck_dense = out_ck[0, ...], out_ck[1, ...], out_ck[2, ...]
             assert out_ck.shape == all_shapes[i]
 
             _, afn, _ = stax.serial(*zip(self.init_fns[:i+1], self.apply_fns[:i+1], self.kernel_fns[:i+1]))
             out = afn(params[:i+1], self.x1)
 
-            out_avg = dense_apply(readout_params[i][0], out.mean((-3, -2)))
+            out_avg = dense_apply(readout_params[i][0][1], out.mean((-3, -2)))
             assert np.allclose(out_ck_avg, out_avg)
 
             out_tick = (out[..., None] * readout_params[i][1]).sum((-4, -3, -2))
             assert np.allclose(out_ck_tick, out_tick)
+
+            out_dense = dense_apply(readout_params[i][2][1], out.reshape(out.shape[0], -1))
+            assert np.allclose(out_ck_dense, out_dense)
 
 
 

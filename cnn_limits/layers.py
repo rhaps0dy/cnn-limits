@@ -205,16 +205,17 @@ def _serial_apply_fn(apply_fns, readout_apply_fns, params, inputs, **kwargs):
 
 
 @_layer
-def TickSerialCheckpoint(*layers, intermediate_outputs=True, output_dense_also=False):
+def TickSerialCheckpoint(*layers, intermediate_outputs=True):
     init_fns, apply_fns, kernel_fns, W_covs_list = zip(*layers)
-    dense_init, dense_apply, _ = stax.Dense(1)
+    dense_init, dense_apply, dense_kernel = stax.serial(stax.Flatten(), stax.Dense(1))
 
     # Assume input_shape[-3:-1] are spatial dimensions
     def readout_init(W_std, rng, input_shape):
-        k1, k2 = jax.random.split(rng, 2)
-        out_dense, params_dense = dense_init(k1, (*input_shape[:-3], input_shape[-1]))
-        params_tick = W_init_tensor(W_std, k2, (*input_shape[-3:], 1))
-        return (2, *out_dense), (params_dense, params_tick)
+        rng = jax.random.split(rng, 3)
+        out_dense, params_meanpool_dense = dense_init(rng[0], (*input_shape[:-3], input_shape[-1]))
+        params_tick = W_init_tensor(W_std, rng[1], (*input_shape[-3:], 1))
+        _, params_dense = dense_init(rng[2], input_shape)
+        return (3, *out_dense), (params_meanpool_dense, params_tick, params_dense)
     init_fn = jax.partial(
         _serial_init_fn, init_fns,
         [jax.partial(readout_init, tensor_cholesky(W_cov))
@@ -224,10 +225,11 @@ def TickSerialCheckpoint(*layers, intermediate_outputs=True, output_dense_also=F
     def readout_apply(params, inputs):
         # Assume that inputs[-1] are the channels, and inputs[-3:-1] the image
         # spatial dimensions.
-        params_dense, params_tick = params
-        mean_pool = dense_apply(params_dense, np.mean(inputs, axis=(-3, -2)))
+        params_meanpool_dense, params_tick, params_dense = params
+        mean_pool = dense_apply(params_meanpool_dense, np.mean(inputs, axis=(-3, -2)))
         tick = np.einsum("...hwi,hwio->...o", inputs, params_tick)
-        return np.stack([mean_pool, tick], 0)
+        dense = dense_apply(params_dense, inputs)
+        return np.stack([mean_pool, tick, dense], 0)
 
     apply_fn = jax.partial(
         _serial_apply_fn, apply_fns, [readout_apply]*len(apply_fns))
@@ -250,15 +252,9 @@ def TickSerialCheckpoint(*layers, intermediate_outputs=True, output_dense_also=F
                 tick_nngp = nngp @ W_cov_T
             this_layer_kernels = [
                 kernel._replace(nngp=meanpool_nngp, var1=None, var2=None, ntk=None),
-                kernel._replace(nngp=tick_nngp, var1=None, var2=None, ntk=None)
+                kernel._replace(nngp=tick_nngp, var1=None, var2=None, ntk=None),
+                dense_kernel(kernel),
             ]
-            if output_dense_also:
-                assert h==w, 'otherwise more expensive and not implemented'
-                dense_nngp = np.trace(kernel.nngp.reshape((d1, d2, h*w, h*w)),
-                                      axis0=-2, axis1=-1) / (h*w)
-                per_layer_kernels = per_layer_kernels + [
-                    kernel._replace(nngp=dense_nngp, var1=None, var2=None, ntk=None)
-                ]
             per_layer_kernels = per_layer_kernels + this_layer_kernels
         return per_layer_kernels
     setattr(kernel_fn, _INPUT_REQ, {'marginal': M.OVER_POINTS,
