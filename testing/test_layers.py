@@ -8,7 +8,7 @@ from neural_tangents.utils.kernel import Marginalisation as M
 from cnn_limits.layers import CorrelatedConv, conv4d_for_5or6d, naive_conv4d_for_5or6d, covariance_tensor, TickSerialCheckpoint
 import gpytorch
 
-NO_MARGINAL_ARG = {'marginal': M.NO, 'cross': M.NO, 'spec': "NHWC"}
+NO_MARGINAL_ARG = {'marginal': M.OVER_POINTS, 'cross': M.NO, 'spec': "NHWC"}
 
 def covariance_test(v_apply_fn, params, kernel_fn, x1, x2):
     y1 = v_apply_fn(params, x1)
@@ -116,27 +116,32 @@ class Conv4dTest(unittest.TestCase):
 
 
 class TickSerialCheckpointTest(unittest.TestCase):
-    def test_equal_to_separate(self):
-        x1 = make_tensor_with_shape((2, 5, 5, 1))
-        x2 = make_tensor_with_shape((1, 5, 5, 1)) + x1.max()
+    def setUp(self):
+        self.x1 = make_tensor_with_shape((2, 5, 5, 1))
+        self.x2 = make_tensor_with_shape((1, 5, 5, 1)) + self.x1.max()
 
         kern = gpytorch.kernels.MaternKernel(nu=3/2)
         Wcg = []
         for l in (1, 2, 3):
             kern.lengthscale = l
             Wcg.append(covariance_tensor(5, 5, kern))
+        self.Wcg = Wcg
 
-        init_fns, apply_fns, kernel_fns = zip(
+        self.init_fns, self.apply_fns, self.kernel_fns = zip(
             stax.serial(stax.Conv(3, (3, 3), padding='SAME'), stax.Relu()),
             stax.serial(stax.Conv(3, (3, 3), padding='SAME'), stax.Relu()),
             stax.serial(stax.Conv(3, (3, 3), padding='SAME'), stax.Relu()),
         )
+        self.checkpoint_init, self.checkpoint_apply, self.checkpoint_kern = TickSerialCheckpoint(
+            *zip(self.init_fns, self.apply_fns, self.kernel_fns, self.Wcg))
 
-        _, _, checkpoint_kern = TickSerialCheckpoint(
-            *zip(init_fns, apply_fns, kernel_fns, Wcg))
+    def test_equal_to_separate(self):
+        x1, x2 = self.x1, self.x2
+        init_fns, apply_fns, kernel_fns = self.init_fns, self.apply_fns, self.kernel_fns
 
-        kernels_checkpointed = checkpoint_kern(x1, x2, get='nngp')
+        kernels_checkpointed = self.checkpoint_kern(x1, x2, get='nngp')
         kernels_avg_checkpointed = kernels_checkpointed[::2]
+        kernels_tick_checkpointed = kernels_checkpointed[1::2]
 
         for i, k_checkpointed in enumerate(kernels_avg_checkpointed):
             _, _, kfn = stax.serial(
@@ -144,4 +149,39 @@ class TickSerialCheckpointTest(unittest.TestCase):
                 stax.GlobalAvgPool())
             k = kfn(x1, x2, get='nngp')
             assert np.allclose(k_checkpointed, k)
+
+        for i, (k_checkpointed, W) in enumerate(zip(kernels_tick_checkpointed, self.Wcg)):
+            _, _, kfn = stax.serial(
+                *zip(init_fns[:i+1], apply_fns[:i+1], kernel_fns[:i+1]))
+            k = kfn(x1, x2, get='nngp', marginalization=NO_MARGINAL_ARG)
+            k = (W * k).sum((-4, -3, -2, -1))
+            assert np.allclose(k_checkpointed, k)
+
+    def test_init(self, N=3):
+        output_shape, _ = self.checkpoint_init(jax.random.PRNGKey(123), (N, 5, 5, 2))
+        assert output_shape == [(2, N, 1)]*3
+
+    def test_apply(self):
+        all_shapes, all_params = self.checkpoint_init(jax.random.PRNGKey(123), self.x1.shape)
+        out_checkpointed = self.checkpoint_apply(all_params, self.x1)
+        _, dense_apply, _ = stax.Dense(1)
+
+        params, readout_params = zip(*all_params)
+
+        for i, out_ck in enumerate(out_checkpointed):
+            out_ck_avg, out_ck_tick = out_ck[0, ...], out_ck[1, ...]
+            assert out_ck.shape == all_shapes[i]
+
+            _, afn, _ = stax.serial(*zip(self.init_fns[:i+1], self.apply_fns[:i+1], self.kernel_fns[:i+1]))
+            out = afn(params[:i+1], self.x1)
+
+            out_avg = dense_apply(readout_params[i][0], out.mean((-3, -2)))
+            assert np.allclose(out_ck_avg, out_avg)
+
+            out_tick = (out[..., None] * readout_params[i][1]).sum((-4, -3, -2))
+            assert np.allclose(out_ck_tick, out_tick)
+
+
+
+
 

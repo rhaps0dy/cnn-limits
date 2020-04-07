@@ -4,10 +4,24 @@ from neural_tangents.utils.kernel import Marginalisation as M
 import jax.experimental.stax as ostax
 
 from jax import random, lax, ops
+import jax
 import jax.numpy as np
 import itertools
 import torch
 
+
+def W_init_scalar(std, key, kernel_shape):
+    return std * random.normal(key, kernel_shape)
+def W_init_tensor(std, key, kernel_shape):
+    x = random.normal(key, kernel_shape)
+    # Naive einsum is already optimal, and uses BLAS TDOT
+    return np.einsum("ghqw,hwio->gqio", std, x)
+def tensor_cholesky(W_cov_tensor):
+    height, width = W_cov_tensor.shape[-3], W_cov_tensor.shape[-1]
+    filter_numel = height*width
+    a = W_cov_tensor.transpose((0, 2, 1, 3)).reshape((filter_numel, filter_numel))
+    a = np.linalg.cholesky(a)
+    return a.reshape((height, width, height, width)).transpose((0, 2, 1, 3))
 
 @stax._layer
 def CorrelatedConv(out_chan,
@@ -33,13 +47,6 @@ def CorrelatedConv(out_chan,
     def input_total_dim(input_shape):
         return input_shape[C_index] * filter_numel
 
-    def W_init_scalar(key, kernel_shape, std):
-        return std * random.normal(key, kernel_shape)
-    def W_init_tensor(key, kernel_shape, std):
-        x = random.normal(key, kernel_shape)
-        # Naive einsum is already optimal, and uses BLAS TDOT
-        return np.einsum("ghqw,hwio->gqio", std, x)
-
     if W_cov_tensor is None:
         if W_std is None:
                 W_std = 1.0
@@ -55,9 +62,7 @@ def CorrelatedConv(out_chan,
             W_cov_tensor = np.einsum("ahcw,bhdw->abcd", W_std, W_std) / filter_numel
     else:
         W_init = W_init_tensor
-        W_std = np.linalg.cholesky(
-            W_cov_tensor.transpose((0, 2, 1, 3)).reshape((filter_numel, filter_numel))
-        ).reshape((height, width, height, width)).transpose((0, 2, 1, 3))
+        W_std = tensor_cholesky(W_cov_tensor)
 
     def init_fn(rng, input_shape):
         kernel_shape = (*filter_shape, input_shape[C_index], out_chan)
@@ -67,7 +72,7 @@ def CorrelatedConv(out_chan,
             W_std_init = W_std / np.sqrt(input_total_dim(input_shape))
         else:
             W_std_init = W_std
-        return output_shape, W_init(rng, kernel_shape, W_std_init)
+        return output_shape, W_init(W_std_init, rng, kernel_shape)
 
     def apply_fn(params, inputs, **kwargs):
         W = params
@@ -176,21 +181,56 @@ def conv4d_for_5or6d(mat, W_cov_tensor, strides, padding):
     return f(f(out[1], 2), 0)
 
 
+def _serial_init_fn(init_fns, readout_init_fns, init_intermediate, rng, input_shape):
+    output_shape = []
+    all_params = []
+    rngs = jax.random.split(rng, 2*len(init_fns)).reshape((len(init_fns), 2, -1))
+    for i, (fn, readout_fn) in enumerate(zip(init_fns, readout_init_fns)):
+        input_shape, params = fn(rngs[i, 0], input_shape)
+        if init_intermediate:
+            shape, params_readout = readout_fn(rngs[i, 1], input_shape)
+        else:
+            shape, params_readout = (), None
+        output_shape.append(shape)
+        all_params.append((params, params_readout))
+    return output_shape, all_params
+
+def _serial_apply_fn(apply_fns, readout_apply_fns, params, inputs, **kwargs):
+    outputs = []
+    for fn, fn_readout, (p, p_readout) in zip(apply_fns, readout_apply_fns, params):
+        inputs = fn(p, inputs)
+        outputs.append(None if p_readout is None
+                        else fn_readout(p_readout, inputs))
+    return outputs
+
+
 @_layer
-def TickSerialCheckpoint(*layers):
+def TickSerialCheckpoint(*layers, intermediate_outputs=True, output_dense_also=False):
     init_fns, apply_fns, kernel_fns, W_covs_list = zip(*layers)
-    o_init_fn, o_apply_fn = ostax.serial(*zip(init_fns, apply_fns))
+    dense_init, dense_apply, _ = stax.Dense(1)
 
-    n_outputs = 2*len(init_fns)
+    # Assume input_shape[-3:-1] are spatial dimensions
+    def readout_init(W_std, rng, input_shape):
+        k1, k2 = jax.random.split(rng, 2)
+        out_dense, params_dense = dense_init(k1, (*input_shape[:-3], input_shape[-1]))
+        params_tick = W_init_tensor(W_std, k2, (*input_shape[-3:], 1))
+        return (2, *out_dense), (params_dense, params_tick)
+    init_fn = jax.partial(
+        _serial_init_fn, init_fns,
+        [jax.partial(readout_init, tensor_cholesky(W_cov))
+         for W_cov in W_covs_list],
+        intermediate_outputs)
 
-    def init_fn(rng, input_shape):
-        output_shape, params = o_init_fn(rng, input_shape)
-        return ([output_shape]*n_outputs,
-                [params] + [()]*(n_outputs-1))
+    def readout_apply(params, inputs):
+        # Assume that inputs[-1] are the channels, and inputs[-3:-1] the image
+        # spatial dimensions.
+        params_dense, params_tick = params
+        mean_pool = dense_apply(params_dense, np.mean(inputs, axis=(-3, -2)))
+        tick = np.einsum("...hwi,hwio->...o", inputs, params_tick)
+        return np.stack([mean_pool, tick], 0)
 
-    def apply_fn(params, inputs, **kwargs):
-        apply_out = o_apply_fn(params[0], inputs, **kwargs)
-        return [apply_out] + [None]*(n_outputs-1)
+    apply_fn = jax.partial(
+        _serial_apply_fn, apply_fns, [readout_apply]*len(apply_fns))
 
     W_covs_T = [W_cov.transpose((2, 3, 0, 1)).ravel()
                 for W_cov in W_covs_list]
@@ -200,7 +240,7 @@ def TickSerialCheckpoint(*layers):
         per_layer_kernels = []
         for f, W_cov, W_cov_T in zip(kernel_fns, W_covs, W_covs_T):
             kernel = f(kernel)
-            d1, d2, *_ = kernel.nngp.shape
+            d1, d2, h, _, w, _ = kernel.nngp.shape
             nngp = kernel.nngp.reshape((d1, d2, -1))
 
             meanpool_nngp = nngp.mean(-1)
@@ -208,11 +248,18 @@ def TickSerialCheckpoint(*layers):
                 tick_nngp = nngp @ W_cov
             else:
                 tick_nngp = nngp @ W_cov_T
-
-            per_layer_kernels = per_layer_kernels + [
+            this_layer_kernels = [
                 kernel._replace(nngp=meanpool_nngp, var1=None, var2=None, ntk=None),
-                kernel._replace(nngp=tick_nngp, var1=None, var2=None, ntk=None),
+                kernel._replace(nngp=tick_nngp, var1=None, var2=None, ntk=None)
             ]
+            if output_dense_also:
+                assert h==w, 'otherwise more expensive and not implemented'
+                dense_nngp = np.trace(kernel.nngp.reshape((d1, d2, h*w, h*w)),
+                                      axis0=-2, axis1=-1) / (h*w)
+                per_layer_kernels = per_layer_kernels + [
+                    kernel._replace(nngp=dense_nngp, var1=None, var2=None, ntk=None)
+                ]
+            per_layer_kernels = per_layer_kernels + this_layer_kernels
         return per_layer_kernels
     setattr(kernel_fn, _INPUT_REQ, {'marginal': M.OVER_POINTS,
                                     'cross': M.NO,
@@ -220,26 +267,16 @@ def TickSerialCheckpoint(*layers):
     return init_fn, apply_fn, kernel_fn
 
 @_layer
-def DenseSerialCheckpoint(*layers):
+def DenseSerialCheckpoint(*layers, intermediate_outputs=True):
     init_fns, apply_fns, kernel_fns = zip(*layers)
 
     readout_init_fn, readout_apply_fn, readout_kernel_fn = stax.serial(
         stax.Flatten(), stax.Dense(1))
-
-    o_init_fn, o_apply_fn = ostax.serial(
-        *zip(init_fns, apply_fns),
-        (readout_init_fn, readout_kernel_fn))
-
-    n_outputs = len(init_fns)
-
-    def init_fn(rng, input_shape):
-        output_shape, params = o_init_fn(rng, input_shape)
-        return ([output_shape]*n_outputs,
-                [params] + [()]*(n_outputs-1))
-
-    def apply_fn(params, inputs, **kwargs):
-        apply_out = o_apply_fn(params[0], inputs, **kwargs)
-        return [apply_out] + [None]*(n_outputs-1)
+    init_fn =  jax.partial(_serial_init_fn,
+                           init_fns,  [readout_init_fn ]*len(init_fns),
+                           intermediate_outputs)
+    apply_fn = jax.partial(_serial_apply_fn,
+                           apply_fns, [readout_apply_fn]*len(init_fns))
 
     def kernel_fn(kernel):
         per_layer_kernels = []
