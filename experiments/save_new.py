@@ -8,8 +8,9 @@ import itertools
 import jax.numpy as np
 import jax
 import pickle
+import h5py
 
-from cnn_gp import DiagIterator, ProductIterator
+from cnn_gp import DiagIterator, ProductIterator, create_h5py_dataset
 from nigp.tbx import PrintTimings
 import cnn_limits
 import cnn_limits.models
@@ -22,7 +23,7 @@ experiment = sacred.Experiment("save_new")
 cnn_limits.sacred_utils.add_file_observer(experiment, __name__)
 load_dataset = experiment.capture(cnn_limits.load_dataset)
 base_dir = experiment.capture(cnn_limits.base_dir)
-new_file = cnn_limits.new_file
+new_file = cnn_limits.def_new_file(base_dir)
 
 
 @experiment.config
@@ -43,12 +44,13 @@ def config():
 
 
 @experiment.capture
-def kern_iterator(kern_name, X, X2, diag, batch_size, worker_rank, n_workers):
-    this_dir = os.path.join(base_dir(), kern_name)
-    if os.path.exists(this_dir):
-        print("Skipping {} (directory exists)".format(kern_name))
+def kern_iterator(f, kern_name, X, X2, diag, batch_size, worker_rank, n_workers):
+    if kern_name in f.keys():
+        print("Skipping {} (group exists)".format(kern_name))
         return
-    os.makedirs(this_dir)
+    N = len(X)
+    N2 = N if X2 is None else len(X2)
+    out = create_h5py_dataset(f, batch_size, kern_name, diag, N, N2)
 
     if diag:
         # Don't split the load for diagonals, they are cheap
@@ -56,25 +58,21 @@ def kern_iterator(kern_name, X, X2, diag, batch_size, worker_rank, n_workers):
     else:
         it = ProductIterator(batch_size, X, X2, worker_rank=worker_rank,
                              n_workers=n_workers)
-    N = len(X)
-    N2 = N if X2 is None else len(X2)
-    zN = len(str(N))
-    zN2 = len(str(N2))
-
-    if diag:
-        def path_fn(i, j):
-            return f"{kern_name}/{str(i).zfill(zN)}.npy"
-    else:
-        def path_fn(i, j):
-            return f"{kern_name}/{str(i).zfill(zN)}_{str(j).zfill(zN)}.npy"
-    return iter(it), path_fn
+    return iter(it), out
 
 
-def kern_save(iterate, kernel_fn, path_fn):
+def kern_save(iterate, kernel_fn, out):
     same, (i, (x, _y)), (j, (x2, _y2)) = iterate
     k = kernel_fn(x, x2, same, False)
-    with new_file(path_fn(i, j)) as f:
-        np.save(f, k)
+    s = k.shape
+    try:
+        if len(s) == 2:
+            out[:s[0], i:i+s[1]] = k
+        else:
+            out[:s[0], i:i+s[1], j:j+s[2]] = k
+    except TypeError:
+        out.resize(k.shape[0], axis=0)
+        return kern_save(iterate, kernel_fn, out)
 
 
 @experiment.command
@@ -127,26 +125,35 @@ def jitted_kernel_fn(kernel_fn):
 def main(worker_rank, print_interval, n_workers):
     train_set, test_set = load_sorted_dataset()
     _, _, kernel_fn = jax_model()
-    kern = jitted_kernel_fn(kernel_fn)
+    # kern = jitted_kernel_fn(kernel_fn)
+    def kern(x1, x2, same, diag):
+        if x2 is None:
+            x2 = x1
+        return np.ones((36, len(x1), len(x2)), dtype=np.float32)
 
-    Kxx, Kxx_path_fn = kern_iterator(kern_name="Kxx", X=train_set, X2=None,     diag=False)
-    Kxt, Kxt_path_fn = kern_iterator(kern_name="Kxt", X=train_set, X2=test_set, diag=False)
-    timings = PrintTimings(desc=f"Kxx+Kxt (worker {worker_rank}/{n_workers})",
-                           print_interval=print_interval)(itertools.count(), len(Kxx) + len(Kxt))
+    with h5py.File(base_dir()/"kernels.h5", "w") as f:
+        Kxx, Kxx_out = kern_iterator(
+            f, kern_name="Kxx", X=train_set, X2=None,     diag=False)
+        Kxt, Kxt_out = kern_iterator(
+            f, kern_name="Kxt", X=train_set, X2=test_set, diag=False)
+        timings = PrintTimings(
+            desc=f"Kxx+Kxt (worker {worker_rank}/{n_workers})",
+            print_interval=print_interval)(
+                itertools.count(), len(Kxx) + len(Kxt))
 
-    Kxx_ongoing = Kxt_ongoing = True
-    while Kxx_ongoing or Kxt_ongoing:
-        if Kxx_ongoing:
-            try:
-                kern_save(next(Kxx), kern, Kxx_path_fn); next(timings)
-            except StopIteration:
-                Kxx_ongoing = False
-        if Kxt_ongoing:
-            try:
-                kern_save(next(Kxt), kern, Kxt_path_fn); next(timings)
-                kern_save(next(Kxt), kern, Kxt_path_fn); next(timings)
-            except StopIteration:
-                Kxt_ongoing = False
+        Kxx_ongoing = Kxt_ongoing = True
+        while Kxx_ongoing or Kxt_ongoing:
+            if Kxx_ongoing:
+                try:
+                    kern_save(next(Kxx), kern, Kxx_out); next(timings)
+                except StopIteration:
+                    Kxx_ongoing = False
+            if Kxt_ongoing:
+                try:
+                    kern_save(next(Kxt), kern, Kxt_out); next(timings)
+                    kern_save(next(Kxt), kern, Kxt_out); next(timings)
+                except StopIteration:
+                    Kxt_ongoing = False
 
 
 if __name__ == '__main__':
