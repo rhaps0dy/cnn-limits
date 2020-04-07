@@ -125,11 +125,7 @@ def jitted_kernel_fn(kernel_fn):
 def main(worker_rank, print_interval, n_workers):
     train_set, test_set = load_sorted_dataset()
     _, _, kernel_fn = jax_model()
-    # kern = jitted_kernel_fn(kernel_fn)
-    def kern(x1, x2, same, diag):
-        if x2 is None:
-            x2 = x1
-        return np.ones((36, len(x1), len(x2)), dtype=np.float32)
+    kern = jitted_kernel_fn(kernel_fn)
 
     with h5py.File(base_dir()/"kernels.h5", "w") as f:
         Kxx, Kxx_out = kern_iterator(

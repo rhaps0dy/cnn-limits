@@ -1,10 +1,14 @@
 from neural_tangents import stax
 from neural_tangents.stax import (AvgPool, Dense, FanInSum, FanOut,
-                                  Flatten, Identity, Relu, ABRelu, Conv, GlobalAvgPool)
+                                  Flatten, Identity, Conv, GlobalAvgPool)
 import jax.experimental.stax as ostax
 import jax.numpy as np
 from .layers import CorrelatedConv, TickSerialCheckpoint, covariance_tensor, DenseSerialCheckpoint
 import gpytorch
+
+
+def Relu():
+    return stax.ABRelu(0, 2**.5)
 
 
 def BasicBlock(out_chan, filter_shape=(3, 3), strides=(1, 1)):
@@ -165,6 +169,7 @@ def Myrtle5Uncorrelated(channels=16):
 
 
 def google_NNGP(channels=16):
+    block = stax.serial(Conv(channels, (3, 3), (1, 1), 'SAME'), Relu())
     return DenseSerialCheckpoint(
-        *[stax.serial(Conv(channels, (3, 3), (1, 1), 'SAME'), Relu())]*36
-    )
+        stax.serial(*(block*20)),
+        *(block*16))
