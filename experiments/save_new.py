@@ -30,12 +30,11 @@ new_file = cnn_limits.def_new_file(base_dir)
 def config():
     dataset_base_path = "/scratch/ag919/datasets/"
 
-    batch_size = 15
-    N_train = batch_size*100
-    N_test = (2000// batch_size + 1)*batch_size
+    batch_size = 400
+    N_train = None
+    N_test = None
     sorted_dataset_path = os.path.join(dataset_base_path, "interlaced_argsort")
     dataset_name = "CIFAR10"
-    max_n_functions = 50
 
     n_workers = 1
     worker_rank = 0
@@ -94,8 +93,12 @@ def load_sorted_dataset(sorted_dataset_path, N_train, N_test):
     with experiment.open_resource(os.path.join(sorted_dataset_path, "test.pkl"), "rb") as f:
         test_idx = pickle.load(f)
     train_set, test_set = load_dataset()
-    return (Subset(train_set, train_idx[:N_train]),
-            Subset(test_set, test_idx[:N_test]))
+    if N_train is not None:
+        train_idx = train_idx[:N_train]
+    if N_test is not None:
+        test_idx = test_idx[:N_test]
+    return (Subset(train_set, train_idx),
+            Subset(test_set, test_idx))
 
 
 ## JAX Model

@@ -171,5 +171,5 @@ def Myrtle5Uncorrelated(channels=16):
 def google_NNGP(channels=16):
     block = stax.serial(Conv(channels, (3, 3), (1, 1), 'SAME'), Relu())
     return DenseSerialCheckpoint(
-        stax.serial(*(block*20)),
-        *(block*16))
+        stax.serial(*([block]*20)),
+        *([block]*16))
