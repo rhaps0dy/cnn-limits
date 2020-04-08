@@ -1,21 +1,20 @@
-import os
-import sacred
 import itertools
+import os
+import pickle
 
+import jax
 import jax.numpy as np
 import numpy as onp
-import jax
-import pickle
-import h5py
+import sacred
 import tqdm
+from torch.utils.data import DataLoader, Subset
 
-from cnn_gp import DiagIterator, ProductIterator
-from nigp.tbx import PrintTimings
 import cnn_limits
 import cnn_limits.models
-from torch.utils.data import Subset, DataLoader
-from neural_tangents.utils.kernel import Marginalisation as M
+import h5py
 from neural_tangents import stax
+from neural_tangents.utils.kernel import Marginalisation as M
+from nigp.tbx import PrintTimings
 
 experiment = sacred.Experiment("mc_nn")
 cnn_limits.sacred_utils.add_file_observer(experiment, __name__)
@@ -27,16 +26,17 @@ new_file = cnn_limits.def_new_file(base_dir)
 def config():
     dataset_base_path = "/scratch/ag919/datasets/"
 
-    batch_size = 200**2
+    batch_size = 200
     N_train = None
     N_test = None
     sorted_dataset_path = os.path.join(dataset_base_path, "interlaced_argsort")
     dataset_name = "CIFAR10"
-    max_n_samples = 80000
+    max_n_samples = 3000
 
     print_interval = 2.
     model = "google_NNGP_sampling"
     n_channels=16
+    N_reps=4
 
 
 def create_dataset(f, batch_size, name, N):
@@ -66,17 +66,16 @@ def populate(F, sample_i, params, apply_fn, data, batch_size, _log):
             out = apply_fn(params, x)
             F[:, sample_i, data_i] = out
         except TypeError:  # should only run once
-            _log.debug(f"Resizing data set {F}")
             F.resize(out.shape[0], axis=0)
             F[:, sample_i, data_i] = out
 
 
 @experiment.automain
-def main(batch_size, model, max_n_samples, n_channels, print_interval, _seed):
+def main(batch_size, model, max_n_samples, n_channels, print_interval, _seed, N_reps):
     train_set, test_set = load_sorted_dataset()
     input_shape = train_set.dataset.data.shape
 
-    _orig_init_fn, _orig_apply_fn, _ = getattr(cnn_limits.models, model)(n_channels)
+    _orig_init_fn, _orig_apply_fn, _ = getattr(cnn_limits.models, model)(n_channels, N_reps)
     init_fn = jax.jit(lambda rng: _orig_init_fn(rng, input_shape))
     @jax.jit
     def _apply_fn(params, x):

@@ -172,9 +172,9 @@ def google_NNGP(channels):
     block = stax.serial(Conv(channels, (3, 3), (1, 1), 'SAME'), Relu())
     return DenseSerialCheckpoint(*([block]*36))
 
-def google_NNGP_sampling(channels):
+def google_NNGP_sampling(channels, N_reps):
     kern = gpytorch.kernels.MaternKernel(nu=3/2)
     kern.lengthscale = 10
     W_cov = covariance_tensor(32, 32, kern)
-    block = (*stax.serial(Conv(channels, (3, 3), (1, 1), 'SAME'), Relu()), W_cov)
-    return TickSerialCheckpoint(*([block]*36))
+    block = (*stax.serial(*([Conv(channels, (3, 3), (1, 1), 'SAME'), Relu()]*N_reps)), W_cov)
+    return TickSerialCheckpoint(*([block]*(36//N_reps)))

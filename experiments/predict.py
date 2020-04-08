@@ -1,17 +1,20 @@
-import sacred
-import numpy as np
-import scipy.linalg
-import h5py
-from cnn_gp import create_h5py_dataset
 import collections
-import os
-from pathlib import Path
-import cnn_limits
-import re
-import pickle
-import tqdm
-from torch.utils.data import Subset, DataLoader
+import contextlib
 import faulthandler
+import itertools
+import os
+import pickle
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import sacred
+import scipy.linalg
+from torch.utils.data import DataLoader, Subset
+
+import cnn_limits
+import h5py
+
 faulthandler.enable()
 
 experiment = sacred.Experiment("predict")
@@ -37,10 +40,12 @@ def config():
     dataset_name = "CIFAR10"
 
     kernel_matrix_path = "/scratch/ag919/logs/save_new/166"
+    feature_paths = [f"/scratch/ag919/logs/mc_nn/{e}/mc.h5" for e in [2,3,5,7]]
 
     N_train = None
     N_test = None
-
+    N_classes = 10
+    layer_range = (2, 999, 3)
 
 
 def get_last_full(present):
@@ -63,80 +68,16 @@ def nan_shape(M, symmetric=False):
     return N_full_row, N_full_col
 
 
-_collect_exp = re.compile(r"^0*([0-9]+)_0*([0-9]+)\.npy$")
-@experiment.capture
-def collect_kernel_matrix(layer_idx, path, _log, symmetric=False):
-    fpaths = list(sorted(path.iterdir(), key=lambda t: t.stat().st_ctime))
-    indices = (tuple(map(int, _collect_exp.match(path.name).groups()))
-               for path in fpaths)
-    idx, jdx = zip(*indices)
-    # B=batch size.
-    n_layers, B, _ = np.load(fpaths[0]).shape
-
-    present_squares = np.zeros((max(idx)//B + 1, max(jdx)//B + 1), bool)
-    for i, j in zip(idx, jdx):
-        present_squares[i//B, j//B] = True
-        if symmetric:
-            present_squares[j//B, i//B] = True
-
-    # Find suitable all-present region
-    full_cols = present_squares.all(axis=0)
-    N_full_col = get_last_full(full_cols) * B
-    _log.debug(f"N full col for {path}: {N_full_col}")
-
-    full_rows = present_squares[:, :N_full_col].all(axis=1)
-    N_full_row = get_last_full(full_rows) * B
-    _log.debug(f"N full row for {path}: {N_full_row}")
-
-    in_memory = len(range(n_layers)[layer_idx])
-    K = np.zeros((in_memory, N_full_row, N_full_col), dtype=np.float32)
-    for fpath, i, j in zip(tqdm.tqdm(fpaths), idx, jdx):
-        if i+B < N_full_row and j+B < N_full_col:
-            K[:, i:i+B, j:j+B] = np.load(fpath)[layer_idx, :, :]
-            # if symmetric and i!=j:
-            #     K[:, j:j+B, i:i+B] = K[:, i:i+B, j:j+B].transpose((0, 2, 1))
-    return K
-
-@experiment.capture
-def collect_kernel_matrix2(f, name, path, _log, symmetric=False):
-    fpaths = list(sorted(path.iterdir(), key=lambda t: t.stat().st_ctime))
-    indices = (tuple(map(int, _collect_exp.match(path.name).groups()))
-               for path in fpaths)
-    idx, jdx = zip(*indices)
-    # B=batch size.
-    n_layers, B, _ = np.load(fpaths[0]).shape
-
-    present_squares = np.zeros((max(idx)//B + 1, max(jdx)//B + 1), bool)
-    for i, j in zip(idx, jdx):
-        present_squares[i//B, j//B] = True
-        if symmetric:
-            present_squares[j//B, i//B] = True
-
-    # Find suitable all-present region
-    full_cols = present_squares.all(axis=0)
-    N_full_col = get_last_full(full_cols) * B
-    _log.debug(f"N full col for {path}: {N_full_col}")
-
-    full_rows = present_squares[:, :N_full_col].all(axis=1)
-    N_full_row = get_last_full(full_rows) * B
-    _log.debug(f"N full row for {path}: {N_full_row}")
-
-    K = create_h5py_dataset(f, B, name, False, N_full_row, N_full_col)
-    K.resize(n_layers, axis=0)
-    for fpath, i, j in zip(tqdm.tqdm(fpaths), idx, jdx):
-        K[:, i:i+B, j:j+B] = np.load(fpath)
-    return K
-
-
 @experiment.capture
 def dataset_targets(dset):
     _, y = next(iter(DataLoader(dset, batch_size=len(dset))))
     return np.asarray(y.numpy())
 
 
-def centered_one_hot(y, N=10):
-    oh = y[:, None] == np.arange(N)
-    return (oh.astype(np.float64)*N - 1) / (N-1)
+@experiment.capture
+def centered_one_hot(y, N_classes=10):
+    oh = y[:, None] == np.arange(N_classes)
+    return (oh.astype(np.float64)*N_classes - 1) / (N_classes-1)
 
 
 def _meta_cholesky_jitter(cholesky_f, Kxx, _log):
@@ -165,19 +106,23 @@ def _meta_cholesky_jitter(cholesky_f, Kxx, _log):
         return None, -1
     return K, jitters[m]
 
+
 try:
     from cnn_limits import magma
     n_gpu = 1
     @experiment.capture
     def cholesky(Kxx, _log, lower=True):
-        K, jitter = _meta_cholesky_jitter(lambda K: magma.potrf(K, lower=True, n_gpu=n_gpu), Kxx, _log)
+        K, jitter = _meta_cholesky_jitter(
+            lambda K: magma.potrf(K, lower=True, n_gpu=n_gpu), Kxx, _log)
         return K, jitter
         _log.debug("Testing K...")
         Kxx.flat[::Kxx.shape[0]+1] += jitter
         # idx = slice(41234, 41334, 1)
         idx = slice(None, None, None)
         K_ = np.tril(K)
-        assert np.allclose(K_[idx]@K_[idx].T, np.nanmean(np.stack([Kxx[idx, idx], Kxx[idx, idx].T], -1), -1))
+        assert np.allclose(
+            K_[idx]@K_[idx].T,
+            np.nanmean(np.stack([Kxx[idx, idx], Kxx[idx, idx].T], -1), -1))
         return K, jitter
 
 except OSError:
@@ -186,16 +131,16 @@ except OSError:
     @experiment.capture
     def cholesky(Kxx, _log, lower=True):
         return _meta_cholesky_jitter(
+            # Note: _meta_cholesky_jitter copies Kxx, so overwrite_a=True is correct
             lambda K: scipy.linalg.cholesky(K, lower=lower, overwrite_a=True, check_finite=False),
-            Kxx)
+            Kxx, _log)
 
 @experiment.capture
 def predict_gp_prepare(Lxx, Kxt, y, _log):
     _log.debug("Solving system...")
     assert Lxx.dtype == np.float64
     A = scipy.linalg.solve_triangular(Lxx, Kxt, lower=True, check_finite=False)
-    b = scipy.linalg.solve_triangular(Lxx, centered_one_hot(y), lower=True,
-                                      check_finite=False)
+    b = scipy.linalg.solve_triangular(Lxx, y, lower=True, check_finite=False)
     if np.any(np.isnan(A)) or np.any(np.isnan(b)):
         import pdb; pdb.set_trace()
     return A.T, b
@@ -207,12 +152,86 @@ def accuracy(y, pred):
     return (y == pred).astype(np.float64).mean(-1)
 
 # TODO Find optimal likelihood for fourier features
+
+
+def log_range(N):
+    r = itertools.chain(
+        range(100, 1000, 100),
+        range(1000, 10000, 1000),
+        range(10000, 50000, 5000),
+        range(50000, 100000, 10000))
+    return [*itertools.takewhile(lambda n: n < N, r), N]
+
+
+def read_features(files, name, out, layer, N, prev_N):
+    prev_features = 0
+    assert N-prev_N >= 0
+    for f in files:
+        features = prev_features + f[name].shape[1]
+        f[name].read_direct(
+                out, source_sel=np.s_[layer, :, prev_N:N],
+                dest_sel=np.s_[prev_features:features, :N-prev_N])
+        prev_features = features
+
+
 @experiment.command
-def collate_kernel_matrix(kernel_matrix_path, _log):
-    kernel_matrix_path = Path(kernel_matrix_path)
-    with h5py.File(base_dir()/"kernels.h5", "w") as f:
-        collect_kernel_matrix2(f, "Kxx", kernel_matrix_path/"Kxx", symmetric=True)
-        collect_kernel_matrix2(f, "Kxt", kernel_matrix_path/"Kxt", symmetric=False)
+def mc_nn(feature_paths, layer_range, _log):
+    train_set, test_set = load_sorted_dataset()
+    train_Y = dataset_targets(train_set)
+    test_Y = dataset_targets(test_set)
+    train_Y_oh = centered_one_hot(train_Y)
+
+    with contextlib.ExitStack() as stack:
+        files = [stack.enter_context(h5py.File(f, 'r')) for f in feature_paths]
+
+        N_layers, _, N_train = files[0]['F_train'].shape
+        _, _, N_test = files[0]['F_test'].shape
+        N_features = sum(f['F_train'].shape[1] for f in files)
+        FF = np.zeros((N_features, N_features), dtype=np.float64)
+        FY = np.zeros((N_features, train_Y_oh.shape[1]), dtype=np.float64)
+        F_train = np.empty((N_features, 10000), dtype=np.float64)
+        F_test = np.empty((N_features, N_test), dtype=np.float64)
+
+        acc_idx = pd.MultiIndex.from_product(
+            [log_range(N_train), log_range(N_features)],
+            names=['N_train', 'N_features'])
+        _layer_range = range(layer_range[0],
+                             min(N_layers, layer_range[1]),
+                             layer_range[2])
+        accuracies = pd.DataFrame(index=_layer_range, columns=acc_idx)
+        list_of_N = accuracies.columns.levels[0]
+        jitters = pd.DataFrame(index=accuracies.index, columns=list_of_N)
+
+        for layer in accuracies.index:
+            read_features(files, 'F_test', F_test, layer, N=F_test.shape[1], prev_N=0)
+            for prev_N, N in zip([0, *list_of_N], list_of_N):
+                _log.debug(f"Reading files for N={N}, layer={layer}")
+                read_features(files, 'F_train', F_train, layer, N, prev_N)
+
+                _log.debug("Updating outer product")
+                _Ft = F_train[:, :N-prev_N]
+                FF += _Ft @ _Ft.T
+                FY += _Ft @ train_Y_oh[prev_N:N]
+
+                _log.debug("Cholesky & prediction")
+                LFF, jitters[N][layer] = cholesky(FF, lower=True)
+                regression_FtL, regression_Ly = predict_gp_prepare(LFF, F_test, FY)
+                del LFF
+
+                for features in accuracies.columns.levels[1]:
+                    pred_F = regression_FtL[:, :features] @ regression_Ly[:features, :]
+                    pred_Y = np.argmax(pred_F, axis=1)
+                    acc = accuracy(test_Y[:N_test], pred_Y)
+                    _log.info(f"Accuracies at N={N}, features={features}, layer={layer}, jitter={jitters[N][layer]}: {acc}")
+                    accuracies[N, features][layer] = acc
+
+            accuracies.to_pickle(base_dir()/"accuracies.pkl.gz")
+            jitters.to_pickle(base_dir()/"jitters.pkl.gz")
+            del regression_Ly
+            del regression_FtL
+            del pred_F
+            del pred_Y
+
 
 @experiment.automain
 def mainv2(kernel_matrix_path, _log):
@@ -234,17 +253,13 @@ def mainv2(kernel_matrix_path, _log):
             effective_N, Nt = nan_shape(Kxt)
             effective_N = min(nan_shape(Kxx)[0], effective_N)
 
-            all_Ns = reversed([*range(100, 1000, 100),
-                               *range(1000, 10000, 1000),
-                               *range(10000, 50000, 5000),
-                               effective_N])
             Lxx, jitter = cholesky(Kxx[:effective_N, :effective_N], lower=True)
             Lxx = Lxx.astype(np.float64, copy=False)
-            gp_KtL, gp_Ly = predict_gp_prepare(Lxx, Kxt[:effective_N, :Nt], train_Y[:effective_N])
+            gp_KtL, gp_Ly = predict_gp_prepare(Lxx, Kxt[:effective_N, :Nt], centered_one_hot(train_Y[:effective_N]))
             del Lxx
 
             jitters[layer] = jitter
-            for N in filter(lambda x: x<=effective_N, all_Ns):
+            for N in reversed(log_range(effective_N)):
                 pred_F = gp_KtL[:, :N] @ gp_Ly[:N, :]
                 pred_Y = np.argmax(pred_F, axis=1)
                 acc = accuracy(test_Y[:Nt], pred_Y)
