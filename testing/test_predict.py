@@ -1,10 +1,12 @@
+import logging
 import unittest
 
 import jax
 import jax.numpy as np
 import torch
 
-from experiments.predict import jax_linear_lik, likelihood_cholesky
+from experiments.predict import (jax_linear_lik, likelihood_cholesky,
+                                 likelihood_cholesky_kernel)
 from gpytorch.distributions import MultivariateNormal
 
 torch.set_default_dtype(torch.float64)
@@ -57,3 +59,23 @@ class LikTest(unittest.TestCase):
         import matplotlib.pyplot as plt
         plt.plot(grid_x, likelihoods)
         plt.show()
+
+    def test_likelihood_cholesky_kernel(self, N=10, D=19):
+        F = torch.randn(2*N - 5, 2*N)
+        Y = torch.randn(N, D)
+        Kxx_notril = F[:N] @ F[:N].t()
+        Kxx = torch.tril(Kxx_notril)
+        Kxt = F[:N] @ F[N:].t()
+
+        sigy, lik, FtL, Ly, (grid, likelihoods) = likelihood_cholesky_kernel(
+            Kxx.numpy(), Kxt.numpy(), Y.numpy(), 100, logging)
+
+        with torch.no_grad():
+            dist = MultivariateNormal(torch.zeros(N), Kxx_notril + sigy*torch.eye(N))
+            lik_torch = dist.log_prob(Y.t()).sum()
+            L = dist.lazy_covariance_matrix.cholesky().evaluate()
+            FtL_torch = torch.triangular_solve(Kxt, L, upper=False).solution.t()
+            Ly_torch = torch.triangular_solve(Y, L, upper=False).solution
+        assert np.allclose(lik_torch.numpy(), lik)
+        assert np.allclose(FtL_torch.numpy(), FtL)
+        assert np.allclose(Ly_torch.numpy(), Ly)

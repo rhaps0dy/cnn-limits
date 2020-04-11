@@ -21,7 +21,8 @@ import cnn_limits
 
 faulthandler.enable()
 
-experiment = sacred.Experiment("predict")
+# TODO remove sgi=False
+experiment = sacred.Experiment("predict", save_git_info=False)
 cnn_limits.sacred_utils.add_file_observer(experiment, __name__)
 load_dataset = experiment.capture(cnn_limits.load_dataset)
 base_dir = experiment.capture(cnn_limits.base_dir)
@@ -44,13 +45,15 @@ def config():
     dataset_name = "CIFAR10"
 
     kernel_matrix_path = "/scratch/ag919/logs/save_new/166"
-    feature_paths = [f"/scratch/ag919/logs/mc_nn/{e}/mc.h5" for e in [2,3,5,7]]
-
+    feature_paths = [f"/scratch/ag919/logs/mc_nn/{e}/mc.h5" for e in [2,3,5,7,
+                                                                      10,11,12,13,14,15,16,
+                                                                      17,10,19,20,21,22,23]]
     N_train = None
     N_test = None
     N_classes = 10
     layer_range = (2, 999, 3)
     train_do_range = False
+    n_grid_opt_points = 1000
 
 
 def get_last_full(present):
@@ -137,13 +140,13 @@ def jax_linear_lik(FF, FY, y, n_train, log_sigy):
     Lxx = jax_reg_chol(FF, sigy)
     A = jax.scipy.linalg.solve_triangular(Lxx, FY, lower=True)
 
-    logdet_Lxx_part = -n_out * jnp.log(jnp.diag(Lxx)).sum()
+    logdet_Lxx_part = -n_out * jnp.log(jnp.diag(Lxx)).sum() - .5*n_out*(n_train-n_features)*log_sigy
     exp_part = -.5*(y - A.ravel() @ A.ravel()) / sigy
-    scalar_part = -.5*(n_train*n_out)*(math.log(2*math.pi)) - .5*n_out*(n_train-n_features)*log_sigy
+    scalar_part = -.5*(n_train*n_out)*(math.log(2*math.pi))
     return (logdet_Lxx_part + exp_part + scalar_part)
 
 
-def likelihood_cholesky(FF, FY, F_test, train_Y, grid_opt_points=100, lower=True):
+def likelihood_cholesky(FF, FY, F_test, train_Y, n_grid_opt_points=100, lower=True):
     assert lower
     FF = jnp.asarray(FF)
     FY = jnp.asarray(FY)
@@ -152,7 +155,7 @@ def likelihood_cholesky(FF, FY, F_test, train_Y, grid_opt_points=100, lower=True
     n_train, _ = train_Y.shape
 
     _lik = jax.jit(jax.partial(jax_linear_lik, FF, FY, y, n_train))
-    grid_x = jnp.log(jnp.square(jnp.linspace(1e-3, 110, grid_opt_points)))[::-1]
+    grid_x = jnp.log(jnp.square(jnp.linspace(1e-3, 110, n_grid_opt_points)))[::-1]
     likelihoods = []
     for g in grid_x:
         y = _lik(g)
@@ -192,6 +195,91 @@ try:
             np.nanmean(np.stack([Kxx[idx, idx], Kxx[idx, idx].T], -1), -1))
         return K, jitter
 
+
+    @experiment.capture
+    def likelihood_cholesky_kernel(Kxx, Kxt, oh_train_Y, n_grid_opt_points, _log, FY=None, lower=True):
+        """Determines optimal likelihood noise for the Gaussian N(y | 0, Kxx).
+
+        Let Lxx = cholesky(Kxx + σ_y² I). Returns solve(Lxx, oh_train_Y) and
+        solve(Lxx, Kxt).
+        """
+        N, D = oh_train_Y.shape
+        """In what follows, σ_y is the variance, not the standard deviation.
+
+        For j=1..D, the marginal likelihood is
+              -1/2 ∑_j [y_jᵀ(Kxx + σ_y I)⁻¹y_j      + logdet(Kxx + σ_y I) + N log(2π)]
+            = -D/2  [(∑_j y_jᵀ(Kxx + σ_y I)⁻¹y_j)/D + logdet(Kxx + σ_y I) + N log(2π)]
+
+            = -D/2 [N log(2π) + ∑_i ((∑_j α_ij)/D / (λ_i + σ_y) + log(λ_i + σ_y))]
+
+        using the eigendecomposition. α_ij = [Qᵀ oh_train_Y]²_ij. We'll assume
+        all eigenvalues λ_i are positive.
+
+        We have to find the argmax with respect to σ_y. The negative likelihood
+        is a sum over i of:
+
+            -2/D Lik(σ_y) + C = β_i / (λ_i + σ_y) + log(λ_i + σ_y)
+
+        for β_i = (∑_j α_ij)/D. The derivative is
+
+            -β_i/(λ_i + σ_y)² + 1/(λ_i + σ_y)¹,
+
+        which has its only zero at σ_y = β_i - λ_i. Thus, the minimum σ_y of
+        the sum over i (thus, the maximum of the likelihood) has to be between
+        min_i(β_i - λ_i) and max_i(β_i - λ_i). We will find it with a
+        logarithmic grid search.
+        """
+        _log.debug("Calculating eigendecomposition")
+        eig = magma.syevd(Kxx.astype(np.float64, copy=True), vectors=True, lower=lower)
+        _log.debug("Calculating alpha and beta")
+        alpha = eig.vecs.T @ oh_train_Y
+        beta = (alpha[:, None, :] @ alpha[:, :, None]).ravel() / D
+
+        """If the smallest eigenvalue of Kxx is negative, the analysis above does not
+        apply. We first need to add jitter to it until the smallest eigenvalue
+        is positive. In that case:
+
+            eigvals = eig.vals + abs(eig.vals.min())
+
+        Then, we compute (sigy_bounds := beta-eigvals) as usual, to calculate
+        the interval where the optimal σ_y lies. Finally, we need to add
+        `abs(eig.vals.min())` back to this interval, so the result is:
+
+            sigy_bounds = beta - (eig.vals + abs(eig.vals.min())) + abs(eig.vals.min())
+                        = beta - eig.vals
+
+        The computations are thus the same.
+        """
+        sigy_bounds = beta - eig.vals
+        min_sigy = max(sigy_bounds.min(), 0)  # sigy cannot be negative
+        max_sigy = sigy_bounds.max()
+        if max_sigy < 0:
+            grid = np.zeros([1])  # Optimal likelihood is with zero sigy
+        else:
+            log_grid = np.linspace(np.log(min_sigy), np.log(max_sigy), n_grid_opt_points)
+            grid = np.exp(log_grid)
+
+        _log.debug("Calculating likelihood for all grid points...")
+        grid_vals = eig.vals + grid[:, None]
+        likelihoods_sum_term = (beta / grid_vals).sum(1) + np.log(grid_vals).sum(1)
+        likelihoods = -D/2 * (N*np.log(2*np.pi) + likelihoods_sum_term)
+
+        opt_i = likelihoods.argmax()
+        sigy = grid[opt_i]
+        _log.debug(f"Finished grid search. Optimal sigy={sigy}, opt_i={opt_i}/{len(likelihoods)}, likelihood={likelihoods[opt_i]}")
+
+        _log.debug("Cholesky decomposition using optimal sigy")
+        L = Kxx.astype(np.float64, copy=True)
+        L.flat[::L.shape[0]+1] += sigy
+        magma.potrf(L, lower=lower)
+
+        _log.debug("Solving triangular linear systems")
+        if not lower:
+            L = L.T
+        FtL = scipy.linalg.solve_triangular(L, Kxt, lower=True).T
+        Ly = scipy.linalg.solve_triangular(L, oh_train_Y, lower=True)
+        return sigy, likelihoods[opt_i], FtL, Ly, (grid, likelihoods)
+
 except OSError:
     print("Warning: Could not load MAGMA.")
     @experiment.capture
@@ -200,6 +288,9 @@ except OSError:
             # Note: _meta_cholesky_jitter copies Kxx, so overwrite_a=True is correct
             lambda K: scipy.linalg.cholesky(K, lower=lower, overwrite_a=True, check_finite=False),
             Kxx, _log)
+
+
+
 
 @experiment.capture
 def predict_gp_prepare(Lxx, Kxt, y, _log):
@@ -309,6 +400,70 @@ def mc_nn(feature_paths, layer_range, train_do_range, _log):
             del pred_Y
 
 # TODO figure out bug in the 
+@experiment.command
+def dual_mc_nn(feature_paths, layer_range, _log):
+    train_set, test_set = load_sorted_dataset()
+    train_Y = dataset_targets(train_set)
+    test_Y = dataset_targets(test_set)
+    kernel_matrix_path = Path(kernel_matrix_path)
+
+    with contextlib.ExitStack() as stack:
+        files = [stack.enter_context(h5py.File(f, 'r')) for f in feature_paths]
+        N_layers, _, N_train = files[-1]['F_train'].shape
+        _, _, N_test = files[-1]['F_test'].shape
+        N_features = sum(f['F_train'].shape[1] for f in files)
+
+        # max_ind_N_features = max(f['F_train'].shape[1] for f in files)
+        # F_train = np.empty((max_ind_N_features, N_train), np.float32)
+
+        list_of_N = log_range(N_train)
+        _layer_range = range(layer_range[0],
+                             min(N_layers, layer_range[1]),
+                             layer_range[2])
+        accuracies = pd.DataFrame(index=_layer_range, columns=list_of_N)
+        jitters = {}
+        # likelihoods = pd.DataFrame(index=accuracies.index, columns=list_of_N)
+
+
+        Kxx = np.empty((N_train, N_train), dtype=np.float32)  # We copy it with an astype later
+        Kxt = np.empty((N_train, N_test), dtype=np.float64)
+
+        for layer in accuracies.index:
+            Kxx[...] = 0
+            Kxt[...] = 0
+            for f in files:
+                # f['F_train'].read_direct(
+                #     F_train,
+                #     source_sel=np.s_[layer, :, :],
+                #     dest_sel=np.s_[:f['F_train'].shape[1], :])
+                F_train = f['F_train'][layer, :, :]
+                Kxx += F_train.T @ F_train
+                Kxt += F_train.T @ f['F_test'][layer, :, :]
+
+            effective_N = N_train
+            Lxx, jitter = cholesky(Kxx[:effective_N, :effective_N], lower=True)
+            Lxx = Lxx.astype(np.float64, copy=False)
+            gp_KtL, gp_Ly = predict_gp_prepare(Lxx, Kxt[:effective_N, :Nt], centered_one_hot(train_Y[:effective_N]))
+            del Lxx
+
+            jitters[layer] = jitter
+            for N in reversed(log_range(effective_N)):
+                pred_F = gp_KtL[:, :N] @ gp_Ly[:N, :]
+                pred_Y = np.argmax(pred_F, axis=1)
+                acc = accuracy(test_Y[:N_test], pred_Y)
+                _log.info(f"Accuracies at N={N}, layer={layer}, jitter={jitter}: {acc}")
+                accuracies.loc[layer, N] = acc
+
+                # Overwrite the files each time; so that if the experiment is
+                # interrupted we keep intermediate results
+                accuracies.to_pickle(base_dir()/"accuracies.pkl")
+            with new_file("jitters.pkl") as write_f:
+                pickle.dump(dict(jitters), write_f)
+            del gp_KtL
+            del gp_Ly
+            del pred_F
+            del pred_Y
+
 
 
 @experiment.automain

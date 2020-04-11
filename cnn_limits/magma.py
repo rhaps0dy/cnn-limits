@@ -9,7 +9,7 @@ import numpy as np
 import torch
 from numpy.ctypeslib import as_array, as_ctypes, ndpointer
 
-__all__ = ['posv', 'potrf', 'potri', 'make_symm', 'eigh', 'EigenOut']
+__all__ = ['posv', 'potrf', 'potri', 'make_symm', 'syevd', 'EigenOut']
 
 # Load the library
 # libmagma_path = "/usr/local/magma/lib/libmagma.so"
@@ -297,12 +297,12 @@ def potri(A, lower=False):
 EigenOut = collections.namedtuple("EigenOut", ("vals", "vecs"))
 
 
-by_dtype_eigh = {
+by_dtype_syevd = {
     np.dtype(np.float32): libmagma.magma_ssyevd_m,
     np.dtype(np.float64): libmagma.magma_dsyevd_m,
 }
 for dtype in [np.dtype(np.float32), np.dtype(np.float64)]:
-    f = by_dtype_eigh[dtype]
+    f = by_dtype_syevd[dtype]
     f.argtypes = [
         magma_int,                     # ngpu
         enum,                          # jobz
@@ -320,7 +320,7 @@ for dtype in [np.dtype(np.float32), np.dtype(np.float64)]:
     f.restype = magma_int  # info
     f.argnames = ["ngpu", "jobz", "uplo", "n", "A", "lda", "w", "work",
                   "lwork", "iwork", "liwork", "info"]
-def eigh(A, vectors=False, lower=True, n_gpu=1):
+def syevd(A, vectors=False, lower=True, n_gpu=1):
     "computes eigenvalues and optionally eigenvectors of PSD matrix A"
     info = magma_int()
     if not (A.shape[0] == A.shape[1]):
@@ -360,7 +360,7 @@ def eigh(A, vectors=False, lower=True, n_gpu=1):
         assert 'cuda' in A.device.type, "`A` is not in GPU, use Numpy version."
     else:
         raise ValueError("type of A: {}".format(type(A)))
-    f = by_dtype_eigh[A.dtype]
+    f = by_dtype_syevd[A.dtype]
     f(*args, byref(info))
 
     info = info.value
