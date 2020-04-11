@@ -1,11 +1,15 @@
-from ctypes import (CDLL, c_uint, POINTER, c_int64, c_int, c_float, byref)
-import ctypes
-from numpy.ctypeslib import (ndpointer, as_ctypes, as_array)
 import atexit
-import numpy as np
+import collections
+import ctypes
 import os
+from ctypes import (CDLL, POINTER, byref, c_float, c_int, c_int64, c_longlong,
+                    c_uint)
 
-__all__ = ['posv', 'potrf', 'potri', 'make_symm']
+import numpy as np
+import torch
+from numpy.ctypeslib import as_array, as_ctypes, ndpointer
+
+__all__ = ['posv', 'potrf', 'potri', 'make_symm', 'eigh', 'EigenOut']
 
 # Load the library
 # libmagma_path = "/usr/local/magma/lib/libmagma.so"
@@ -16,11 +20,13 @@ except OSError as e:
     raise OSError(("{}. Please edit `libmagma_path` in \"{}\" to the correct "
                    "location".format(e, __file__)))
 
-import torch
 
 # MAGMA dtypes
 enum = c_uint
-magma_int = c_int  # because we linked with mkl_intel_lp64, instead of mkl_intel_ilp64
+class vec_t:
+    MagmaNoVec = 301
+    MagmaVec   = 302
+magma_int = c_longlong  # because we linked with mkl_intel_ilp64, instead of mkl_intel_lp64
 class uplo:
     upper         = 121
     lower         = 122
@@ -286,6 +292,89 @@ def potri(A, lower=False):
         raise ValueError("Error code: {}".format(info))
     uplo.enforce(A, uplo_A)
     return A
+
+
+EigenOut = collections.namedtuple("EigenOut", ("vals", "vecs"))
+
+
+by_dtype_eigh = {
+    np.dtype(np.float32): libmagma.magma_ssyevd_m,
+    np.dtype(np.float64): libmagma.magma_dsyevd_m,
+}
+for dtype in [np.dtype(np.float32), np.dtype(np.float64)]:
+    f = by_dtype_eigh[dtype]
+    f.argtypes = [
+        magma_int,                     # ngpu
+        enum,                          # jobz
+        enum,                          # uplo
+        magma_int,                     # n
+        ndpointer(dtype, ndim=2, flags=('F', 'ALIGNED', 'WRITEABLE')), # A
+        magma_int,                     # lda
+        ndpointer(dtype, ndim=1, flags=('F', 'ALIGNED', 'WRITEABLE')), # w
+        ndpointer(dtype, ndim=1, flags=('F', 'ALIGNED', 'WRITEABLE')), # work
+        magma_int,                     # lwork
+        ndpointer(np.int64, ndim=1, flags=('F', 'ALIGNED', 'WRITEABLE')), # iwork
+        magma_int,                     # liwork
+        POINTER(magma_int),            # info
+    ]
+    f.restype = magma_int  # info
+    f.argnames = ["ngpu", "jobz", "uplo", "n", "A", "lda", "w", "work",
+                  "lwork", "iwork", "liwork", "info"]
+def eigh(A, vectors=False, lower=True, n_gpu=1):
+    "computes eigenvalues and optionally eigenvectors of PSD matrix A"
+    info = magma_int()
+    if not (A.shape[0] == A.shape[1]):
+        raise ValueError("Matrix A must be square, is {}.".format(A.shape))
+    jobz = vec_t.MagmaVec if vectors else vec_t.MagmaNoVec
+    uplo_A = uplo.lower if lower else uplo.upper
+    uplo.check(A, uplo_A)
+
+    NB = 64   # from magma_get_dsytrd_nb
+    N = A.shape[0]
+    if N <= 1:
+        liwork = lwork = 1
+    elif vectors:
+        lwork = max(2*N + N*NB, 1 + 6*N + 2*N**2)
+        liwork = 3 + 5*N
+    else:
+        lwork = 2*N + N*NB
+        liwork = 1
+
+    if isinstance(A, np.ndarray):
+        if not A.flags['F']:
+            A = A.T
+            uplo_A = uplo.transpose(uplo_A)
+        w = np.empty(A.shape[0], A.dtype, order='F')
+        work = np.empty(lwork, A.dtype, order='F')
+        iwork = np.empty(liwork, np.int64, order='F')
+        args = [n_gpu,
+                jobz,
+                uplo_A,
+                A.shape[0], A, lda(A),
+                w,
+                work, lwork,
+                iwork, liwork]
+    elif isinstance(A, torch.Tensor):
+        raise NotImplementedError
+        assert A.t().is_contiguous(), "`A` is not in Fortran format"
+        assert 'cuda' in A.device.type, "`A` is not in GPU, use Numpy version."
+    else:
+        raise ValueError("type of A: {}".format(type(A)))
+    f = by_dtype_eigh[A.dtype]
+    f(*args, byref(info))
+
+    info = info.value
+    if info < 0:
+        raise ValueError("Illegal {}th argument: {} = {}"
+                         .format(-info, f.argnames[-info], args[-info]))
+        # it could also be that the error is a MAGMA_ERR definition, see
+        # `magma_types.h`
+    if info > 0:
+        raise np.linalg.LinAlgError("Failed to converge")
+    print(f"work: len(work)={len(work)}, lwork={lwork}, opt_lwork={work[0]}")
+    print(f"iwork: len(iwork)={len(iwork)}, liwork={liwork}, opt_liwork={iwork[0]}")
+    uplo.enforce(A, uplo_A)
+    return EigenOut(w, A)
 
 
 def make_symm(A, lower=False):

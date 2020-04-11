@@ -2,18 +2,22 @@ import collections
 import contextlib
 import faulthandler
 import itertools
+import math
 import os
 import pickle
 from pathlib import Path
 
+import h5py
+import jax
+import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 import sacred
 import scipy.linalg
+import scipy.optimize
 from torch.utils.data import DataLoader, Subset
 
 import cnn_limits
-import h5py
 
 faulthandler.enable()
 
@@ -46,6 +50,7 @@ def config():
     N_test = None
     N_classes = 10
     layer_range = (2, 999, 3)
+    train_do_range = False
 
 
 def get_last_full(present):
@@ -107,6 +112,68 @@ def _meta_cholesky_jitter(cholesky_f, Kxx, _log):
     return K, jitters[m]
 
 
+def jax_reg_chol(FF, sigy):
+    Sxx = FF + jnp.diag(jnp.full((FF.shape[0],), sigy))
+    Lxx = jnp.linalg.cholesky(Sxx)
+    return Lxx
+
+
+def jax_kernel_lik(Kxx, y, log_sigy):
+    """Likelihood for Bayesian linear regression, using the "kernel matrix"
+    version. More efficient when data points < features
+    """
+    n_train, _ = Kxx.shape
+    log_sigy = jnp.squeeze(log_sigy)
+    sigy = jnp.exp(log_sigy)
+    Lxx = jax_reg_chol(Kxx, sigy)
+
+
+def jax_linear_lik(FF, FY, y, n_train, log_sigy):
+    """Likelihood for Bayesian linear regression, using the "design matrix" version
+    of the calculation. More efficient when features < data points"""
+    n_features, n_out = FY.shape
+    log_sigy = jnp.squeeze(log_sigy)
+    sigy = jnp.exp(log_sigy)
+    Lxx = jax_reg_chol(FF, sigy)
+    A = jax.scipy.linalg.solve_triangular(Lxx, FY, lower=True)
+
+    logdet_Lxx_part = -n_out * jnp.log(jnp.diag(Lxx)).sum()
+    exp_part = -.5*(y - A.ravel() @ A.ravel()) / sigy
+    scalar_part = -.5*(n_train*n_out)*(math.log(2*math.pi)) - .5*n_out*(n_train-n_features)*log_sigy
+    return (logdet_Lxx_part + exp_part + scalar_part)
+
+
+def likelihood_cholesky(FF, FY, F_test, train_Y, grid_opt_points=100, lower=True):
+    assert lower
+    FF = jnp.asarray(FF)
+    FY = jnp.asarray(FY)
+    train_Y = jnp.asarray(train_Y)
+    y = train_Y.ravel() @ train_Y.ravel()  # tr(YY^T)
+    n_train, _ = train_Y.shape
+
+    _lik = jax.jit(jax.partial(jax_linear_lik, FF, FY, y, n_train))
+    grid_x = jnp.log(jnp.square(jnp.linspace(1e-3, 110, grid_opt_points)))[::-1]
+    likelihoods = []
+    for g in grid_x:
+        y = _lik(g)
+        if np.isnan(y):
+            break
+        likelihoods.append(y)
+    if len(likelihoods) == 0:
+        return np.nan, np.nan, None, None, (grid_x[:0], grid_x[:0])
+    likelihoods = np.stack(likelihoods)
+    grid_x = np.asarray(grid_x[:len(likelihoods)])
+    max_i = likelihoods.argmax()
+    sigy = np.exp(grid_x[max_i])
+    lik = likelihoods[max_i]
+    print(f"Found max sigy={sigy}, lik={lik}")
+
+    Lxx = np.asarray(jax_reg_chol(FF, jnp.asarray(sigy)))
+    FtL = jax.scipy.linalg.solve_triangular(Lxx, jnp.asarray(F_test), lower=True).T
+    Ly = jax.scipy.linalg.solve_triangular(Lxx, FY, lower=True)
+    return sigy, lik, np.asarray(FtL), np.asarray(Ly), (grid_x, likelihoods)
+
+
 try:
     from cnn_limits import magma
     n_gpu = 1
@@ -126,8 +193,7 @@ try:
         return K, jitter
 
 except OSError:
-    print("Warning: could not load magma. Proceed? ")
-    input()
+    print("Warning: Could not load MAGMA.")
     @experiment.capture
     def cholesky(Kxx, _log, lower=True):
         return _meta_cholesky_jitter(
@@ -156,7 +222,7 @@ def accuracy(y, pred):
 
 def log_range(N):
     r = itertools.chain(
-        range(100, 1000, 100),
+        range(500, 1000, 500),
         range(1000, 10000, 1000),
         range(10000, 50000, 5000),
         range(50000, 100000, 10000))
@@ -175,7 +241,7 @@ def read_features(files, name, out, layer, N, prev_N):
 
 
 @experiment.command
-def mc_nn(feature_paths, layer_range, _log):
+def mc_nn(feature_paths, layer_range, train_do_range, _log):
     train_set, test_set = load_sorted_dataset()
     train_Y = dataset_targets(train_set)
     test_Y = dataset_targets(test_set)
@@ -189,11 +255,15 @@ def mc_nn(feature_paths, layer_range, _log):
         N_features = sum(f['F_train'].shape[1] for f in files)
         FF = np.zeros((N_features, N_features), dtype=np.float64)
         FY = np.zeros((N_features, train_Y_oh.shape[1]), dtype=np.float64)
-        F_train = np.empty((N_features, 10000), dtype=np.float64)
+        F_train = np.empty((N_features, 50000), dtype=np.float64)
         F_test = np.empty((N_features, N_test), dtype=np.float64)
 
+        if train_do_range:
+            list_of_N = log_range(N_train)
+        else:
+            list_of_N = [N_train]
         acc_idx = pd.MultiIndex.from_product(
-            [log_range(N_train), log_range(N_features)],
+            [list_of_N, log_range(N_features)],
             names=['N_train', 'N_features'])
         _layer_range = range(layer_range[0],
                              min(N_layers, layer_range[1]),
@@ -201,7 +271,8 @@ def mc_nn(feature_paths, layer_range, _log):
         accuracies = pd.DataFrame(index=_layer_range, columns=acc_idx)
         list_of_N = accuracies.columns.levels[0]
         jitters = pd.DataFrame(index=accuracies.index, columns=list_of_N)
-
+        likelihoods = pd.DataFrame(index=accuracies.index, columns=list_of_N)
+        opt_grid = {}
         for layer in accuracies.index:
             read_features(files, 'F_test', F_test, layer, N=F_test.shape[1], prev_N=0)
             for prev_N, N in zip([0, *list_of_N], list_of_N):
@@ -214,9 +285,11 @@ def mc_nn(feature_paths, layer_range, _log):
                 FY += _Ft @ train_Y_oh[prev_N:N]
 
                 _log.debug("Cholesky & prediction")
-                LFF, jitters[N][layer] = cholesky(FF, lower=True)
-                regression_FtL, regression_Ly = predict_gp_prepare(LFF, F_test, FY)
-                del LFF
+                (jitters[N][layer], likelihoods[N][layer], regression_FtL,
+                 regression_Ly, opt_grid[N, layer]
+                 ) = likelihood_cholesky(FF, FY, F_test, train_Y_oh[:N], lower=True)
+                if regression_FtL is None:
+                    continue
 
                 for features in accuracies.columns.levels[1]:
                     pred_F = regression_FtL[:, :features] @ regression_Ly[:features, :]
@@ -227,10 +300,15 @@ def mc_nn(feature_paths, layer_range, _log):
 
             accuracies.to_pickle(base_dir()/"accuracies.pkl.gz")
             jitters.to_pickle(base_dir()/"jitters.pkl.gz")
+            likelihoods.to_pickle(base_dir()/"likelihoods.pkl.gz")
+            with new_file("opt_grid.pkl") as write_f:
+                pickle.dump(opt_grid, write_f)
             del regression_Ly
             del regression_FtL
             del pred_F
             del pred_Y
+
+# TODO figure out bug in the 
 
 
 @experiment.automain

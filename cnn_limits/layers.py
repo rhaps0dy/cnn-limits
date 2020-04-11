@@ -1,13 +1,12 @@
-from neural_tangents.stax import _layer, Padding, _INPUT_REQ, _set_input_req_attr
-import neural_tangents.stax as stax
-from neural_tangents.utils.kernel import Marginalisation as M
-import jax.experimental.stax as ostax
-
-from jax import random, lax, ops
 import jax
 import jax.numpy as np
-import itertools
 import torch
+from jax import lax, ops, random
+
+import neural_tangents.stax as stax
+from neural_tangents.stax import (_INPUT_REQ, Padding, _layer,
+                                  _set_input_req_attr)
+from neural_tangents.utils.kernel import Marginalisation as M
 
 
 def W_init_scalar(std, key, kernel_shape):

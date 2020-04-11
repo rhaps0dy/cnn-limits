@@ -2,6 +2,7 @@ import itertools
 import os
 import pickle
 
+import h5py
 import jax
 import jax.numpy as np
 import numpy as onp
@@ -11,7 +12,6 @@ from torch.utils.data import DataLoader, Subset
 
 import cnn_limits
 import cnn_limits.models
-import h5py
 from neural_tangents import stax
 from neural_tangents.utils.kernel import Marginalisation as M
 from nigp.tbx import PrintTimings
@@ -89,7 +89,8 @@ def main(batch_size, model, max_n_samples, n_channels, print_interval, _seed, N_
     def apply_fn(params, x):
         return _apply_fn(params, np.asarray(x.numpy()))
 
-    key = jax.random.PRNGKey(_seed)
+    all_keys = jax.random.split(jax.random.PRNGKey(_seed), max_n_samples)
+    np.save(base_dir()/"random_keys.npy", all_keys)
 
     with h5py.File(base_dir()/"mc.h5", "w") as f:
         F_train = create_dataset(f, batch_size, "F_train", len(train_set))
@@ -97,7 +98,6 @@ def main(batch_size, model, max_n_samples, n_channels, print_interval, _seed, N_
 
         print_timings = PrintTimings(print_interval=print_interval)
         for sample_i in print_timings(range(max_n_samples), total=max_n_samples):
-            _, key = jax.random.split(key, 2)
-            _, params = init_fn(key)
+            _, params = init_fn(all_keys[sample_i])
             populate(F_train, sample_i, params, apply_fn, train_set)
             populate(F_test, sample_i, params, apply_fn, test_set)
