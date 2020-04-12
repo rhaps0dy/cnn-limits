@@ -52,3 +52,21 @@ class LikTest(unittest.TestCase):
         assert np.allclose(lik_torch.numpy(), lik)
         assert np.allclose(FtL_torch.numpy(), FtL)
         assert np.allclose(Ly_torch.numpy(), Ly)
+
+    def test_lck_consistent(self, N=10, E=4, D=3):
+        F = np.random.randn(N, E)
+        F_test = np.random.randn(N+1, E)
+        Y = np.random.randn(N, D)
+        FF = F.T @ F
+        FY = F.T @ Y
+        Kxx = F@F.T
+        Kxt = F @ F_test.T
+
+        sigy1, lik1, FtL1, Ly1, (grid1, likelihoods1) = likelihood_cholesky_kernel(
+            FF, F_test.T, Y, 5000, logging, FY=FY)
+        sigy2, lik2, FtL2, Ly2, (grid2, likelihoods2) = likelihood_cholesky_kernel(
+            Kxx, Kxt, Y, 5000, logging, FY=None)
+
+        assert np.allclose(FtL1@Ly1, FtL2@Ly2)
+        assert np.allclose(sigy1, sigy2)
+        assert np.allclose(lik1, lik2)

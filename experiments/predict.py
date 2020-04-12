@@ -222,7 +222,7 @@ try:
 
         for β_i = (∑_j α_ij)/D. The derivative is
 
-            -β_i/(λ_i + σ_y)² + 1/(λ_i + σ_y)¹,
+            -β_i/(λ_i + σ_y)² + 1/(λ_i + σ_y),
 
         which has its only zero at σ_y = β_i - λ_i. Thus, the minimum σ_y of
         the sum over i (thus, the maximum of the likelihood) has to be between
@@ -255,10 +255,13 @@ try:
 
         The computations are thus the same.
         """
-        eigval_floor = max(-eig.vals.min(), np.finfo(eig.vals.dtype).eps)
+        eigval_floor = max(-eig.vals.min() + np.finfo(eig.vals.dtype).eps,
+                           np.finfo(eig.vals.dtype).eps)
         if calculate_primal:
             sigy_bounds = beta - eig.vals
-            min_sigy = max(sigy_bounds.min(), 0)  # sigy cannot be negative
+            # Sigy cannot be negative, and has to be big enough to make Kxx
+            # positive semi-definite
+            min_sigy = max(sigy_bounds.min(), eigval_floor)
             max_sigy = sigy_bounds.max()
             if max_sigy < 0:
                 # Optimal likelihood is with zero sigy
@@ -268,7 +271,14 @@ try:
             def lik_fn(sigy):
                 grid_vals = eig.vals + np.expand_dims(sigy, -1)
                 a = (beta / grid_vals).sum(-1) + np.log(grid_vals).sum(-1)
+                assert not np.isnan(a).any()
                 return -D/2*(N*np.log(2*np.pi) + a)
+
+            def d_lik_fn(sigy):
+                grid_vals = eig.vals + np.expand_dims(sigy, -1)
+                a = -(beta / grid_vals**2).sum(-1) + (1/grid_vals).sum(-1)
+                assert not np.isnan(a).any()
+                return -D/2*a
         else:
             """Evaluate the dual likelihood:
                 -D/2 [N log(2π) + (N-F) log(σ_y) + tr_YY/(D σ_y)
@@ -294,13 +304,43 @@ try:
                 grid_vals = eig.vals + np.expand_dims(sigy, -1)
                 a = (N-n_feat)*np.log(sigy) + np.log(grid_vals).sum(-1)
                 b = (tr_YY__D - (beta / grid_vals).sum(-1)) / sigy
+                assert not np.isnan(a).any() and not np.isnan(b).any()
                 return -D/2*(N*np.log(2*np.pi) + a+b)
 
-        grid = np.square(np.linspace(
-            np.sqrt(min_sigy), np.sqrt(max_sigy), n_grid_opt_points))
-        likelihoods = lik_fn(grid)
-        opt_i = likelihoods.argmax()
-        sigy = grid[opt_i]
+            def d_lik_fn(sigy):
+                grid_vals = eig.vals + np.expand_dims(sigy, -1)
+                grid2_vals = eig.vals + 2*np.expand_dims(sigy, -1)
+                a = (N-n_feat)/sigy + (1/grid_vals).sum(-1)
+                b = (tr_YY__D - (beta * grid2_vals / grid_vals**2).sum(-1)) / (-sigy**2)
+                assert not np.isnan(a).any() and not np.isnan(b).any()
+                return -D/2*(a+b)
+
+        dlik_at_min = d_lik_fn(min_sigy)
+        dlik_at_max = d_lik_fn(max_sigy)
+        if dlik_at_min < 0 and dlik_at_max < 0:
+            if d_lik_fn(eigval_floor) <= 4*np.finfo(eig.vals.dtype).eps:
+                if eigval_floor < min_sigy:
+                    _log.warn(f"maximum was at eigval_floor={eigval_floor}, less than min_sigy={min_sigy}.")
+                min_sigy = max_sigy = eigval_floor
+            else:
+                _log.warn(f"maximum somewhere between eigval_floor={eigval_floor} and min_sigy={min_sigy}.")
+                min_sigy = eigval_floor
+                max_sigy = min_sigy
+        elif dlik_at_min > 0 and dlik_at_max > 0:
+            _log.warn(f"maximum not between min_sigy={min_sigy} and max_sigy={max_sigy}.")
+            if d_lik_fn(max_sigy + 100) > 0:
+                raise ValueError("Definitely not a precision error")
+        if min_sigy == max_sigy:
+            sigy = min_sigy
+        else:
+            sigy = scipy.optimize.brentq(d_lik_fn, min_sigy, max_sigy,
+                                         maxiter=n_grid_opt_points, disp=True)
+        likelihood = lik_fn(sigy)
+        # grid = np.square(np.linspace(
+        #     np.sqrt(min_sigy), np.sqrt(max_sigy), n_grid_opt_points))
+        # likelihoods = lik_fn(grid)
+        # opt_i = likelihoods.argmax()
+        # sigy = grid[opt_i]
 
         _log.debug("Cholesky decomposition using optimal sigy")
         L = Kxx.astype(np.float64, copy=True)
@@ -312,7 +352,7 @@ try:
             L = L.T
         FtL = scipy.linalg.solve_triangular(L, Kxt, lower=True).T
         Ly = scipy.linalg.solve_triangular(L, FY, lower=True)
-        return sigy, likelihoods[opt_i], FtL, Ly, (grid, likelihoods)
+        return sigy, likelihood, FtL, Ly, (None, None)
 
 except OSError:
     print("Warning: Could not load MAGMA.")
