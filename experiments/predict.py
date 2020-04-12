@@ -53,7 +53,7 @@ def config():
     N_classes = 10
     layer_range = (2, 999, 3)
     train_do_range = False
-    n_grid_opt_points = 1000
+    n_grid_opt_points = 100
 
 
 def get_last_full(present):
@@ -232,7 +232,12 @@ try:
         _log.debug("Calculating eigendecomposition")
         eig = magma.syevd(Kxx.astype(np.float64, copy=True), vectors=True, lower=lower)
         _log.debug("Calculating alpha and beta")
-        alpha = eig.vecs.T @ oh_train_Y
+        if FY is None:
+            FY = oh_train_Y
+            calculate_primal = True
+        else:
+            calculate_primal = False
+        alpha = eig.vecs.T @ FY
         beta = (alpha[:, None, :] @ alpha[:, :, None]).ravel() / D
 
         """If the smallest eigenvalue of Kxx is negative, the analysis above does not
@@ -250,23 +255,52 @@ try:
 
         The computations are thus the same.
         """
-        sigy_bounds = beta - eig.vals
-        min_sigy = max(sigy_bounds.min(), 0)  # sigy cannot be negative
-        max_sigy = sigy_bounds.max()
-        if max_sigy < 0:
-            grid = np.zeros([1])  # Optimal likelihood is with zero sigy
+        eigval_floor = max(-eig.vals.min(), np.finfo(eig.vals.dtype).eps)
+        if calculate_primal:
+            sigy_bounds = beta - eig.vals
+            min_sigy = max(sigy_bounds.min(), 0)  # sigy cannot be negative
+            max_sigy = sigy_bounds.max()
+            if max_sigy < 0:
+                # Optimal likelihood is with zero sigy
+                min_sigy = max_sigy = 0
+                n_grid_opt_points = 1
+
+            def lik_fn(sigy):
+                grid_vals = eig.vals + np.expand_dims(sigy, -1)
+                a = (beta / grid_vals).sum(-1) + np.log(grid_vals).sum(-1)
+                return -D/2*(N*np.log(2*np.pi) + a)
         else:
-            log_grid = np.linspace(np.log(min_sigy), np.log(max_sigy), n_grid_opt_points)
-            grid = np.exp(log_grid)
+            """Evaluate the dual likelihood:
+                -D/2 [N log(2π) + (N-F) log(σ_y) + tr_YY/(D σ_y)
+                     + ∑_i log(λ_i + σ_y) - β_i/(σ_y(λ_i + σ_y))]
+            where tr_YY = tr{YᵀY} = (∑_j y_jᵀy_j).
 
-        _log.debug("Calculating likelihood for all grid points...")
-        grid_vals = eig.vals + grid[:, None]
-        likelihoods_sum_term = (beta / grid_vals).sum(1) + np.log(grid_vals).sum(1)
-        likelihoods = -D/2 * (N*np.log(2*np.pi) + likelihoods_sum_term)
+            The dual (negative) likelihood derivative is:
+                (N-F)/σ_y - (tr_YY/D)/σ_y² + (∑_i positive terms)
 
+
+            The positive terms imply that that part of the likelihood increase
+            monotonically. Thus, an upper bound on the optimal sigy is the
+            location of the first term's minimum:
+                (N-F)/σ_y - (tr_YY/D)/σ_y² = 0
+                => σ_y = tr_YY/D / (N-F)
+            """
+            n_feat, _ = FY.shape
+            tr_YY__D = (oh_train_Y.ravel() @ oh_train_Y.ravel())/D
+            min_sigy = eigval_floor
+            max_sigy = tr_YY__D / (N-n_feat)
+
+            def lik_fn(sigy):
+                grid_vals = eig.vals + np.expand_dims(sigy, -1)
+                a = (N-n_feat)*np.log(sigy) + np.log(grid_vals).sum(-1)
+                b = (tr_YY__D - (beta / grid_vals).sum(-1)) / sigy
+                return -D/2*(N*np.log(2*np.pi) + a+b)
+
+        grid = np.square(np.linspace(
+            np.sqrt(min_sigy), np.sqrt(max_sigy), n_grid_opt_points))
+        likelihoods = lik_fn(grid)
         opt_i = likelihoods.argmax()
         sigy = grid[opt_i]
-        _log.debug(f"Finished grid search. Optimal sigy={sigy}, opt_i={opt_i}/{len(likelihoods)}, likelihood={likelihoods[opt_i]}")
 
         _log.debug("Cholesky decomposition using optimal sigy")
         L = Kxx.astype(np.float64, copy=True)
@@ -277,7 +311,7 @@ try:
         if not lower:
             L = L.T
         FtL = scipy.linalg.solve_triangular(L, Kxt, lower=True).T
-        Ly = scipy.linalg.solve_triangular(L, oh_train_Y, lower=True)
+        Ly = scipy.linalg.solve_triangular(L, FY, lower=True)
         return sigy, likelihoods[opt_i], FtL, Ly, (grid, likelihoods)
 
 except OSError:
