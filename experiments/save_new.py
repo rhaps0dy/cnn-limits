@@ -1,23 +1,22 @@
 """
 Save a kernel matrix to disk
 """
-import os
-import sacred
 import itertools
-
-import jax.numpy as np
-import jax
+import os
 import pickle
-import h5py
 
-from cnn_gp import DiagIterator, ProductIterator, create_h5py_dataset
-from nigp.tbx import PrintTimings
+import h5py
+import jax
+import jax.numpy as np
+import sacred
+from torch.utils.data import DataLoader, Subset
+
 import cnn_limits
 import cnn_limits.models
-from torch.utils.data import Subset, DataLoader
-from neural_tangents.utils.kernel import Marginalisation as M
+from cnn_gp import DiagIterator, ProductIterator, create_h5py_dataset
 from neural_tangents import stax
-
+from neural_tangents.utils.kernel import Marginalisation as M
+from nigp.tbx import PrintTimings
 
 experiment = sacred.Experiment("save_new")
 cnn_limits.sacred_utils.add_file_observer(experiment, __name__)
@@ -104,7 +103,7 @@ def load_sorted_dataset(sorted_dataset_path, N_train, N_test):
 ## JAX Model
 @experiment.capture
 def jax_model(model):
-    return getattr(cnn_limits.models, model)()
+    return getattr(cnn_limits.models, model)(channels=1)
 
 
 def jitted_kernel_fn(kernel_fn):

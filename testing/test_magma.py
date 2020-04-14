@@ -6,7 +6,7 @@ from cnn_limits.magma import syevd
 
 
 class MagmaTest(unittest.TestCase):
-    def one_test_syevd(self, dtype, N=10):
+    def one_test_syevd(self, dtype, N=1000):
         A = np.random.randn(N, N)
         A_orig = (A@A.T).astype(dtype)
         np_vals, np_vecs = np.linalg.eigh(A_orig)
@@ -28,7 +28,7 @@ class MagmaTest(unittest.TestCase):
             self.one_test_syevd(dtype)
 
 
-    def test_syevd_negative(self, N=10):
+    def test_syevd_negative(self, N=1000):
         Q, _ = np.linalg.qr(np.random.randn(N, N))
         eig = np.array(sorted(np.random.randn(N)))
         A = (Q * eig) @ Q.T

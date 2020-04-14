@@ -18,7 +18,7 @@ setup(
         "nigp @ git+ssh://git@github.com/cambridge-mlg/nigp.git@6ac4f3fc8789d9fb6c9f94115810a445b61e3aeb",
         "gpytorch>=1.0.1<1.1",
         "numpy>=1.18<1.19",
-        "pickle-utils==0.1",
+        "pickle-utils>=0.1",
         "sacred>=0.8<0.9",
         "tensorboardX>=2.0",
         "torch>=1.4<1.5",

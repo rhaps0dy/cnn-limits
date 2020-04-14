@@ -4,7 +4,7 @@ import unittest
 import numpy as np
 import torch
 
-from experiments.predict import likelihood_cholesky_kernel
+from experiments.predict import likelihood_cholesky
 from gpytorch.distributions import MultivariateNormal
 
 torch.set_default_dtype(torch.float64)
@@ -20,7 +20,7 @@ class LikTest(unittest.TestCase):
 
         Kxx = F@F.t()
         Kxt = F @ F_test.t()
-        sigy, lik, FtL, Ly, (grid, likelihoods) = likelihood_cholesky_kernel(
+        sigy, lik, FtL, Ly = likelihood_cholesky(
             FF.numpy(), F_test.t().numpy(), Y.numpy(), 100, logging, FY=FY.numpy())
         with torch.no_grad():
             dist = MultivariateNormal(torch.zeros(N), Kxx + sigy*torch.eye(N))
@@ -40,7 +40,7 @@ class LikTest(unittest.TestCase):
         Kxx = torch.tril(Kxx_notril)
         Kxt = F[:N] @ F[N:].t()
 
-        sigy, lik, FtL, Ly, (grid, likelihoods) = likelihood_cholesky_kernel(
+        sigy, lik, FtL, Ly = likelihood_cholesky(
             Kxx.numpy(), Kxt.numpy(), Y.numpy(), 100, logging)
 
         with torch.no_grad():
@@ -62,9 +62,9 @@ class LikTest(unittest.TestCase):
         Kxx = F@F.T
         Kxt = F @ F_test.T
 
-        sigy1, lik1, FtL1, Ly1, (grid1, likelihoods1) = likelihood_cholesky_kernel(
+        sigy1, lik1, FtL1, Ly1 = likelihood_cholesky(
             FF, F_test.T, Y, 5000, logging, FY=FY)
-        sigy2, lik2, FtL2, Ly2, (grid2, likelihoods2) = likelihood_cholesky_kernel(
+        sigy2, lik2, FtL2, Ly2 = likelihood_cholesky(
             Kxx, Kxt, Y, 5000, logging, FY=None)
 
         assert np.allclose(FtL1@Ly1, FtL2@Ly2)

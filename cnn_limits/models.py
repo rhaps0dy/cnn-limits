@@ -1,10 +1,13 @@
-from neural_tangents import stax
-from neural_tangents.stax import (AvgPool, Dense, FanInSum, FanOut,
-                                  Flatten, Identity, Conv, GlobalAvgPool)
 import jax.experimental.stax as ostax
 import jax.numpy as np
-from .layers import CorrelatedConv, TickSerialCheckpoint, covariance_tensor, DenseSerialCheckpoint
+
 import gpytorch
+from neural_tangents import stax
+from neural_tangents.stax import (AvgPool, Conv, Dense, FanInSum, FanOut,
+                                  Flatten, GlobalAvgPool, Identity)
+
+from .layers import (CorrelatedConv, DenseSerialCheckpoint,
+                     TickSerialCheckpoint, covariance_tensor)
 
 
 def Relu():
@@ -73,7 +76,7 @@ def PreResNetEnd(no_pooling_net, out_chan):
     )
 
 def convrelu(channels, pool=None):
-    if True or pool is None:
+    if pool is None:
         avgpool = ()
     else:
         avgpool = (AvgPool(pool),)
@@ -106,16 +109,30 @@ def Myrtle5(channels=16):
 
 
 def Myrtle10(channels=16):
-    return myrtle_checkpoint_serial(
-        convrelu(channels),
-        convrelu(channels),
-        convrelu(channels),
-        convrelu(channels, (2, 2)),
-        convrelu(channels),
-        convrelu(channels),
-        convrelu(channels, (2, 2)),
-        convrelu(channels),
-        convrelu(channels),
+    kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
+    W_cov = covariance_tensor(3, 3, kern)
+
+    Wcg = {}
+    for sz in [32, 16, 8, 4, 2]:
+        kern.lengthscale = sz/2
+        Wcg[sz] = covariance_tensor(sz, sz, kern)
+
+    return TickSerialCheckpoint(
+        (*convrelu(channels), Wcg[32]),
+        (*convrelu(channels), Wcg[32]),
+        (*convrelu(channels), Wcg[32]),
+        (*convrelu(channels, (2, 2)), Wcg[16]),
+        (*convrelu(channels), Wcg[16]),
+        (*convrelu(channels), Wcg[16]),
+        (*convrelu(channels, (2, 2)), Wcg[8]),
+        (*convrelu(channels), Wcg[8]),
+        (*convrelu(channels), Wcg[8]),
+        (*convrelu(channels, (2, 2)), Wcg[4]),
+        (*convrelu(channels), Wcg[4]),
+        (*convrelu(channels), Wcg[4]),
+        (*convrelu(channels, (2, 2)), Wcg[2]),
+        (*convrelu(channels), Wcg[2]),
+        (*convrelu(channels), Wcg[2]),
     )
 
 def NaiveConv(layers, channels=10):

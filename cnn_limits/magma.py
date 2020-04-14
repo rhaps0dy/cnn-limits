@@ -298,13 +298,12 @@ EigenOut = collections.namedtuple("EigenOut", ("vals", "vecs"))
 
 
 by_dtype_syevd = {
-    np.dtype(np.float32): libmagma.magma_ssyevd_m,
-    np.dtype(np.float64): libmagma.magma_dsyevd_m,
+    np.dtype(np.float32): libmagma.magma_ssyevd,
+    np.dtype(np.float64): libmagma.magma_dsyevd,
 }
 for dtype in [np.dtype(np.float32), np.dtype(np.float64)]:
     f = by_dtype_syevd[dtype]
     f.argtypes = [
-        magma_int,                     # ngpu
         enum,                          # jobz
         enum,                          # uplo
         magma_int,                     # n
@@ -318,9 +317,9 @@ for dtype in [np.dtype(np.float32), np.dtype(np.float64)]:
         POINTER(magma_int),            # info
     ]
     f.restype = magma_int  # info
-    f.argnames = ["ngpu", "jobz", "uplo", "n", "A", "lda", "w", "work",
+    f.argnames = ["jobz", "uplo", "n", "A", "lda", "w", "work",
                   "lwork", "iwork", "liwork", "info"]
-def syevd(A, vectors=False, lower=True, n_gpu=1):
+def syevd(A, vectors=False, lower=True):
     "computes eigenvalues and optionally eigenvectors of PSD matrix A"
     info = magma_int()
     if not (A.shape[0] == A.shape[1]):
@@ -329,26 +328,30 @@ def syevd(A, vectors=False, lower=True, n_gpu=1):
     uplo_A = uplo.lower if lower else uplo.upper
     uplo.check(A, uplo_A)
 
-    NB = 64   # from magma_get_dsytrd_nb
-    N = A.shape[0]
-    if N <= 1:
-        liwork = lwork = 1
-    elif vectors:
-        lwork = max(2*N + N*NB, 1 + 6*N + 2*N**2)
-        liwork = 3 + 5*N
-    else:
-        lwork = 2*N + N*NB
-        liwork = 1
-
+    f = by_dtype_syevd[A.dtype]
     if isinstance(A, np.ndarray):
         if not A.flags['F']:
             A = A.T
             uplo_A = uplo.transpose(uplo_A)
         w = np.empty(A.shape[0], A.dtype, order='F')
+        work = np.empty(1, A.dtype, order='F')
+        iwork = np.empty(1, np.int64, order='F')
+        args = [jobz,
+                uplo_A,
+                A.shape[0], A, lda(A),
+                w,
+                work, -1,
+                iwork, -1]
+        f(*args, byref(info))
+        assert info.value == 0, "something is wrong"
+
+        lwork = int(work[0])
+        liwork = int(iwork[0])
+        print(f"lwork={lwork}, liwork={liwork}, N={A.shape[0]}")
+
         work = np.empty(lwork, A.dtype, order='F')
         iwork = np.empty(liwork, np.int64, order='F')
-        args = [n_gpu,
-                jobz,
+        args = [jobz,
                 uplo_A,
                 A.shape[0], A, lda(A),
                 w,
@@ -360,7 +363,6 @@ def syevd(A, vectors=False, lower=True, n_gpu=1):
         assert 'cuda' in A.device.type, "`A` is not in GPU, use Numpy version."
     else:
         raise ValueError("type of A: {}".format(type(A)))
-    f = by_dtype_syevd[A.dtype]
     f(*args, byref(info))
 
     info = info.value
@@ -371,8 +373,6 @@ def syevd(A, vectors=False, lower=True, n_gpu=1):
         # `magma_types.h`
     if info > 0:
         raise np.linalg.LinAlgError("Failed to converge")
-    print(f"work: len(work)={len(work)}, lwork={lwork}, opt_lwork={work[0]}")
-    print(f"iwork: len(iwork)={len(iwork)}, liwork={liwork}, opt_liwork={iwork[0]}")
     uplo.enforce(A, uplo_A)
     return EigenOut(w, A)
 
