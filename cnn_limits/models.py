@@ -185,7 +185,7 @@ def Myrtle5Uncorrelated(channels=16):
     )
 
 
-def google_NNGP(channels):
+def google_NNGP(channels, N_reps):
     block = stax.serial(Conv(channels, (3, 3), (1, 1), 'SAME'), Relu())
     return DenseSerialCheckpoint(*([block]*36))
 
@@ -195,3 +195,12 @@ def google_NNGP_sampling(channels, N_reps):
     W_cov = covariance_tensor(32, 32, kern)
     block = (*stax.serial(*([Conv(channels, (3, 3), (1, 1), 'SAME'), Relu()]*N_reps)), W_cov)
     return TickSerialCheckpoint(*([block]*(36//N_reps)))
+
+
+def StraightConvNet(channels=16, N_reps=1):
+    block = [Conv(channels, (3, 3), (1, 1), 'SAME'), Relu()]
+    return stax.serial(
+        *(block*36),
+        Flatten(),
+        Dense(1),
+    )

@@ -187,10 +187,10 @@ def _serial_init_fn(init_fns, readout_init_fns, init_intermediate, rng, input_sh
     for i, (fn, readout_fn) in enumerate(zip(init_fns, readout_init_fns)):
         input_shape, params = fn(rngs[i, 0], input_shape)
         if init_intermediate:
-            shape, params_readout = readout_fn(rngs[i, 1], input_shape)
+            shapes, params_readout = readout_fn(rngs[i, 1], input_shape)
         else:
-            shape, params_readout = (), None
-        output_shape.append(shape)
+            raise NotImplementedError
+        output_shape = output_shape + shapes
         all_params.append((params, params_readout))
     return output_shape, all_params
 
@@ -198,8 +198,14 @@ def _serial_apply_fn(apply_fns, readout_apply_fns, params, inputs, **kwargs):
     outputs = []
     for fn, fn_readout, (p, p_readout) in zip(apply_fns, readout_apply_fns, params):
         inputs = fn(p, inputs)
-        outputs.append(None if p_readout is None
-                        else fn_readout(p_readout, inputs))
+        if p_readout is None:
+            outputs.append(None)
+        else:
+            out = fn_readout(p_readout, inputs)
+            if isinstance(out, list):
+                outputs = outputs + out
+            else:
+                outputs.append(out)
     return outputs
 
 
@@ -214,7 +220,7 @@ def TickSerialCheckpoint(*layers, intermediate_outputs=True):
         out_dense, params_meanpool_dense = dense_init(rng[0], (*input_shape[:-3], input_shape[-1]))
         params_tick = W_init_tensor(W_std, rng[1], (*input_shape[-3:], 1))
         _, params_dense = dense_init(rng[2], input_shape)
-        return (3, *out_dense), (params_meanpool_dense, params_tick, params_dense)
+        return [out_dense]*3, (params_meanpool_dense, params_tick, params_dense)
     init_fn = jax.partial(
         _serial_init_fn, init_fns,
         [jax.partial(readout_init, tensor_cholesky(W_cov))
@@ -228,7 +234,7 @@ def TickSerialCheckpoint(*layers, intermediate_outputs=True):
         mean_pool = dense_apply(params_meanpool_dense, np.mean(inputs, axis=(-3, -2)))
         tick = np.einsum("...hwi,hwio->...o", inputs, params_tick)
         dense = dense_apply(params_dense, inputs)
-        return np.stack([mean_pool, tick, dense], 0)
+        return [mean_pool, tick, dense]
 
     apply_fn = jax.partial(
         _serial_apply_fn, apply_fns, [readout_apply]*len(apply_fns))
@@ -265,8 +271,11 @@ def TickSerialCheckpoint(*layers, intermediate_outputs=True):
 def DenseSerialCheckpoint(*layers, intermediate_outputs=True):
     init_fns, apply_fns, kernel_fns = zip(*layers)
 
-    readout_init_fn, readout_apply_fn, readout_kernel_fn = stax.serial(
+    _readout_init_fn, readout_apply_fn, readout_kernel_fn = stax.serial(
         stax.Flatten(), stax.Dense(1))
+    def readout_init_fn(rng, input_shape):
+        s, params = _readout_init_fn(rng, input_shape)
+        return [s], params
     init_fn =  jax.partial(_serial_init_fn,
                            init_fns,  [readout_init_fn ]*len(init_fns),
                            intermediate_outputs)

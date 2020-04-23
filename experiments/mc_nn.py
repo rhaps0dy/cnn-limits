@@ -36,7 +36,8 @@ def config():
     print_interval = 2.
     model = "google_NNGP_sampling"
     n_channels=16
-    N_reps=4
+    N_reps=1
+    kernel_matrix_path = "/scratch/ag919/logs/save_new/4/kernels.h5"
 
 
 def create_dataset(f, batch_size, name, N):
@@ -69,6 +70,86 @@ def populate(F, sample_i, params, apply_fn, data, batch_size, _log):
             F.resize(out.shape[0], axis=0)
             F[:, sample_i, data_i] = out
 
+@experiment.command
+def check_approx(batch_size, model, max_n_samples, n_channels, print_interval,
+                 _seed, N_reps, kernel_matrix_path):
+    print("Loading dataset")
+    train_set, test_set = load_sorted_dataset()
+    input_shape = train_set.dataset.data.shape
+
+    print("Creating Jax network", model)
+    _orig_init_fn, _orig_apply_fn, kernel_fn = getattr(cnn_limits.models, model)(n_channels, N_reps)
+    print("compiliung jax init")
+    init_fn = jax.jit(lambda rng: _orig_init_fn(rng, input_shape))
+    print("compilngi jax apply")
+    @jax.jit
+    def _apply_fn(params, x):
+        x_nhwc = np.moveaxis(x, 1, -1)
+        # dimensions: layer, readout, batch, 1
+        out_l_b_r = _orig_apply_fn(params, x_nhwc)
+        print([o.shape for o in out_l_b_r])
+        out_lb_r = np.squeeze(np.stack(out_l_b_r, 0), -1)  # layer*readout, batch
+        return out_lb_r
+
+    def apply_fn(params, x):
+        return _apply_fn(params, np.asarray(x.numpy()))
+
+    key= jax.random.PRNGKey(_seed)
+    # all_keys = jax.random.split(, max_n_samples)
+
+    print("creating batches")
+    assert batch_size >= len(train_set) and batch_size >= len(test_set)
+    train, _ = next(iter(DataLoader(train_set, batch_size=batch_size)))
+    test, _ = next(iter(DataLoader(test_set, batch_size=batch_size)))
+    train = np.moveaxis(np.asarray(train.numpy()), 1, -1)
+    test = np.moveaxis(np.asarray(test.numpy()), 1, -1)
+
+    _, _, kfn2 = cnn_limits.models.StraightConvNet()
+    K2 = kfn2(train, train, get='nngp')
+    K = kernel_fn(train, train, get='nngp')
+
+    assert np.allclose(K[107], K2, rtol=1e-3)  # Ouch! Low precision.
+
+    print("Calculating kernel")
+    Kxx_ref = onp.asarray(np.stack(
+        kernel_fn(np.moveaxis(np.asarray(train.numpy()), 1, -1),
+                  np.moveaxis(np.asarray(train.numpy()), 1, -1), get='nngp')))
+    Kxt_ref = onp.asarray(np.stack(
+        kernel_fn(np.moveaxis(np.asarray(train.numpy()), 1, -1),
+                  np.moveaxis(np.asarray(test.numpy()), 1, -1), get='nngp')))
+
+    onp.save(base_dir()/"Kxx_ref.npy", Kxx_ref)
+    onp.save(base_dir()/"Kxt_ref.npy", Kxt_ref)
+
+
+    Kxx = onp.zeros(Kxx_ref.shape, dtype=onp.float64)
+    Kxt = onp.zeros(Kxt_ref.shape, dtype=onp.float64)
+    print_timings = PrintTimings(print_interval=print_interval)
+    print_timings.data = [["x_atol", np.inf], ["t_atol", np.inf], ["x_meandev", np.inf], ["t_meandev", np.inf]]
+    print("Entering l00p")
+    tols = []
+    for sample_i in print_timings(range(max_n_samples), total=max_n_samples):
+        # _, params = init_fn(all_keys[sample_i])
+        _, key = jax.random.split(key)
+        _, params = init_fn(key)
+        F_train = apply_fn(params, train)#[2::3, :]
+        F_test = apply_fn(params, test)#[2::3, :]
+        Kxx += np.expand_dims(F_train, -1) * np.expand_dims(F_train, -2) / max_n_samples
+        Kxt += np.expand_dims(F_train, -1) * np.expand_dims(F_test, -2) / max_n_samples
+
+        if sample_i % 100 == 0:
+            Kxx_sub = Kxx*(max_n_samples/(sample_i+1)) - Kxx_ref
+            print_timings.data[0][1] = np.abs(Kxx_sub).max()
+            print_timings.data[2][1] = np.mean(Kxx_sub).max()
+            Kxt_sub = Kxt*(max_n_samples/(sample_i+1)) - Kxt_ref
+            print_timings.data[1][1] = np.abs(Kxt_sub).max()
+            print_timings.data[3][1] = np.mean(Kxt_sub)
+            tols.append([print_timings.data[0][1], print_timings.data[1][1],
+                         print_timings.data[2][1], print_timings.data[3][1]])
+    onp.save(base_dir()/"Kxx.npy", Kxx)
+    onp.save(base_dir()/"Kxt.npy", Kxt)
+    onp.save(base_dir()/"tols.npy", np.asarray(tols))
+
 
 @experiment.automain
 def main(batch_size, model, max_n_samples, n_channels, print_interval, _seed, N_reps):
@@ -83,7 +164,7 @@ def main(batch_size, model, max_n_samples, n_channels, print_interval, _seed, N_
         # dimensions: layer, readout, batch, 1
         out_l_b_r = _orig_apply_fn(params, x_nhwc)
         print([o.shape for o in out_l_b_r])
-        out_lb_r = np.squeeze(np.concatenate(out_l_b_r, 0), -1)  # layer*readout, batch
+        out_lb_r = np.squeeze(np.stack(out_l_b_r, 0), -1)  # layer*readout, batch
         return out_lb_r
 
     def apply_fn(params, x):

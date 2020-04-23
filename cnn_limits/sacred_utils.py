@@ -1,12 +1,16 @@
-import gpytorch
-import torch
-import torchvision
-import os
-import sacred
 import contextlib
+import os
+import pickle
 from pathlib import Path
 
-__all__ = ["gpytorch_pre_run_hook", "load_dataset", "interlaced_argsort", "base_dir", "def_new_file"]
+import sacred
+import torch
+import torchvision
+from torch.utils.data import Subset
+
+import gpytorch
+
+__all__ = ["gpytorch_pre_run_hook", "load_dataset", "interlaced_argsort", "base_dir", "def_new_file", "def_load_sorted_dataset"]
 
 def gpytorch_pre_run_hook(num_likelihood_samples, default_dtype):
     gpytorch.settings.num_likelihood_samples._set_value(num_likelihood_samples)
@@ -77,3 +81,23 @@ def def_new_file(base_dir):
         with open(full_path, mode) as f:
             yield f
     return new_file
+
+def def_load_sorted_dataset(experiment, _load_dataset):
+    @experiment.capture
+    def load_sorted_dataset(sorted_dataset_path, N_train, N_test):
+        with experiment.open_resource(os.path.join(sorted_dataset_path, "train.pkl"), "rb") as f:
+            train_idx = pickle.load(f)
+        with experiment.open_resource(os.path.join(sorted_dataset_path, "test.pkl"), "rb") as f:
+            test_idx = pickle.load(f)
+        train_set, test_set = _load_dataset()
+        return (Subset(train_set, train_idx[:N_train]),
+                Subset(test_set, test_idx[:N_test]))
+    return load_sorted_dataset
+
+# class Utils:
+#     @classmethod
+#     def define_functions(self, experiment):
+#         self.load_dataset = experiment.capture(load_dataset)
+#         self.base_dir = experiment.capture(base_dir)
+#         self.new_file = def_new_file(experiment)
+#         self.load_sorted_dataset = def_load_sorted_dataset(experiment)

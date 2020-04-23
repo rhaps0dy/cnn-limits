@@ -2,6 +2,7 @@ import collections
 import contextlib
 import faulthandler
 import itertools
+import math
 import os
 import pickle
 from pathlib import Path
@@ -14,18 +15,20 @@ import pandas as pd
 import sacred
 import scipy.linalg
 import scipy.optimize
+import torch
 from torch.utils.data import DataLoader, Subset
 
 import cnn_limits
+from cnn_gp import create_h5py_dataset
 
 faulthandler.enable()
 
-experiment = sacred.Experiment("predict")
+experiment = sacred.Experiment("predict_lik_vs_acc")
 cnn_limits.sacred_utils.add_file_observer(experiment, __name__)
 load_dataset = experiment.capture(cnn_limits.load_dataset)
 base_dir = experiment.capture(cnn_limits.base_dir)
 new_file = cnn_limits.def_new_file(base_dir)
-load_sorted_dataset = cnn_limits.def_load_sorted_dataset(experiment)
+load_sorted_dataset = cnn_limits.def_load_sorted_dataset(experiment, load_dataset)
 
 
 @experiment.config
@@ -42,10 +45,10 @@ def config():
     N_test = None
     N_classes = 10
     layer_range = (2, 999, 3)
-    train_do_range = False
-    n_grid_opt_points = 100
+    n_grid_opt_points = 1000
 
     N_files = 9999
+    eig_engine="scipy"
 
 
 def get_last_full(present):
@@ -127,13 +130,18 @@ try:
 
 
     @experiment.capture
-    def likelihood_cholesky(Kxx, Kxt, oh_train_Y, n_grid_opt_points, _log, FY=None, lower=True):
+    def likelihood_cholesky(Kxx, Kxt, oh_train_Y, test_Y, n_grid_opt_points, _log, eig_engine, FY=None, lower=True):
         """Determines optimal likelihood noise for the Gaussian N(y | 0, Kxx).
 
         Let Lxx = cholesky(Kxx + σ_y² I). Returns solve(Lxx, oh_train_Y) and
         solve(Lxx, Kxt).
         """
         N, D = oh_train_Y.shape
+        Kxt = jnp.asarray(Kxt)
+        oh_train_Y = jnp.asarray(oh_train_Y)
+        test_Y = jnp.asarray(test_Y)
+        if FY is not None:
+            FY = jnp.asarray(FY)
         """In what follows, σ_y is the variance, not the standard deviation.
 
         For j=1..D, the marginal likelihood is
@@ -160,12 +168,22 @@ try:
         logarithmic grid search.
         """
         _log.debug("Calculating eigendecomposition")
-        eig = magma.syevd(Kxx.astype(np.float64, copy=True), vectors=True, lower=lower)
-        # eig = magma.EigenOut(*(map(np.asarray, jax.scipy.linalg.eigh(
-        #     jnp.asarray(Kxx, dtype=jnp.float64),
-        #     lower=lower, eigvals_only=False, check_finite=False))))
-        # eig = magma.EigenOut(*scipy.linalg.eigh(Kxx.astype(np.float64, copy=False),
-        #                                         lower=lower, eigvals_only=False, check_finite=False))
+        if isinstance(Kxx, magma.EigenOut):
+            eig = magma.EigenOut(*map(jnp.asarray, Kxx))
+        else:
+            if eig_engine == "jax":
+                Kxx = jnp.asarray(Kxx, dtype=jnp.float64)
+                eig = magma.EigenOut(*jax.scipy.linalg.eigh(Kxx, lower=lower, eigvals_only=False, check_finite=False))
+            else:
+                if eig_engine == "magma":
+                    eig = magma.syevd(Kxx, vectors=True, lower=lower)
+                    # eig = magma.syevd(Kxx.astype(np.float64, copy=True), vectors=True, lower=lower)
+                elif eig_engine == "scipy":
+                    eig = magma.EigenOut(*scipy.linalg.eigh(Kxx.astype(np.float64, copy=False),
+                                                            lower=lower, eigvals_only=False, check_finite=False))
+                else:
+                    raise ValueError(f"eig_engine={eig_engine}")
+                eig = magma.EigenOut(*map(jnp.asarray, eig))
         _log.debug("Calculating alpha and beta")
         if FY is None:
             FY = oh_train_Y
@@ -203,19 +221,11 @@ try:
             if max_sigy < 0:
                 # Optimal likelihood is with zero sigy
                 min_sigy = max_sigy = 0
-                n_grid_opt_points = 1
 
             def lik_fn(sigy):
-                grid_vals = eig.vals + np.expand_dims(sigy, -1)
-                a = (beta / grid_vals).sum(-1) + np.log(grid_vals).sum(-1)
-                assert not np.isnan(a).any()
-                return -D/2*(N*np.log(2*np.pi) + a)
-
-            def d_lik_fn(sigy):
-                grid_vals = eig.vals + np.expand_dims(sigy, -1)
-                a = -(beta / grid_vals**2).sum(-1) + (1/grid_vals).sum(-1)
-                assert not np.isnan(a).any()
-                return -D/2*a
+                grid_vals = eig.vals + jnp.expand_dims(sigy, -1)
+                a = (beta / grid_vals).sum(-1) + jnp.log(grid_vals).sum(-1)
+                return -D/2*(N*math.log(2*math.pi) + a)
         else:
             """Evaluate the dual likelihood:
                 -D/2 [N log(2π) + (N-F) log(σ_y) + tr_YY/(D σ_y)
@@ -238,62 +248,23 @@ try:
             max_sigy = tr_YY__D / (N-n_feat)
 
             def lik_fn(sigy):
-                grid_vals = eig.vals + np.expand_dims(sigy, -1)
-                a = (N-n_feat)*np.log(sigy) + np.log(grid_vals).sum(-1)
+                grid_vals = eig.vals + jnp.expand_dims(sigy, -1)
+                a = (N-n_feat)*jnp.log(sigy) + jnp.log(grid_vals).sum(-1)
                 b = (tr_YY__D - (beta / grid_vals).sum(-1)) / sigy
-                assert not np.isnan(a).any() and not np.isnan(b).any()
-                return -D/2*(N*np.log(2*np.pi) + a+b)
+                return -D/2*(N*math.log(2*math.pi) + a+b)
 
-            def d_lik_fn(sigy):
-                grid_vals = eig.vals + np.expand_dims(sigy, -1)
-                grid2_vals = eig.vals + 2*np.expand_dims(sigy, -1)
-                a = (N-n_feat)/sigy + (1/grid_vals).sum(-1)
-                b = (tr_YY__D - (beta * grid2_vals / grid_vals**2).sum(-1)) / (-sigy**2)
-                assert not np.isnan(a).any() and not np.isnan(b).any()
-                return -D/2*(a+b)
+        print("Eigval_floor, min_sigy, max_sigy=", eigval_floor, min_sigy, max_sigy)
+        grid = jnp.exp(jnp.linspace(max(jnp.log(eigval_floor), -36), 0., n_grid_opt_points))
+        likelihoods = lik_fn(grid)
+        gamma = Kxt.T @ eig.vecs
 
-        dlik_at_min = d_lik_fn(min_sigy)
-        dlik_at_max = d_lik_fn(max_sigy)
-        if dlik_at_min < 0 and dlik_at_max < 0:
-            if d_lik_fn(eigval_floor) <= 4*np.finfo(eig.vals.dtype).eps:
-                if eigval_floor < min_sigy:
-                    _log.warn(f"maximum was at eigval_floor={eigval_floor}, less than min_sigy={min_sigy}.")
-                else:
-                    _log.info(f"found maximum at min_sigy={min_sigy}")
-                min_sigy = max_sigy = eigval_floor
-            else:
-                _log.warn(f"maximum somewhere between eigval_floor={eigval_floor} and min_sigy={min_sigy}.")
-                min_sigy = eigval_floor
-                max_sigy = min_sigy
-        elif dlik_at_min > 0 and dlik_at_max > 0:
-            _log.warn(f"maximum not between min_sigy={min_sigy} and max_sigy={max_sigy}.")
-            if d_lik_fn(max_sigy + 100) > 0:
-                raise ValueError("Definitely not a precision error")
-        if min_sigy == max_sigy:
-            sigy = min_sigy
-        else:
-            sigy = scipy.optimize.brentq(d_lik_fn, min_sigy, max_sigy,
-                                         maxiter=n_grid_opt_points, disp=True)
-        print("Eigval_floor, min_sigy, max_sigy, sigy=", eigval_floor, min_sigy, max_sigy, sigy)
-        likelihood = lik_fn(sigy)
-        # grid = np.square(np.linspace(
-        #     np.sqrt(min_sigy), np.sqrt(max_sigy), n_grid_opt_points))
-        # likelihoods = lik_fn(grid)
-        # opt_i = likelihoods.argmax()
-        # sigy = grid[opt_i]
+        def jax_acc(sigy):
+            pred_F = (gamma / (eig.vals + sigy)) @ alpha
+            pred_Y = jnp.argmax(pred_F, axis=-1)
+            return (pred_Y == test_Y).mean(-1)
 
-        _log.debug("Cholesky decomposition using optimal sigy")
-        L = Kxx.astype(np.float64, copy=True)
-        L.flat[::L.shape[0]+1] += sigy
-        magma.potrf(L, lower=lower)
-        # L = scipy.linalg.cholesky(L, lower=lower, overwrite_a=True, check_finite=False)
-
-        _log.debug("Solving triangular linear systems")
-        if not lower:
-            L = L.T
-        FtL = scipy.linalg.solve_triangular(L, Kxt, lower=True, check_finite=False).T
-        Ly = scipy.linalg.solve_triangular(L, FY, lower=True, check_finite=False)
-        return sigy, likelihood, FtL, Ly
+        accuracies = [float(jax_acc(sigy)) for sigy in grid]
+        return tuple(map(np.asarray, (grid, likelihoods, accuracies))) #, eig.vals)))
 
 except OSError:
     print("Warning: Could not load MAGMA.")
@@ -325,6 +296,8 @@ def accuracy(y, pred):
 
 
 def log_range(N):
+    if N == 0:
+        return []
     r = itertools.chain(
         range(500, 1000, 500),
         range(1000, 10000, 1000),
@@ -345,74 +318,54 @@ def read_features(files, name, out, layer, N, prev_N):
 
 
 @experiment.command
-def mc_nn(feature_paths, layer_range, train_do_range, _log):
+def mc_nn(feature_paths, layer_range, N_files, _log):
     train_set, test_set = load_sorted_dataset()
     train_Y = dataset_targets(train_set)
     test_Y = dataset_targets(test_set)
-    train_Y_oh = centered_one_hot(train_Y)
+    oh_train_Y = centered_one_hot(train_Y)
+
+    assert len(feature_paths) == 1 or N_files == 1, "notimplemented"
 
     with contextlib.ExitStack() as stack:
-        files = [stack.enter_context(h5py.File(f, 'r')) for f in feature_paths]
+        files = [stack.enter_context(h5py.File(f, 'r')) for f in feature_paths[:N_files]]
 
         N_layers, _, N_train = files[0]['F_train'].shape
         _, _, N_test = files[0]['F_test'].shape
-        N_features = sum(f['F_train'].shape[1] for f in files)
-        FF = np.zeros((N_features, N_features), dtype=np.float64)
-        FY = np.zeros((N_features, train_Y_oh.shape[1]), dtype=np.float64)
-        F_train = np.empty((N_features, 50000), dtype=np.float64)
-        F_test = np.empty((N_features, N_test), dtype=np.float64)
+        N_features = min(files[0]['F_train'].shape[1],
+                         files[0]['F_test'].shape[1])
 
-        if train_do_range:
-            list_of_N = log_range(N_train)
-        else:
-            list_of_N = [N_train]
-        acc_idx = pd.MultiIndex.from_product(
-            [list_of_N, log_range(N_features)],
-            names=['N_train', 'N_features'])
+        FF = np.zeros((N_features, N_features), dtype=np.float64)
+        FY = np.zeros((N_features, oh_train_Y.shape[1]), dtype=np.float64)
+
+        list_of_N = [5000, 10000]
         _layer_range = range(layer_range[0],
                              min(N_layers, layer_range[1]),
                              layer_range[2])
-        accuracies = pd.DataFrame(index=_layer_range, columns=acc_idx)
-        list_of_N = accuracies.columns.levels[0]
-        jitters = pd.DataFrame(index=accuracies.index, columns=list_of_N)
-        likelihoods = pd.DataFrame(index=accuracies.index, columns=list_of_N)
-        opt_grid = {}
-        for layer in accuracies.index:
-            read_features(files, 'F_test', F_test, layer, N=F_test.shape[1], prev_N=0)
-            for prev_N, N in zip([0, *list_of_N], list_of_N):
-                _log.debug(f"Reading files for N={N}, layer={layer}")
-                read_features(files, 'F_train', F_train, layer, N, prev_N)
+        data = {}
+        for layer in _layer_range:
+            _log.debug(f"Reading files for layer={layer}")
+            F_train = files[0]['F_train'][layer, :, :]
+            F_test = files[0]['F_test'][layer, :, :]
+            if layer%3 == 1:  # is TICK
+                # Compensate size of filter
+                F_train /= 32**2
+                F_test /= 32**2
 
-                _log.debug("Updating outer product")
-                _Ft = F_train[:, :N-prev_N]
-                FF += _Ft @ _Ft.T
-                FY += _Ft @ train_Y_oh[prev_N:N]
+            for N in list_of_N:
+                _log.debug(f"Calculating outer product for N={N}")
+                FF = F_train[:, :N] @ F_train[:, :N].T
+                FY = F_train[:, :N] @ oh_train_Y[:N]
 
-                _log.debug("Cholesky & prediction")
-                (jitters[N][layer], likelihoods[N][layer], regression_FtL,
-                 regression_Ly, opt_grid[N, layer]
-                 ) = likelihood_cholesky(FF, FY, F_test, train_Y_oh[:N], lower=True)
-                if regression_FtL is None:
-                    continue
+                for n_feat in log_range(N_features):
+                    _log.debug(f"Cholesky & prediction for N={N}, n_feat={n_feat}, layer={layer}")
+                    data[layer, N, n_feat] = likelihood_cholesky(
+                        Kxx=FF[:n_feat, :n_feat] / n_feat,
+                        Kxt=F_test[:n_feat, :] / n_feat,
+                        oh_train_Y=oh_train_Y[:N],
+                        test_Y=test_Y,
+                        FY=FY[:n_feat])
+                pd.to_pickle(data, base_dir()/"grid_lik_acc.pkl.gz")
 
-                for features in accuracies.columns.levels[1]:
-                    pred_F = regression_FtL[:, :features] @ regression_Ly[:features, :]
-                    pred_Y = np.argmax(pred_F, axis=1)
-                    acc = accuracy(test_Y[:N_test], pred_Y)
-                    _log.info(f"Accuracies at N={N}, features={features}, layer={layer}, jitter={jitters[N][layer]}: {acc}")
-                    accuracies[N, features][layer] = acc
-
-            accuracies.to_pickle(base_dir()/"accuracies.pkl.gz")
-            jitters.to_pickle(base_dir()/"jitters.pkl.gz")
-            likelihoods.to_pickle(base_dir()/"likelihoods.pkl.gz")
-            with new_file("opt_grid.pkl") as write_f:
-                pickle.dump(opt_grid, write_f)
-            del regression_Ly
-            del regression_FtL
-            del pred_F
-            del pred_Y
-
-# TODO figure out bug in the 
 @experiment.command
 def dual_mc_nn(feature_paths, layer_range, N_files, _log):
     train_set, test_set = load_sorted_dataset()
@@ -431,49 +384,67 @@ def dual_mc_nn(feature_paths, layer_range, N_files, _log):
         # max_ind_N_features = max(f['F_train'].shape[1] for f in files)
         # F_train = np.empty((max_ind_N_features, N_train), np.float32)
 
-        list_of_N = log_range(N_train) + [N_features]  # For double descent
-        print(N_features, list_of_N)
+        # list_of_N = [N_train]  #log_range(N_train) + [N_features]  # For double descent
+        # print(N_features, list_of_N)
+        list_of_F = log_range(N_features)
         _layer_range = range(layer_range[0],
                              min(N_layers, layer_range[1]),
                              layer_range[2])
-        accuracies = pd.DataFrame(index=_layer_range, columns=list_of_N)
+        accuracies = pd.DataFrame(index=_layer_range, columns=list_of_F)
         jitters = pd.DataFrame(index=accuracies.index, columns=accuracies.columns)
         likelihoods = pd.DataFrame(index=accuracies.index, columns=accuracies.columns)
+        data = {}
 
-        Kxx = np.empty((N_train, N_train), dtype=np.float64)  # We copy it with an astype later
+        Kxx = np.empty((N_train, N_train), dtype=np.float64)
         Kxt = np.empty((N_train, N_test), dtype=np.float64)
 
-        for layer in accuracies.index:
-            Kxx[...] = 0
-            Kxt[...] = 0
-            _log.debug("Loading from all the files...")
-            for f in files:
-                _log.debug(f"Loading file {f}")
-                # f['F_train'].read_direct(
-                #     F_train,
-                #     source_sel=np.s_[layer, :, :],
-                #     dest_sel=np.s_[:f['F_train'].shape[1], :])
-                F_train = f['F_train'][layer, :, :N_train]
-                Kxx += F_train.T @ F_train
-                Kxt += F_train.T @ f['F_test'][layer, :, :N_test]
+        with h5py.File(base_dir()/"kernels.h5", "w") as kernel_f:
+            create_h5py_dataset(kernel_f, N_train, "Kxx_vecs",   diag=False, N=N_train, N2=N_train)
+            create_h5py_dataset(kernel_f, N_train, "Kxx_vals", diag=True,  N=N_train, N2=None)
+            create_h5py_dataset(kernel_f, N_train, "Kxt",     diag=False, N=N_train, N2=N_test)
+            # kernel_f["Kxx"].resize(N_layers, axis=0)
+            # kernel_f["Kxt"].resize(N_layers, axis=0)
+            kernel_f["Kxx_vecs"].resize(3*len(files), axis=0)
+            kernel_f["Kxx_vals"].resize(3*len(files), axis=0)
+            kernel_f["Kxt"].resize(3*len(files), axis=0)
+            for layer in accuracies.index:
+                Kxx[...] = 0
+                Kxt[...] = 0
+                _log.debug("Loading from all the files...")
+                # if layer == 107:
+                #     Kxx = np.load("/scratch/ag919/logs/predict_lik_vs_acc/Kxx.npy")
+                #     Kxt = np.load("/scratch/ag919/logs/predict_lik_vs_acc/Kxt.npy")
+                # elif layer == 105:
+                #     Kxx = np.load("/scratch/ag919/logs/predict_lik_vs_acc/Kxx2.npy")
+                #     Kxt = np.load("/scratch/ag919/logs/predict_lik_vs_acc/Kxt2.npy")
+                # else:
+                for out_i, (f, name) in enumerate(zip(files, feature_paths)):
+                    _log.debug(f"Loading file {name}")
+                    F_train = torch.from_numpy(f['F_train'][layer, :, :N_train]).to(dtype=torch.float64, device='cuda')
+                    F_test = torch.from_numpy(f['F_test'][layer, :, :N_test]).to(dtype=torch.float64, device='cuda')
 
-            (jitters.loc[layer, N_train], likelihoods.loc[layer, N_train], gp_KtL, gp_Ly
-             ) = likelihood_cholesky(Kxx, Kxt, oh_train_Y[:N_train], FY=None, lower=True)
-            _log.info(f"σ²y = {jitters.loc[layer, N_train]}, likelihood={likelihoods.loc[layer, N_train]}")
-            jitters.to_pickle(base_dir()/"jitters.pkl")
-            likelihoods.to_pickle(base_dir()/"likelihoods.pkl")
+                    factor = math.sqrt(N_features)
+                    if layer%3 == 1:  # is TICK
+                        # Compensate size of filter
+                        factor = factor * 32**2
+                    F_train /= factor
+                    F_test /= factor
 
-            for N in accuracies.columns:
-                pred_F = gp_KtL[:, :N] @ gp_Ly[:N, :]
-                pred_Y = np.argmax(pred_F, axis=1)
-                acc = accuracy(test_Y[:N_test], pred_Y)
-                _log.info(f"Accuracies at N={N}, layer={layer}: {acc}")
-                accuracies.loc[layer, N] = acc
-                accuracies.to_pickle(base_dir()/"accuracies.pkl")
-            del gp_KtL
-            del gp_Ly
-            del pred_F
-            del pred_Y
+                    # The overal Kxx and Kxt will be "multiplied" by the number
+                    # of files.
+                    Kxx += (F_train.t() @ F_train).cpu().numpy()
+                    Kxt += (F_train.t() @ F_test).cpu().numpy()
+                    print(Kxx[:5, :5])
+                    eig = magma.syevd(Kxx.copy(), vectors=True, lower=True)
+                    kernel_f["Kxx_vecs"][3*out_i + layer%3, :, :] = eig.vecs
+                    kernel_f["Kxx_vals"][3*out_i + layer%3, :] = eig.vals
+                    kernel_f["Kxt"][3*out_i + layer%3, :, :] = Kxt
+
+                # for N in reversed(accuracies.columns):
+                #     data[layer, N] = likelihood_cholesky(
+                #         Kxx[:N, :N], Kxt[:N], oh_train_Y[:N], test_Y, FY=None,
+                #         lower=True)
+                #     pd.to_pickle(data, base_dir()/"grid_lik_acc.pkl.gz")
 
 
 @experiment.automain
@@ -485,38 +456,31 @@ def mainv2(kernel_matrix_path, _log):
     kernel_matrix_path = Path(kernel_matrix_path)
 
     with h5py.File(kernel_matrix_path/"kernels.h5", "r") as f:
-        N_layers, _, _ = f['Kxx'].shape
-        Kxx = np.empty(f['Kxx'].shape[1:], dtype=np.float32)  # We copy it with an astype later
+        N_layers, _, _ = f['Kxx_vecs'].shape
+        Kxx_vecs = np.empty(f['Kxx_vecs'].shape[1:], dtype=np.float64)  # We copy it with an astype later
+        Kxx_vals = np.empty(f['Kxx_vals'].shape[1:], dtype=np.float64)  # We copy it with an astype later
         Kxt = np.empty(f['Kxt'].shape[1:], dtype=np.float64)
-        accuracies = collections.defaultdict(lambda: [None]*N_layers)
-        jitters = {}
-        likelihoods = {}
+        data = {}
 
         for layer in range(N_layers-1, -1, -1):
-            f['Kxx'].read_direct(Kxx, source_sel=np.s_[layer, :, :])
+            f['Kxx_vecs'].read_direct(Kxx_vecs, source_sel=np.s_[layer, :, :])
+            f['Kxx_vals'].read_direct(Kxx_vals, source_sel=np.s_[layer, :])
             f['Kxt'].read_direct(Kxt, source_sel=np.s_[layer, :, :])
-            effective_N, Nt = nan_shape(Kxt)
-            effective_N = min(nan_shape(Kxx)[0], effective_N)
-
-            (jitters[layer], likelihoods[layer], gp_KtL, gp_Ly
-             ) = likelihood_cholesky(Kxx[:effective_N, :effective_N],
-                                     Kxt[:effective_N], oh_train_Y[:effective_N], FY=None, lower=True)
-            for N in reversed(log_range(effective_N)):
-                pred_F = gp_KtL[:, :N] @ gp_Ly[:N, :]
-                pred_Y = np.argmax(pred_F, axis=1)
-                acc = accuracy(test_Y[:Nt], pred_Y)
-                _log.info(f"Accuracies at N={N}, layer={layer}, jitter={jitters[layer]}, likelihodo={likelihoods[layer]}: {acc}")
-                accuracies[N][layer] = acc
-
-                # Overwrite the files each time; so that if the experiment is
-                # interrupted we keep intermediate results
-                with new_file("accuracies.pkl") as write_f:
-                    pickle.dump(dict(accuracies), write_f)
-            with new_file("jitters.pkl") as write_f:
-                pickle.dump(dict(jitters), write_f)
-            with new_file("likelihoods.pkl") as write_f:
-                pickle.dump(dict(likelihoods), write_f)
-            del gp_KtL
-            del gp_Ly
-            del pred_F
-            del pred_Y
+            if (np.any(np.isnan(Kxx_vecs))
+                or np.any(np.isnan(Kxx_vals))
+                or np.any(np.isnan(Kxt))):
+                print(f"Found nan at layer {layer}")
+                continue
+            effective_N, Nt = Kxt.shape
+            # effective_N, Nt = nan_shape(Kxt)
+            # effective_N = min(nan_shape(Kxx)[0], effective_N)
+            # print(f"effective_N={effective_N}, Nt={Nt}")
+            # for N in reversed(log_range(effective_N)):
+            if True:
+                N = effective_N
+                data[layer, N] = likelihood_cholesky(
+                    # Kxx[:N, :N],
+                    magma.EigenOut(Kxx_vals, Kxx_vecs),
+                    Kxt[:N], oh_train_Y[:N], test_Y, FY=None,
+                    lower=True)
+                pd.to_pickle(data, base_dir()/"grid_lik_acc.pkl.gz")

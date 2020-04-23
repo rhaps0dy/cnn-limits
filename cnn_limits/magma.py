@@ -159,6 +159,8 @@ def posv(A, b, lower=False):
 
     info = info.value
     if info < 0:
+        if info == -113:
+            raise RuntimeError("MAGMA could not malloc GPU device memory")
         raise ValueError("Illegal {}th argument: {} = {}"
                          .format(-info, f.argnames[-info], args[-info]))
         # it could also be that the error is a MAGMA_ERR definition, see
@@ -237,6 +239,8 @@ def potrf(A, lower=False, n_gpu=1):
 
     info = info.value
     if info < 0:
+        if info == -113:
+            raise RuntimeError("MAGMA could not malloc GPU device memory")
         raise ValueError("Illegal {}th argument: {} = {}"
                          .format(-info, f.argnames[-info], args[-info]))
         # it could also be that the error is a MAGMA_ERR definition, see
@@ -284,6 +288,8 @@ def potri(A, lower=False):
 
     info = info.value
     if info < 0:
+        if info == -113:
+            raise RuntimeError("MAGMA could not malloc GPU device memory")
         raise ValueError("Illegal {}th argument: {} = {}"
                          .format(-info, argnames[-info], args[-info]))
         # it could also be that the error is a MAGMA_ERR definition, see
@@ -367,6 +373,8 @@ def syevd(A, vectors=False, lower=True):
 
     info = info.value
     if info < 0:
+        if info == -113:
+            raise RuntimeError("MAGMA could not malloc GPU device memory")
         raise ValueError("Illegal {}th argument: {} = {}"
                          .format(-info, f.argnames[-info], args[-info]))
         # it could also be that the error is a MAGMA_ERR definition, see
