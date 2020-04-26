@@ -79,11 +79,11 @@ def convrelu(channels, pool=None):
     if pool is None:
         avgpool = ()
     else:
-        avgpool = (AvgPool(pool),)
-    strides = ((1, 1) if pool is None else pool)
+        avgpool = (AvgPool(window_shape=pool, strides=pool),)
+    strides = (1, 1)
     return stax.serial(
-        # *avgpool,
-        Conv(channels, (1, 1), strides=strides, padding='SAME'),
+        *avgpool,
+        Conv(channels, filter_shape=(3, 3), strides=strides, padding='SAME'),
         Relu(),
     )
 
@@ -185,11 +185,11 @@ def Myrtle5Uncorrelated(channels=16):
     )
 
 
-def google_NNGP(channels, N_reps):
+def google_NNGP(channels, N_reps=1):
     block = stax.serial(Conv(channels, (3, 3), (1, 1), 'SAME'), Relu())
     return DenseSerialCheckpoint(*([block]*36))
 
-def google_NNGP_sampling(channels, N_reps):
+def google_NNGP_sampling(channels, N_reps=1):
     kern = gpytorch.kernels.MaternKernel(nu=3/2)
     kern.lengthscale = 10
     W_cov = covariance_tensor(32, 32, kern)

@@ -131,7 +131,7 @@ def _apply_ZCA(X, W):
 
 def do_transforms(train_set, test_set, ZCA: bool):
     X, y = whole_dset(train_set)
-    # X = X.cuda()
+    X = X.cuda()
     rgb_mean = X.mean((0, 2, 3))
     assert rgb_mean.size() == torch.Size([3])
     X = _apply_zeromean(X, rgb_mean)
@@ -146,20 +146,21 @@ def do_transforms(train_set, test_set, ZCA: bool):
     Xt = _apply_zeromean(Xt, rgb_mean)
     if ZCA:
         Xt = _apply_ZCA(Xt, W)
-    return TensorDataset(X.cpu(), y), TensorDataset(Xt, yt)
+    return TensorDataset(X.cpu()*100, y), TensorDataset(Xt*100, yt)
 
 @ingredient.capture
-def load_sorted_dataset(sorted_dataset_path, N_train, N_test, ZCA_transform, test_is_validation):
-    with ingredient.open_resource(os.path.join(sorted_dataset_path, "train.pkl"), "rb") as f:
+def load_sorted_dataset(sorted_dataset_path, N_train, N_test, ZCA_transform, test_is_validation, _run):
+    with _run.open_resource(os.path.join(sorted_dataset_path, "train.pkl"), "rb") as f:
         train_idx = pickle.load(f)
-    with ingredient.open_resource(os.path.join(sorted_dataset_path, "test.pkl"), "rb") as f:
+    with _run.open_resource(os.path.join(sorted_dataset_path, "test.pkl"), "rb") as f:
         test_idx = pickle.load(f)
     train_set, test_set = load_dataset()
 
-    train_set = Subset(train_set, train_idx[:N_train])
     if test_is_validation:
         assert N_train+N_test <= len(train_set), "Train+validation sets too large"
         test_set = Subset(train_set, train_idx[-1:-N_test-1:-1])
     else:
         test_set = Subset(test_set, test_idx[:N_test])
+
+    train_set = Subset(train_set, train_idx[:N_train])
     return do_transforms(train_set, test_set, ZCA=ZCA_transform)
