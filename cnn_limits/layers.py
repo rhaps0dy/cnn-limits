@@ -309,3 +309,34 @@ def covariance_tensor(height, width, kern):
     with torch.no_grad():
         mat = kern(HW, HW).evaluate().reshape((height, width, height, width))
     return np.asarray(mat.transpose(1, 2).cpu().numpy())
+
+
+def _gaussian_kernel(ker_mat, prod, do_backprop):
+    sqrt_prod = stax._safe_sqrt(prod)
+    cosines = ker_mat / sqrt_prod
+    return sqrt_prod * np.exp(cosines - 1)
+
+
+@_layer
+def GaussianLayer(do_backprop=False):
+    "similar to relu but less acute"
+    def init_fn(rng, input_shape):
+        return input_shape, ()
+    def apply_fn(params, inputs):
+        raise NotImplementedError
+    def kernel_fn(kernels):
+        var1, nngp, var2, ntk, marginal = \
+            kernels.var1, kernels.nngp, kernels.var2, kernels.ntk, kernels.marginal
+        if ntk is not None:
+            raise NotImplementedError
+        prod11, prod12, prod22 = stax._get_normalising_prod(var1, var2, marginal)
+        nngp = _gaussian_kernel(nngp, prod12, do_backprop)
+        var1 = _gaussian_kernel(var1, prod11, do_backprop)
+        if var2 is not None:
+            var2 = _gaussian_kernel(var2, prod22, do_backprop)
+
+        return kernels._replace(
+            var1=var1, nngp=nngp, var2=var2, ntk=ntk, is_gaussian=False,
+            marginal=marginal)
+
+    return init_fn, apply_fn, kernel_fn

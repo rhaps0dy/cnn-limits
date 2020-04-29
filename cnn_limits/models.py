@@ -6,7 +6,7 @@ from neural_tangents import stax
 from neural_tangents.stax import (AvgPool, Conv, Dense, FanInSum, FanOut,
                                   Flatten, GlobalAvgPool, Identity)
 
-from .layers import (CorrelatedConv, DenseSerialCheckpoint,
+from .layers import (CorrelatedConv, DenseSerialCheckpoint, GaussianLayer,
                      TickSerialCheckpoint, covariance_tensor)
 
 
@@ -133,6 +133,45 @@ def Myrtle10(channels=16):
         (*convrelu(channels, (2, 2)), Wcg[2]),
         (*convrelu(channels), Wcg[2]),
         (*convrelu(channels), Wcg[2]),
+    )
+
+def convGaussian(channels, pool=None):
+    if pool is None:
+        avgpool = ()
+    else:
+        avgpool = (AvgPool(window_shape=pool, strides=pool),)
+    strides = (1, 1)
+    return stax.serial(
+        *avgpool,
+        Conv(channels, filter_shape=(3, 3), strides=strides, padding='SAME'),
+        GaussianLayer(),
+    )
+
+def Myrtle10_Gaussian(channels=16):
+    kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
+    W_cov = covariance_tensor(3, 3, kern)
+
+    Wcg = {}
+    for sz in [32, 16, 8, 4, 2]:
+        kern.lengthscale = sz/2
+        Wcg[sz] = covariance_tensor(sz, sz, kern)
+
+    return TickSerialCheckpoint(
+        (*convGaussian(channels), Wcg[32]),
+        (*convGaussian(channels), Wcg[32]),
+        (*convGaussian(channels), Wcg[32]),
+        (*convGaussian(channels, (2, 2)), Wcg[16]),
+        (*convGaussian(channels), Wcg[16]),
+        (*convGaussian(channels), Wcg[16]),
+        (*convGaussian(channels, (2, 2)), Wcg[8]),
+        (*convGaussian(channels), Wcg[8]),
+        (*convGaussian(channels), Wcg[8]),
+        (*convGaussian(channels, (2, 2)), Wcg[4]),
+        (*convGaussian(channels), Wcg[4]),
+        (*convGaussian(channels), Wcg[4]),
+        (*convGaussian(channels, (2, 2)), Wcg[2]),
+        (*convGaussian(channels), Wcg[2]),
+        (*convGaussian(channels), Wcg[2]),
     )
 
 def NaiveConv(layers, channels=10):

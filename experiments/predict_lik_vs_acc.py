@@ -19,36 +19,28 @@ import torch
 from torch.utils.data import DataLoader, Subset
 
 import cnn_limits
+import cnn_limits.sacred_utils as SU
 from cnn_gp import create_h5py_dataset
 
 faulthandler.enable()
 
-experiment = sacred.Experiment("predict_lik_vs_acc")
-cnn_limits.sacred_utils.add_file_observer(experiment, __name__)
-load_dataset = experiment.capture(cnn_limits.load_dataset)
-base_dir = experiment.capture(cnn_limits.base_dir)
-new_file = cnn_limits.def_new_file(base_dir)
-load_sorted_dataset = cnn_limits.def_load_sorted_dataset(experiment, load_dataset)
+experiment = sacred.Experiment("predict_lik_vs_acc", [SU.ingredient])
+if __name__ == '__main__':
+    SU.add_file_observer(experiment)
 
 
 @experiment.config
 def config():
-    dataset_base_path = "/scratch/ag919/datasets/"
-    sorted_dataset_path = os.path.join(dataset_base_path, "interlaced_argsort")
-    dataset_name = "CIFAR10"
-
     kernel_matrix_path = "/scratch/ag919/logs/save_new/166"
     feature_paths = [f"/scratch/ag919/logs/mc_nn/{e}/mc.h5" for e in [2,3,5,7,
                                                                       10,11,12,13,14,15,16,
                                                                       17,10,19,20,21,22,23]]
-    N_train = None
-    N_test = None
     N_classes = 10
     layer_range = (2, 999, 3)
     n_grid_opt_points = 1000
 
     N_files = 9999
-    eig_engine="scipy"
+    eig_engine = "scipy"
 
 
 def get_last_full(present):
@@ -447,9 +439,33 @@ def dual_mc_nn(feature_paths, layer_range, N_files, _log):
                 #     pd.to_pickle(data, base_dir()/"grid_lik_acc.pkl.gz")
 
 
+@experiment.main
+def main_no_eig(kernel_matrix_path):
+    train_set, test_set = SU.load_sorted_dataset()
+    train_Y = dataset_targets(train_set)
+    oh_train_Y = centered_one_hot(train_Y)
+    test_Y = dataset_targets(test_set)
+    kernel_matrix_path = Path(kernel_matrix_path)
+
+    with h5py.File(kernel_matrix_path/"kernels.h5", "r") as f:
+        N_layers, _, _ = f['Kxx'].shape
+
+        all_N = [2**i * 10 for i in range(8)]  # up to 1280
+        data = pd.DataFrame(index=range(N_layers), columns=all_N)
+
+        for layer in data.index:
+            Kxx = f['Kxx'][layer]
+            Kxt = f['Kxt'][layer]
+            for N in data.columns:
+                data.loc[layer, N] = likelihood_cholesky(
+                    Kxx[:N, :N], Kxt[:N], oh_train_Y[:N], test_Y, FY=None,
+                    lower=True)
+            pd.to_pickle(data, SU.base_dir()/"grid_lik_acc.pkl.gz")
+
+
 @experiment.automain
 def mainv2(kernel_matrix_path, _log):
-    train_set, test_set = load_sorted_dataset()
+    train_set, test_set = SU.load_sorted_dataset()
     train_Y = dataset_targets(train_set)
     oh_train_Y = centered_one_hot(train_Y)
     test_Y = dataset_targets(test_set)
