@@ -246,7 +246,7 @@ try:
                 return -D/2*(N*math.log(2*math.pi) + a+b)
 
         print("Eigval_floor, min_sigy, max_sigy=", eigval_floor, min_sigy, max_sigy)
-        grid = jnp.exp(jnp.linspace(max(jnp.log(eigval_floor), -36), 0., n_grid_opt_points))
+        grid = jnp.exp(jnp.linspace(max(jnp.log(eigval_floor), -36), 5, n_grid_opt_points))
         likelihoods = lik_fn(grid)
         gamma = Kxt.T @ eig.vecs
 
@@ -453,7 +453,7 @@ def main_no_eig(kernel_matrix_path):
         all_N = [2**i * 10 for i in range(8)]  # up to 1280
         data = pd.DataFrame(index=range(N_layers), columns=all_N)
 
-        for layer in data.index:
+        for layer in reversed(data.index):
             Kxx = f['Kxx'][layer]
             Kxt = f['Kxt'][layer]
             for N in data.columns:

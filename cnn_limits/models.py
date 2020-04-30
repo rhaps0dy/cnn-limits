@@ -148,31 +148,22 @@ def convGaussian(channels, pool=None):
     )
 
 def Myrtle10_Gaussian(channels=16):
-    kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
-    W_cov = covariance_tensor(3, 3, kern)
-
-    Wcg = {}
-    for sz in [32, 16, 8, 4, 2]:
-        kern.lengthscale = sz/2
-        Wcg[sz] = covariance_tensor(sz, sz, kern)
-
-    return TickSerialCheckpoint(
-        (*convGaussian(channels), Wcg[32]),
-        (*convGaussian(channels), Wcg[32]),
-        (*convGaussian(channels), Wcg[32]),
-        (*convGaussian(channels, (2, 2)), Wcg[16]),
-        (*convGaussian(channels), Wcg[16]),
-        (*convGaussian(channels), Wcg[16]),
-        (*convGaussian(channels, (2, 2)), Wcg[8]),
-        (*convGaussian(channels), Wcg[8]),
-        (*convGaussian(channels), Wcg[8]),
-        (*convGaussian(channels, (2, 2)), Wcg[4]),
-        (*convGaussian(channels), Wcg[4]),
-        (*convGaussian(channels), Wcg[4]),
-        (*convGaussian(channels, (2, 2)), Wcg[2]),
-        (*convGaussian(channels), Wcg[2]),
-        (*convGaussian(channels), Wcg[2]),
-    )
+    conv = Conv(channels, filter_shape=(3, 3), strides=(1, 1), padding='SAME')
+    gaussian = GaussianLayer()
+    avgpool2 = AvgPool(window_shape=(2, 2), strides=(2, 2))
+    return stax.serial(
+        conv, gaussian,
+        conv, gaussian,
+        conv, gaussian,
+        avgpool2,
+        conv, gaussian,
+        conv, gaussian,
+        conv, gaussian,
+        avgpool2,
+        conv, gaussian,
+        conv, gaussian,
+        conv, gaussian,
+        GlobalAvgPool())
 
 def NaiveConv(layers, channels=10):
     l = []

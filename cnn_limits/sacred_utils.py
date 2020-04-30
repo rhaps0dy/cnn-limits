@@ -29,6 +29,7 @@ def config():
     N_train = None
     N_test = None
     ZCA_transform = False
+    ZCA_bias = 1e-5
 
     # Whether to take the "test" set from the end of the training set
     test_is_validation = True
@@ -116,8 +117,11 @@ def whole_dset(dset):
     return next(iter(DataLoader(dset, batch_size=len(dset))))
 
 
-def _apply_zeromean(X, rgb_mean):
-    rgb_mean = rgb_mean.to(X.device).unsqueeze(-1).unsqueeze(-1)
+@ingredient.capture
+def _apply_zeromean(X, rgb_mean, do_zero_mean):
+    if not do_zero_mean:
+        return X
+    rgb_mean = rgb_mean.to(X.device)
     X -= rgb_mean
     return X
 
@@ -129,27 +133,41 @@ def _apply_ZCA(X, W):
     return X.reshape(shape).to(orig_dtype)
 
 
-def do_transforms(train_set, test_set, ZCA: bool):
-    X, y = whole_dset(train_set)
-    X = X.cuda()
-    rgb_mean = X.mean((0, 2, 3))
-    assert rgb_mean.size() == torch.Size([3])
-    X = _apply_zeromean(X, rgb_mean)
+def _norm_shankar(X):
+    "Perform normalization like https://github.com/modestyachts/neural_kernels_code/blob/ef09d4441cfc901d7a845ffac88ddd4754d4602e/utils.py#L280"
+    # Per-instance zero-mean
+    X = X - X.mean((1, 2, 3), keepdims=True)
+    # Normalize each instance
+    sqnorm = X.pow(2).sum((1, 2, 3), keepdims=True)
+    return X * sqnorm.add(1e-16).pow(-1/2)
 
+
+def do_transforms(train_set, test_set, ZCA: bool, ZCA_bias: float):
+    X, y = whole_dset(train_set)
+    device = ('cuda' if torch.cuda.device_count() else 'cpu')
+    X = X.to(device=device, dtype=torch.float64)
     if ZCA:
-        _, S, V = torch.svd(X.reshape((len(train_set), -1)).to(torch.float64))
+        X = _norm_shankar(X)
+        # The output of GPU and CPU SVD is different, so we do it in CPU and
+        # then bring it back to `device`
+        _, S, V = torch.svd(X.reshape((len(train_set), -1)).cpu())
+        S = S.to(device)
+        V = V.to(device)
+
         # X^T @ X  ==  (V * S^2) @ V.T
+        S = S.pow(2).div(len(train_set)).add(ZCA_bias).sqrt()
         W = (V / S) @ V.t()
         X = _apply_ZCA(X, W)
 
     Xt, yt = whole_dset(test_set)
-    Xt = _apply_zeromean(Xt, rgb_mean)
+    Xt = Xt.to(device=device, dtype=torch.float64)
     if ZCA:
+        Xt = _norm_shankar(Xt)
         Xt = _apply_ZCA(Xt, W)
-    return TensorDataset(X.cpu()*100, y), TensorDataset(Xt*100, yt)
+    return TensorDataset(X.cpu(), y), TensorDataset(Xt.cpu(), yt), W.cpu()
 
 @ingredient.capture
-def load_sorted_dataset(sorted_dataset_path, N_train, N_test, ZCA_transform, test_is_validation, _run):
+def load_sorted_dataset(sorted_dataset_path, N_train, N_test, ZCA_transform, test_is_validation, ZCA_bias, _run):
     with _run.open_resource(os.path.join(sorted_dataset_path, "train.pkl"), "rb") as f:
         train_idx = pickle.load(f)
     with _run.open_resource(os.path.join(sorted_dataset_path, "test.pkl"), "rb") as f:
@@ -158,9 +176,10 @@ def load_sorted_dataset(sorted_dataset_path, N_train, N_test, ZCA_transform, tes
 
     if test_is_validation:
         assert N_train+N_test <= len(train_set), "Train+validation sets too large"
-        test_set = Subset(train_set, train_idx[-1:-N_test-1:-1])
+        test_set = Subset(train_set, train_idx[-N_test-1:-1])
     else:
         test_set = Subset(test_set, test_idx[:N_test])
 
     train_set = Subset(train_set, train_idx[:N_train])
-    return do_transforms(train_set, test_set, ZCA=ZCA_transform)
+    train, test, _ = do_transforms(train_set, test_set, ZCA=ZCA_transform, ZCA_bias=ZCA_bias)
+    return train, test

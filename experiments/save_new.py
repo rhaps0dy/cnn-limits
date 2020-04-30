@@ -91,7 +91,7 @@ def jitted_kernel_fn(kernel_fn):
         y = kernel_fn(x1, x2, get=get)
         if isinstance(y, list):
             return np.stack(y)
-        return y
+        return np.expand_dims(y, 0)
     kern_ = jax.jit(kern_, static_argnums=(2, 3))
     def kern(x1, x2, same, diag):
         x1 = np.asarray(x1.numpy())
