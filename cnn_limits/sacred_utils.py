@@ -1,8 +1,10 @@
+import collections
 import contextlib
 import os
 import pickle
 from pathlib import Path
 
+import numpy as np
 import sacred
 import torch
 import torchvision
@@ -33,15 +35,19 @@ def config():
 
     # Whether to take the "test" set from the end of the training set
     test_is_validation = True
+    dataset_treatment = "train_random_balanced"
 
 
 # GPytorch
 @ingredient.pre_run_hook
-def gpytorch_pre_run_hook(num_likelihood_samples, default_dtype):
+def gpytorch_pre_run_hook(num_likelihood_samples, default_dtype, _seed):
     gpytorch.settings.num_likelihood_samples._set_value(num_likelihood_samples)
     # disable CG, it makes the eigenvalues of test Gaussian negative :(
     gpytorch.settings.max_cholesky_size._set_value(1000000)
     torch.set_default_dtype(getattr(torch, default_dtype))
+    torch.manual_seed(_seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(_seed)
 
 
 # File observer creation
@@ -71,9 +77,28 @@ def new_file(relative_path, mode="wb"):
 
 # Datasets and sorted data sets
 @ingredient.capture
-def load_dataset(dataset_name, dataset_base_path, additional_transforms=[]):
+def load_dataset(dataset_name, dataset_base_path, ZCA_transform, additional_transforms=[]):
+    dataset_base_path = Path(dataset_base_path)
+    if dataset_name == "CIFAR10_ZCA_wrong":
+        assert not ZCA_transform, "double ZCA"
+        data = np.load(dataset_base_path/"CIFAR10_ZCA_wrong.npz")
+        train = TensorDataset(*(torch.from_numpy(data[a]) for a in ("X", "y")))
+        test = TensorDataset(*(torch.from_numpy(data[a]) for a in ("Xt", "yt")))
+        return train, test
+
+    elif dataset_name == "CIFAR10_ZCA_shankar_wrong":
+        assert not ZCA_transform, "double ZCA"
+        data = np.load(dataset_base_path/"cifar_10_zca_augmented_extra_zca_augment_en9fKkGMMg.npz")
+        train = TensorDataset(
+            torch.from_numpy(data["X_train"]).permute(0, 3, 1, 2),
+            torch.from_numpy(data["y_train"]))
+        test = TensorDataset(
+            torch.from_numpy(data["X_test"]).permute(0, 3, 1, 2),
+            torch.from_numpy(data["y_test"]))
+        return train, test
+
     if dataset_name == "CIFAR10":
-        dataset_base_path = os.path.join(dataset_base_path, dataset_name)
+        dataset_base_path = dataset_base_path/dataset_name
     if len(additional_transforms) == 0:
         trans = torchvision.transforms.ToTensor()
     else:
@@ -142,11 +167,12 @@ def _norm_shankar(X):
     return X * sqnorm.add(1e-16).pow(-1/2)
 
 
-def do_transforms(train_set, test_set, ZCA: bool, ZCA_bias: float):
+@ingredient.capture
+def do_transforms(train_set, test_set, ZCA_transform: bool, ZCA_bias: float):
     X, y = whole_dset(train_set)
     device = ('cuda' if torch.cuda.device_count() else 'cpu')
     X = X.to(device=device, dtype=torch.float64)
-    if ZCA:
+    if ZCA_transform:
         X = _norm_shankar(X)
         # The output of GPU and CPU SVD is different, so we do it in CPU and
         # then bring it back to `device`
@@ -161,25 +187,75 @@ def do_transforms(train_set, test_set, ZCA: bool, ZCA_bias: float):
 
     Xt, yt = whole_dset(test_set)
     Xt = Xt.to(device=device, dtype=torch.float64)
-    if ZCA:
+    if ZCA_transform:
         Xt = _norm_shankar(Xt)
         Xt = _apply_ZCA(Xt, W)
-    return TensorDataset(X.cpu(), y), TensorDataset(Xt.cpu(), yt), W.cpu()
+
+        W = W.cpu()
+    else:
+        W = None
+    return TensorDataset(X.cpu(), y), TensorDataset(Xt.cpu(), yt), W
 
 @ingredient.capture
-def load_sorted_dataset(sorted_dataset_path, N_train, N_test, ZCA_transform, test_is_validation, ZCA_bias, _run):
-    with _run.open_resource(os.path.join(sorted_dataset_path, "train.pkl"), "rb") as f:
-        train_idx = pickle.load(f)
-    with _run.open_resource(os.path.join(sorted_dataset_path, "test.pkl"), "rb") as f:
-        test_idx = pickle.load(f)
+def load_sorted_dataset(sorted_dataset_path, N_train, N_test, ZCA_transform, test_is_validation, ZCA_bias, dataset_treatment, _run):
     train_set, test_set = load_dataset()
 
+    if dataset_treatment == "unsorted":
+        return load_unsorted_dataset()
+    elif dataset_treatment == "sorted":
+        with _run.open_resource(os.path.join(sorted_dataset_path, "train.pkl"), "rb") as f:
+            train_idx = pickle.load(f)
+        with _run.open_resource(os.path.join(sorted_dataset_path, "test.pkl"), "rb") as f:
+            test_idx = pickle.load(f)
+
+        if test_is_validation:
+            assert N_train+N_test <= len(train_set), "Train+validation sets too large"
+            test_set = Subset(train_set, train_idx[-N_test:])
+        else:
+            test_set = Subset(test_set, test_idx[:N_test])
+        train_set = Subset(train_set, train_idx[:N_train])
+
+    elif dataset_treatment == "train_random_balanced":
+        assert N_test == len(test_set)
+        train_y = torch.tensor(train_set.targets)
+        argsort_y = torch.argsort(train_y)
+        N_classes = len(train_set.classes)
+
+        starting_for_class = [None] * N_classes
+        for i, idx in enumerate(argsort_y):
+            if starting_for_class[train_y[idx]] is None:
+                starting_for_class[train_y[idx]] = i
+
+        min_gap = len(train_set)
+        for prev, nxt in zip(starting_for_class, starting_for_class[1:]):
+            min_gap = min(min_gap, nxt-prev)
+        assert min_gap >= N_train//N_classes, "Cannot draw balanced data set"
+        train_idx_oneclass = torch.randperm(min_gap)[:N_train//N_classes]
+
+        train_idx = torch.cat([argsort_y[train_idx_oneclass + start]
+                               for start in starting_for_class])
+        # Check that it is balanced
+        count = collections.Counter(a.item() for a in train_y[train_idx])
+        for label in range(N_classes):
+            assert count[label] == N_train // N_classes, "new set not balanced"
+        assert len(set(train_idx)) == N_train, "repeated indices"
+
+        np.save(base_dir()/"train_idx.npy", train_idx.numpy())
+        train_set = Subset(train_set, train_idx)
+    else:
+        raise ValueError(dataset_treatment)
+
+    train, test, _ = do_transforms(train_set, test_set)
+    return train, test
+
+
+@ingredient.capture
+def load_unsorted_dataset(test_is_validation, N_train, N_test):
+    train_set, test_set = load_dataset()
     if test_is_validation:
         assert N_train+N_test <= len(train_set), "Train+validation sets too large"
-        test_set = Subset(train_set, train_idx[-N_test-1:-1])
+        test_set = Subset(train_set, range(-N_test, 0, 1))
     else:
-        test_set = Subset(test_set, test_idx[:N_test])
-
-    train_set = Subset(train_set, train_idx[:N_train])
-    train, test, _ = do_transforms(train_set, test_set, ZCA=ZCA_transform, ZCA_bias=ZCA_bias)
-    return train, test
+        test_set = Subset(test_set, range(N_test))
+    train_set = Subset(train_set, range(N_train))
+    return train_set, test_set

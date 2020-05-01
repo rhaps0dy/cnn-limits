@@ -35,8 +35,10 @@ def dataset_targets(dset):
 
 
 def centered_one_hot(y, N_classes=10):
-    oh = y[:, None] == np.arange(N_classes)
-    return (oh.astype(np.float64)*N_classes - 1) / (N_classes-1)
+    return np.eye(N_classes)[y]
+    # oh = y[:, None] == np.arange(N_classes)
+    # return (oh*2-1).astype(np.float64)
+    # return (oh.astype(np.float64)*N_classes - 1) / (N_classes-1)
 
 
 @experiment.config
@@ -50,7 +52,7 @@ def config():
     N_files = 9999
     eig_engine = "scipy"
     n_splits = 4
-
+    multiply_var = False
 
 
 EigenOut = collections.namedtuple("EigenOut", ("vals", "vecs"))
@@ -155,7 +157,7 @@ def do_one_N(Kxx, Kxt, oh_train_Y, test_Y, n_grid_opt_points, n_splits,
 
 
 @experiment.automain
-def main_no_eig(kernel_matrix_path):
+def main_no_eig(kernel_matrix_path, multiply_var):
     train_set, test_set = SU.load_sorted_dataset()
     train_Y = dataset_targets(train_set)
     oh_train_Y = centered_one_hot(train_Y)
@@ -172,6 +174,11 @@ def main_no_eig(kernel_matrix_path):
         for layer in reversed(data.index):
             Kxx = f['Kxx'][layer]
             Kxt = f['Kxt'][layer]
+            if multiply_var:
+                Kx_diag = f['Kx_diag'][layer]
+                Kt_diag = f['Kt_diag'][layer]
+                Kxx *= np.sqrt(Kx_diag[:, None]*Kx_diag)
+                Kxt *= np.sqrt(Kx_diag[:, None]*Kt_diag)
             for N in data.columns:
                 data.loc[layer, N], accuracy.loc[layer, N] = do_one_N(
                     Kxx[:N, :N], Kxt[:N], oh_train_Y[:N], test_Y, FY=None,

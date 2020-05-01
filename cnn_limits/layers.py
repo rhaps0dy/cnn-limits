@@ -311,6 +311,14 @@ def covariance_tensor(height, width, kern):
     return np.asarray(mat.transpose(1, 2).cpu().numpy())
 
 
+def elementwise_init_fn(rng, input_shape):
+    return input_shape, ()
+
+
+def elementwise_apply_fn(params, inputs):
+    raise NotImplementedError
+
+
 def _gaussian_kernel(ker_mat, prod, do_backprop):
     sqrt_prod = stax._safe_sqrt(prod)
     cosines = ker_mat / sqrt_prod
@@ -320,10 +328,6 @@ def _gaussian_kernel(ker_mat, prod, do_backprop):
 @_layer
 def GaussianLayer(do_backprop=False):
     "similar to relu but less acute"
-    def init_fn(rng, input_shape):
-        return input_shape, ()
-    def apply_fn(params, inputs):
-        raise NotImplementedError
     def kernel_fn(kernels):
         var1, nngp, var2, ntk, marginal = \
             kernels.var1, kernels.nngp, kernels.var2, kernels.ntk, kernels.marginal
@@ -339,4 +343,29 @@ def GaussianLayer(do_backprop=False):
             var1=var1, nngp=nngp, var2=var2, ntk=ntk, is_gaussian=False,
             marginal=marginal)
 
-    return init_fn, apply_fn, kernel_fn
+    return elementwise_init_fn, elementwise_apply_fn, kernel_fn
+
+
+def _proj_relu_kernel(ker_mat, prod, do_backprop):
+    cosines = ker_mat / stax._safe_sqrt(prod)
+    angles = stax._arccos(cosines, do_backprop)
+    dot_sigma = (1 - angles/np.pi)
+    ker_mat = (stax._sqrt(1 - cosines**2, do_backprop) / np.pi
+               + dot_sigma*cosines)
+    return ker_mat
+
+
+@_layer
+def CorrelationRelu(do_backprop=False):
+    "Returns the correlation, not the covariance, from a ReLU"
+    def kernel_fn(kernels):
+        var1, nngp, var2, ntk, marginal = \
+            kernels.var1, kernels.nngp, kernels.var2, kernels.ntk, kernels.marginal
+        if ntk is not None:
+            raise NotImplementedError
+        prod11, prod12, prod22 = stax._get_normalising_prod(var1, var2, marginal)
+        nngp = _proj_relu_kernel(nngp, prod12, do_backprop)
+        return kernels._replace(
+            var1=var1, nngp=nngp, var2=var2, ntk=ntk, is_gaussian=False,
+            marginal=marginal)
+    return elementwise_init_fn, elementwise_apply_fn, kernel_fn

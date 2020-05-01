@@ -6,8 +6,8 @@ from neural_tangents import stax
 from neural_tangents.stax import (AvgPool, Conv, Dense, FanInSum, FanOut,
                                   Flatten, GlobalAvgPool, Identity)
 
-from .layers import (CorrelatedConv, DenseSerialCheckpoint, GaussianLayer,
-                     TickSerialCheckpoint, covariance_tensor)
+from .layers import (CorrelatedConv, CorrelationRelu, DenseSerialCheckpoint,
+                     GaussianLayer, TickSerialCheckpoint, covariance_tensor)
 
 
 def Relu():
@@ -99,19 +99,20 @@ def Myrtle1(channels=16):
     )
 
 def Myrtle5(channels=16):
+    conv = Conv(channels, (3, 3), strides=(1, 1), padding='SAME')
+    relu = Relu()
+    pool = AvgPool((2, 2), strides=(2, 2))
+
     return stax.serial(
-        convrelu(channels),
-        convrelu(channels),
-        convrelu(channels, (2, 2)),
-        convrelu(channels, (2, 2)),
-        AvgPool((8, 8)),
-    )
+        conv, relu,
+        conv, relu, pool,
+        conv, relu, pool,
+        conv, relu, GlobalAvgPool(),
+        CorrelationRelu())
 
 
 def Myrtle10(channels=16):
     kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
-    W_cov = covariance_tensor(3, 3, kern)
-
     Wcg = {}
     for sz in [32, 16, 8, 4, 2]:
         kern.lengthscale = sz/2
@@ -233,4 +234,13 @@ def StraightConvNet(channels=16, N_reps=1):
         *(block*36),
         Flatten(),
         Dense(1),
+    )
+
+
+def CNTK5(channels=16):
+    conv = Conv(channels, filter_shape=(3, 3), strides=(1, 1), padding="SAME")
+    relu = Relu()
+    return stax.serial(
+        *([conv, relu]*5),
+        GlobalAvgPool(),
     )
