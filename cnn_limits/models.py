@@ -7,7 +7,8 @@ from neural_tangents.stax import (AvgPool, Conv, Dense, FanInSum, FanOut,
                                   Flatten, GlobalAvgPool, Identity)
 
 from .layers import (CorrelatedConv, CorrelationRelu, DenseSerialCheckpoint,
-                     GaussianLayer, TickSerialCheckpoint, covariance_tensor)
+                     GaussianLayer, TickSerialCheckpoint, TickSweep,
+                     covariance_tensor)
 
 
 def Relu():
@@ -149,22 +150,34 @@ def convGaussian(channels, pool=None):
     )
 
 def Myrtle10_Gaussian(channels=16):
+    kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
+    Wcg = {}
+    for sz in [32, 16, 8, 4, 2]:
+        kern.lengthscale = sz/2
+        Wcg[sz] = covariance_tensor(sz, sz, kern)
+
     conv = Conv(channels, filter_shape=(3, 3), strides=(1, 1), padding='SAME')
     gaussian = GaussianLayer()
     avgpool2 = AvgPool(window_shape=(2, 2), strides=(2, 2))
-    return stax.serial(
-        conv, gaussian,
-        conv, gaussian,
-        conv, gaussian,
-        avgpool2,
-        conv, gaussian,
-        conv, gaussian,
-        conv, gaussian,
-        avgpool2,
-        conv, gaussian,
-        conv, gaussian,
-        conv, gaussian,
-        GlobalAvgPool())
+
+    convgauss = stax.serial(conv, gaussian)
+    poolconvgauss = stax.serial(avgpool2, conv, gaussian)
+    return TickSerialCheckpoint(
+        (*convgauss, Wcg[32]),
+        (*convgauss, Wcg[32]),
+        (*convgauss, Wcg[32]),
+        (*poolconvgauss, Wcg[16]),
+        (*convgauss, Wcg[16]),
+        (*convgauss, Wcg[16]),
+        (*poolconvgauss, Wcg[8]),
+        (*convgauss, Wcg[8]),
+        (*convgauss, Wcg[8]),
+        (*poolconvgauss, Wcg[4]),
+        (*convgauss, Wcg[4]),
+        (*convgauss, Wcg[4]),
+        (*poolconvgauss, Wcg[2]),
+        (*convgauss, Wcg[2]),
+        (*convgauss, Wcg[2]))
 
 def NaiveConv(layers, channels=10):
     l = []
@@ -244,3 +257,78 @@ def CNTK5(channels=16):
         *([conv, relu]*5),
         GlobalAvgPool(),
     )
+
+
+def Myrtle5_correlated(channels=16):
+    kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
+    Wcg = {}
+    for sz in [32, 16, 8, 4, 3, 2]:
+        kern.lengthscale = sz/2
+        Wcg[sz] = covariance_tensor(sz, sz, kern)
+
+    conv = CorrelatedConv(channels, (3, 3), strides=(1, 1), padding='SAME', W_cov_tensor=Wcg[3])
+    relu = Relu()
+    pool = AvgPool((2, 2), strides=(2, 2))
+
+    conv_relu = stax.serial(conv, relu)
+    pool_conv_relu = stax.serial(pool, conv, relu)
+    return TickSerialCheckpoint(
+        (*conv_relu, Wcg[32]),
+        (*conv_relu, Wcg[32]),
+        (*pool_conv_relu, Wcg[16]),
+        (*pool_conv_relu, Wcg[8]),
+        (*pool_conv_relu, Wcg[4]),
+        (*pool_conv_relu, Wcg[2]))
+
+
+def Myrtle10_sweep(channels=16):
+    kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
+    log_lengthscales = np.linspace(-1.5, 4.5, 100)
+
+    Wcovs = []
+    for lsc in 10**log_lengthscales:
+        kern.lengthscale = lsc
+        Wcovs.append(covariance_tensor(8, 8, kern))
+
+    pool = AvgPool(window_shape=(2, 2), strides=(2, 2))
+    relu = Relu()
+    conv = Conv(channels, filter_shape=(3, 3), strides=(1, 1), padding='SAME')
+
+    return TickSweep(stax.serial(
+        conv, relu,
+        conv, relu,
+        conv, relu, pool,
+        conv, relu,
+        conv, relu,
+        conv, relu, pool,
+        conv, relu,
+        conv, relu),
+                     Wcovs)
+
+def Myrtle10_fulltick_sweep(internal_lengthscale, channels=16):
+    kern_internal = gpytorch.kernels.MaternKernel(nu=3/2)
+    kern_internal.lengthscale = internal_lengthscale
+    Wcov_for_conv = covariance_tensor(3, 3, kern_internal)
+
+    kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
+    log_lengthscales = np.linspace(-1.5, 4.5, 100)
+
+    Wcovs = []
+    for lsc in 10**log_lengthscales:
+        kern.lengthscale = lsc
+        Wcovs.append(covariance_tensor(8, 8, kern))
+
+    pool = AvgPool(window_shape=(2, 2), strides=(2, 2))
+    relu = Relu()
+    conv = CorrelatedConv(channels, (3, 3), strides=(1, 1), padding='SAME', W_cov_tensor=Wcov_for_conv)
+
+    return TickSweep(stax.serial(
+        conv, relu,
+        conv, relu,
+        conv, relu, pool,
+        conv, relu,
+        conv, relu,
+        conv, relu, pool,
+        conv, relu,
+        conv, relu),
+                     Wcovs)

@@ -36,6 +36,7 @@ def config():
     # Whether to take the "test" set from the end of the training set
     test_is_validation = True
     dataset_treatment = "train_random_balanced"
+    train_idx_path = None
 
 
 # GPytorch
@@ -197,7 +198,7 @@ def do_transforms(train_set, test_set, ZCA_transform: bool, ZCA_bias: float):
     return TensorDataset(X.cpu(), y), TensorDataset(Xt.cpu(), yt), W
 
 @ingredient.capture
-def load_sorted_dataset(sorted_dataset_path, N_train, N_test, ZCA_transform, test_is_validation, ZCA_bias, dataset_treatment, _run):
+def load_sorted_dataset(sorted_dataset_path, N_train, N_test, ZCA_transform, test_is_validation, ZCA_bias, dataset_treatment, _run, train_idx_path):
     train_set, test_set = load_dataset()
 
     if dataset_treatment == "unsorted":
@@ -216,7 +217,8 @@ def load_sorted_dataset(sorted_dataset_path, N_train, N_test, ZCA_transform, tes
         train_set = Subset(train_set, train_idx[:N_train])
 
     elif dataset_treatment == "train_random_balanced":
-        assert N_test == len(test_set)
+        if N_test != len(test_set):
+            test_set = Subset(test_set, range(N_test))
         train_y = torch.tensor(train_set.targets)
         argsort_y = torch.argsort(train_y)
         N_classes = len(train_set.classes)
@@ -242,6 +244,9 @@ def load_sorted_dataset(sorted_dataset_path, N_train, N_test, ZCA_transform, tes
 
         np.save(base_dir()/"train_idx.npy", train_idx.numpy())
         train_set = Subset(train_set, train_idx)
+    elif dataset_treatment == "load_train_idx":
+        train_idx = np.load(Path(train_idx_path)/"train_idx.npy")
+        train_set = Subset(train_set, torch.from_numpy(train_idx))
     else:
         raise ValueError(dataset_treatment)
 

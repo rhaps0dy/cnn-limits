@@ -33,7 +33,8 @@ def config():
     model = "google_NNGP"
 
     use_ntk = False
-    save_variance = False
+    save_variance = True
+    internal_lengthscale = None
 
 
 @experiment.capture
@@ -82,7 +83,9 @@ def generate_sorted_dataset_idx(sorted_dataset_path):
 
 ## JAX Model
 @experiment.capture
-def jax_model(model):
+def jax_model(model, internal_lengthscale):
+    if model == "Myrtle10_fulltick_sweep":
+        return getattr(cnn_limits.models, model)(internal_lengthscale, channels=1)
     return getattr(cnn_limits.models, model)(channels=1)
 
 

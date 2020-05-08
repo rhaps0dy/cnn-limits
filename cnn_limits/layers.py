@@ -254,15 +254,23 @@ def TickSerialCheckpoint(*layers, intermediate_outputs=True):
             kernel = f(kernel)
             d1, d2, h, _, w, _ = kernel.nngp.shape
             nngp = kernel.nngp.reshape((d1, d2, -1))
+            var1 = kernel.var1.reshape((d1, -1))
+            var2 = (None if kernel.var2 is None else kernel.var2.reshape((d2, -1)))
 
             meanpool_nngp = nngp.mean(-1)
+            meanpool_var1 = var1.mean(-1)
+            meanpool_var2 = (None if var2 is None else var2.mean(-1))
             if kernel.is_height_width:
                 tick_nngp = nngp @ W_cov
+                tick_var1 = var1 @ W_cov
+                tick_var2 = (None if var2 is None else var2@W_cov)
             else:
                 tick_nngp = nngp @ W_cov_T
+                tick_var1 = var1 @ W_cov_T
+                tick_var2 = (None if var2 is None else var2@W_cov_T)
             this_layer_kernels = [
-                kernel._replace(nngp=meanpool_nngp, var1=None, var2=None, ntk=None),
-                kernel._replace(nngp=tick_nngp, var1=None, var2=None, ntk=None),
+                kernel._replace(nngp=meanpool_nngp, var1=meanpool_var1, var2=meanpool_var2, ntk=None),
+                kernel._replace(nngp=tick_nngp, var1=tick_var1, var2=tick_var2, ntk=None),
                 dense_kernel(kernel),
             ]
             per_layer_kernels = per_layer_kernels + this_layer_kernels
@@ -281,7 +289,7 @@ def DenseSerialCheckpoint(*layers, intermediate_outputs=True):
     def readout_init_fn(rng, input_shape):
         s, params = _readout_init_fn(rng, input_shape)
         return [s], params
-    init_fn =  jax.partial(_serial_init_fn,
+    init_fn = jax.partial(_serial_init_fn,
                            init_fns,  [readout_init_fn ]*len(init_fns),
                            intermediate_outputs)
     apply_fn = jax.partial(_serial_apply_fn,
@@ -346,7 +354,7 @@ def GaussianLayer(do_backprop=False):
     return elementwise_init_fn, elementwise_apply_fn, kernel_fn
 
 
-def _proj_relu_kernel(ker_mat, prod, do_backprop):
+def proj_relu_kernel(ker_mat, prod, do_backprop):
     cosines = ker_mat / stax._safe_sqrt(prod)
     angles = stax._arccos(cosines, do_backprop)
     dot_sigma = (1 - angles/np.pi)
@@ -364,8 +372,63 @@ def CorrelationRelu(do_backprop=False):
         if ntk is not None:
             raise NotImplementedError
         prod11, prod12, prod22 = stax._get_normalising_prod(var1, var2, marginal)
-        nngp = _proj_relu_kernel(nngp, prod12, do_backprop)
+        nngp = proj_relu_kernel(nngp, prod12, do_backprop)
         return kernels._replace(
             var1=var1, nngp=nngp, var2=var2, ntk=ntk, is_gaussian=False,
             marginal=marginal)
     return elementwise_init_fn, elementwise_apply_fn, kernel_fn
+
+
+@_layer
+def TickSweep(model, W_covs_list):
+    orig_init_fn, orig_apply_fn, orig_kernel_fn = model
+    dense_init, dense_apply, dense_kernel = stax.serial(stax.Flatten(), stax.Dense(1))
+
+    def init_fn(rng, input_shape):
+        rng = jax.random.split(rng, 2)
+        out_shape, params = orig_init_fn(rng[0], input_shape)
+        out_dense, _ = dense_init(rng[1], out_shape)
+        return [out_dense]*(len(W_covs_list) + 2), params
+
+    def apply_fn(*args, **kwargs):
+        raise NotImplementedError
+
+    def f(W_cov):
+        a = W_cov.ravel()
+        filter_numel = np.sqrt(a.shape[0])
+        return a / filter_numel
+    W_covs_T = [f(W_cov.transpose((2, 3, 0, 1)))
+                for W_cov in W_covs_list]
+    W_covs = [f(W_cov) for W_cov in W_covs_list]
+
+    def kernel_fn(kernel):
+        kernel = orig_kernel_fn(kernel)
+        d1, d2, h, _, w, _ = kernel.nngp.shape
+
+        nngp = kernel.nngp.reshape((d1, d2, -1))
+        var1 = kernel.var1.reshape((d1, -1))
+        var2 = (None if kernel.var2 is None else kernel.var2.reshape((d2, -1)))
+
+        meanpool_nngp = nngp.mean(-1)
+        meanpool_var1 = var1.mean(-1)
+        meanpool_var2 = (None if var2 is None else var2.mean(-1))
+        if kernel.is_height_width:
+            tick_nngp = [nngp @ W_cov for W_cov in W_covs]
+            tick_var1 = [var1 @ W_cov for W_cov in W_covs]
+            tick_var2 = [(None if var2 is None else var2 @ W_cov)
+                         for W_cov in W_covs]
+        else:
+            tick_nngp = [nngp @ W_cov_T for W_cov_T in W_covs_T]
+            tick_var1 = [var1 @ W_cov_T for W_cov_T in W_covs_T]
+            tick_var2 = [(None if var2 is None else var2 @ W_cov_T)
+                         for W_cov_T in W_covs_T]
+        return [
+            dense_kernel(kernel),
+            *[kernel._replace(nngp=n, var1=v1, var2=v2, ntk=None)
+              for (n, v1, v2) in zip(tick_nngp, tick_var1, tick_var2)],
+            kernel._replace(nngp=meanpool_nngp, var1=meanpool_var1, var2=meanpool_var2, ntk=None),
+        ]
+    setattr(kernel_fn, _INPUT_REQ, {'marginal': M.OVER_POINTS,
+                                    'cross': M.NO,
+                                    'spec': "NHWC"})
+    return init_fn, apply_fn, kernel_fn

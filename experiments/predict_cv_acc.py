@@ -21,6 +21,7 @@ from torch.utils.data import DataLoader, Subset
 import cnn_limits
 import cnn_limits.sacred_utils as SU
 from cnn_gp import create_h5py_dataset
+from cnn_limits.layers import proj_relu_kernel
 
 faulthandler.enable()
 
@@ -46,13 +47,13 @@ def config():
     kernel_matrix_path = "/scratch/ag919/logs/save_new/166"
 
     N_classes = 10
-    layer_range = (2, 999, 3)
     n_grid_opt_points = 1000
 
     N_files = 9999
     eig_engine = "scipy"
-    n_splits = 4
+    n_splits = -1
     multiply_var = False
+    apply_relu = False
 
 
 EigenOut = collections.namedtuple("EigenOut", ("vals", "vecs"))
@@ -126,43 +127,90 @@ def fold_eigdecompose(Kxx, start, stop, lower=True):
 @experiment.capture
 def do_one_N(Kxx, Kxt, oh_train_Y, test_Y, n_grid_opt_points, n_splits,
              FY=None, lower=True):
+    if n_splits == -1:
+        return do_one_N_loo(Kxx, Kxt, oh_train_Y, test_Y, n_grid_opt_points,
+                            FY=FY, lower=lower)
     fold_eig = [fold_eigdecompose(Kxx, start, stop)
                 for start, stop in fold_test_idx(len(Kxx), n_splits)]
     min_eigval = min(*[e.vals.min() for e in fold_eig])
-    eigval_floor = (0. if min_eigval < 0 else
+    eigval_floor = (0. if min_eigval > 0 else
                     np.nextafter(np.abs(min_eigval), np.inf))
-    # grid = np.exp(np.linspace(
-    #     max(np.log(eigval_floor), -36), 5, n_grid_opt_points))
+    grid = np.exp(np.linspace(
+        max(np.log(eigval_floor), -36), 5, n_grid_opt_points))
 
     folds = []
-    # for (start, stop), eig in zip(fold_test_idx(len(Kxx), n_splits),
-    #                             fold_eig):
-    #     _Kxt = np.concatenate([Kxx[start:stop, :start].T,  # Use lower triangle
-    #                         Kxx[stop:, start:stop]], 0)
-    #     _oh_train_Y = np.concatenate(
-    #         [oh_train_Y[:start], oh_train_Y[stop:]], 0)
-    #     _test_Y = oh_train_Y[start:stop].argmax(-1)
-    #     print(eig.vals, _Kxt)
-    #     fold = accuracy_eig(eig, _Kxt, _oh_train_Y, _test_Y, grid)
-    #     # fold = accuracy_eig(eigdecompose(Kxx), Kxt, oh_train_Y, test_Y, grid)
-    #     folds.append(fold)
+    for (start, stop), eig in zip(fold_test_idx(len(Kxx), n_splits),
+                                fold_eig):
+        _Kxt = np.concatenate([Kxx[start:stop, :start].T,  # Use lower triangle
+                            Kxx[stop:, start:stop]], 0)
+        _oh_train_Y = np.concatenate(
+            [oh_train_Y[:start], oh_train_Y[stop:]], 0)
+        _test_Y = oh_train_Y[start:stop].argmax(-1)
+        fold = accuracy_eig(eig, _Kxt, _oh_train_Y, _test_Y, grid)
+        # fold = accuracy_eig(eigdecompose(Kxx), Kxt, oh_train_Y, test_Y, grid)
+        folds.append(fold)
 
-    # grid_acc = np.sum(folds, axis=0)
-    # print("Grid_acc:", grid_acc)
-    # sigy = np.expand_dims(grid[grid_acc.argmax()], 0)
+    grid_acc = np.sum(folds, axis=0)
+    sigy = np.expand_dims(grid[grid_acc.argmax()], 0)
 
     return folds, accuracy_eig(
-        eigdecompose(Kxx, lower=lower), Kxt, oh_train_Y, test_Y, np.array([eigval_floor]), FY=FY,
+        eigdecompose(Kxx, lower=lower), Kxt, oh_train_Y, test_Y, sigy, FY=FY,
         lower=lower)
+
+@experiment.capture
+def do_one_N_loo(Kxx, Kxt, oh_train_Y, test_Y, n_grid_opt_points, n_splits,
+                 _log, FY=None, lower=True):
+    eig = eigdecompose(Kxx, lower=lower)
+    min_eigval = eig.vals.min()
+    eigval_floor = max(0., -min_eigval)
+    while min_eigval + eigval_floor <= 0.0:
+        eigval_floor = np.nextafter(eigval_floor, np.inf)
+
+    sigy_grid = np.exp(np.linspace(
+        max(np.log(eigval_floor), -36), 5, n_grid_opt_points))
+    # Make sure that none is lower than eigval_floor
+    sigy_grid = np.clip(sigy_grid, eigval_floor, np.inf)
+
+    eig = EigenOut(*map(jnp.asarray, eig))
+    Kxt = jnp.asarray(Kxt)
+    oh_train_Y = jnp.asarray(oh_train_Y)
+    test_Y = jnp.asarray(test_Y)
+    if FY is not None:
+        FY = jnp.asarray(FY)
+
+    if FY is None:
+        FY = oh_train_Y
+    alpha = eig.vecs.T @ FY
+    # K^-1 = (eig.vecs / (eig.vals + sigy) @ eig.vecs.T
+    # diag(K^-1) = (eig.vecs**2 / (eig.vals + sigy)).sum(1)
+    eigvecs_sq = eig.vecs**2
+    train_Y = jnp.argmax(oh_train_Y, -1)
+
+    def loo_cv_acc(sigy):
+        new_eigvals = eig.vals + sigy
+        diag_K = (eigvecs_sq / new_eigvals).sum(1, keepdims=True)
+        Ky = (eig.vecs / new_eigvals) @ alpha
+        pred_F = oh_train_Y - Ky/diag_K
+        pred_Y = jnp.argmax(pred_F, axis=-1)
+        return (pred_Y == train_Y).mean(-1)
+
+    loo_accuracies = [float(loo_cv_acc(sigy)) for sigy in sigy_grid]
+    assert np.all(np.isfinite(loo_accuracies))
+    sigy = np.expand_dims(sigy_grid[np.argmax(loo_accuracies)], 0)
+    return (sigy_grid, loo_accuracies), accuracy_eig(
+        eig, Kxt, oh_train_Y, test_Y, sigy, FY=FY, lower=lower)
 
 
 @experiment.automain
-def main_no_eig(kernel_matrix_path, multiply_var):
-    train_set, test_set = SU.load_sorted_dataset()
-    train_Y = dataset_targets(train_set)
-    oh_train_Y = centered_one_hot(train_Y)
-    test_Y = dataset_targets(test_set)
+def main_no_eig(kernel_matrix_path, multiply_var, _log, apply_relu):
     kernel_matrix_path = Path(kernel_matrix_path)
+    train_set, test_set = SU.load_sorted_dataset(
+        dataset_treatment="load_train_idx",
+        train_idx_path=kernel_matrix_path)
+
+    train_Y = dataset_targets(train_set)
+    oh_train_Y = centered_one_hot(train_Y).astype(np.float64)
+    test_Y = dataset_targets(test_set)
 
     with h5py.File(kernel_matrix_path/"kernels.h5", "r") as f:
         N_layers, _, _ = f['Kxx'].shape
@@ -170,18 +218,38 @@ def main_no_eig(kernel_matrix_path, multiply_var):
         all_N = [2**i * 10 for i in range(8)]  # up to 1280
         data = pd.DataFrame(index=range(N_layers), columns=all_N)
         accuracy = pd.DataFrame(index=range(N_layers), columns=all_N)
+        N_total = 1280
 
         for layer in reversed(data.index):
-            Kxx = f['Kxx'][layer]
-            Kxt = f['Kxt'][layer]
+            Kxx = f['Kxx'][layer].astype(np.float64)
+            Kxt = f['Kxt'][layer].astype(np.float64)
+            try:
+                Kx_diag = f['Kx_diag'][layer].astype(np.float64)
+                Kt_diag = f['Kt_diag'][layer].astype(np.float64)
+            except KeyError:
+                Kx_diag = np.diag(Kxx)
+
             if multiply_var:
-                Kx_diag = f['Kx_diag'][layer]
-                Kt_diag = f['Kt_diag'][layer]
+                assert np.allclose(np.diag(Kxx), 1.)
                 Kxx *= np.sqrt(Kx_diag[:, None]*Kx_diag)
                 Kxt *= np.sqrt(Kx_diag[:, None]*Kt_diag)
-            for N in data.columns:
+            else:
+                assert not np.allclose(np.diag(Kxx), 1.)
+
+            if apply_relu:
+                prod12 = Kx_diag[:, None] * Kx_diag
+                Kxx = np.asarray(proj_relu_kernel(Kxx, prod12, False))
+                Kxx = Kxx * prod12    # Use covariance, not correlation matrix
+                prod12_t = Kx_diag[:, None] * Kt_diag
+                Kxt = np.asarray(proj_relu_kernel(Kxt, prod12_t, False))
+                Kxt = Kxt * prod12_t
+
+            for N in reversed(data.columns):
+                # Made a mistake, the same label are all contiguous in the training set.
+                train_idx = slice(0, N_total, N_total//N)
                 data.loc[layer, N], accuracy.loc[layer, N] = do_one_N(
-                    Kxx[:N, :N], Kxt[:N], oh_train_Y[:N], test_Y, FY=None,
+                    Kxx[train_idx, train_idx], Kxt[train_idx], oh_train_Y[train_idx], test_Y, FY=None,
                     lower=True)
+                _log.debug(f"For layer={layer}, N={N}, accuracy={accuracy.loc[layer, N]}")
                 pd.to_pickle(data, SU.base_dir()/"grid_acc.pkl.gz")
                 pd.to_pickle(accuracy, SU.base_dir()/"accuracy.pkl.gz")
