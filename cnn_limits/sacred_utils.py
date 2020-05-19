@@ -50,6 +50,11 @@ def gpytorch_pre_run_hook(num_likelihood_samples, default_dtype, _seed):
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(_seed)
 
+@ingredient.post_run_hook
+def print_experiment(_run):
+    print(f"This was run {_run._id}")
+
+
 
 # File observer creation
 def add_file_observer(experiment, default_dir="/scratch/ag919/logs"):

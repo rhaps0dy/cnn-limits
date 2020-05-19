@@ -129,7 +129,7 @@ def main(worker_rank, print_interval, n_workers, save_variance):
 
     with h5py.File(SU.base_dir()/"kernels.h5", "w") as f:
         timings_obj = PrintTimings(
-            desc=f"Kxx$Kxt (worker {worker_rank}/{n_workers})",
+            desc=f"Kxx&Kxt (worker {worker_rank}/{n_workers})",
             print_interval=print_interval)
 
         if save_variance and worker_rank == 0:

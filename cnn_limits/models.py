@@ -305,6 +305,53 @@ def Myrtle10_sweep(channels=16):
         conv, relu),
                      Wcovs)
 
+
+def Myrtle5_sweep(channels=16):
+    kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
+    log_lengthscales = np.linspace(-1.5, 4.5, 100)
+
+    Wcovs = []
+    for lsc in 10**log_lengthscales:
+        kern.lengthscale = lsc
+        Wcovs.append(covariance_tensor(8, 8, kern))
+
+    pool = AvgPool(window_shape=(2, 2), strides=(2, 2))
+    relu = Relu()
+    conv = Conv(channels, filter_shape=(3, 3), strides=(1, 1), padding='SAME')
+
+    return TickSweep(stax.serial(
+        conv, relu,
+        conv, relu, pool,
+        conv, relu,
+        conv, relu, pool,
+        conv, relu),
+                     Wcovs)
+
+
+def Myrtle10_sweep(channels=16):
+    kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
+    log_lengthscales = np.linspace(-1.5, 4.5, 100)
+
+    Wcovs = []
+    for lsc in 10**log_lengthscales:
+        kern.lengthscale = lsc
+        Wcovs.append(covariance_tensor(8, 8, kern))
+
+    pool = AvgPool(window_shape=(2, 2), strides=(2, 2))
+    relu = Relu()
+    conv = Conv(channels, filter_shape=(3, 3), strides=(1, 1), padding='SAME')
+
+    return TickSweep(stax.serial(
+        conv, relu,
+        conv, relu,
+        conv, relu, pool,
+        conv, relu,
+        conv, relu,
+        conv, relu, pool,
+        conv, relu,
+        conv, relu),
+                     Wcovs)
+
 def Myrtle10_fulltick_sweep(internal_lengthscale, channels=16):
     kern_internal = gpytorch.kernels.MaternKernel(nu=3/2)
     kern_internal.lengthscale = internal_lengthscale
@@ -332,3 +379,55 @@ def Myrtle10_fulltick_sweep(internal_lengthscale, channels=16):
         conv, relu,
         conv, relu),
                      Wcovs)
+
+
+def MyrtleBastard_sweep(channels=16):
+    kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
+    log_lengthscales = np.linspace(-1.5, 4.5, 100)
+
+    Wcovs = []
+    for lsc in 10**log_lengthscales:
+        kern.lengthscale = lsc
+        Wcovs.append(covariance_tensor(16, 16, kern))
+
+    pool = AvgPool(window_shape=(2, 2), strides=(2, 2))
+    relu = Relu()
+    conv = Conv(channels, filter_shape=(3, 3), strides=(1, 1), padding='SAME')
+
+    return TickSweep(stax.serial(
+        conv, relu,
+        conv, relu,
+        conv, relu, pool,
+        conv, relu),
+                     Wcovs)
+
+
+def CNTK14_sweep(channels=16):
+    kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
+    log_lengthscales = np.linspace(-1.5, 4.5, 25)
+
+    Wcovs = []
+    for lsc in 10**log_lengthscales:
+        kern.lengthscale = lsc
+        Wcovs.append(covariance_tensor(32, 32, kern))
+
+    relu = Relu()
+    conv = Conv(channels, filter_shape=(3, 3), strides=(1, 1), padding='SAME')
+
+    return TickSweep(stax.serial(
+        *([conv, relu] * 14)), Wcovs)
+
+
+
+def PreResnet32_sweep(channels=16):
+    kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
+    log_lengthscales = np.linspace(-1.5, 4.5, 100)
+
+    Wcovs = []
+    for lsc in 10**log_lengthscales:
+        kern.lengthscale = lsc
+        Wcovs.append(covariance_tensor(8, 8, kern))
+
+    return TickSweep(
+        PreResNetNoPooling(depth=32, channels=channels),
+        Wcovs)

@@ -67,6 +67,11 @@ def eigdecompose(Kxx, eig_engine, lower=True):
             Kxx, lower=lower, eigvals_only=False, check_finite=False))
     if eig_engine == "magma":
         raise NotImplementedError
+    if eig_engine == "torch":
+        Kxx = torch.from_numpy(Kxx).to(dtype=torch.float64, device='cuda')
+        out = torch.symeig(Kxx, eigenvectors=True, upper=not lower)
+        return EigenOut(*(a.cpu().numpy() for a in (out.eigenvalues,
+                                                    out.eigenvectors)))
     if eig_engine == "scipy":
         return EigenOut(*scipy.linalg.eigh(
             Kxx.astype(np.float64, copy=False), lower=lower,
@@ -104,24 +109,12 @@ def accuracy_eig(Kxx, Kxt, oh_train_Y, test_Y, sigy_grid, _log, FY=None,
     return sigy_grid, np.asarray(accuracies)
 
 
-def fold_test_idx(n_samples, n_splits):
-    fold_sizes = np.full(n_splits, n_samples // n_splits, dtype=np.int)
-    fold_sizes[:n_samples % n_splits] += 1
-    current = 0
-    for fold_size in fold_sizes:
-        start, stop = current, current + fold_size
-        yield start, stop
-        current = stop
-
-
-def fold_eigdecompose(Kxx, start, stop, lower=True):
-    m = len(Kxx) - (stop - start)
-    train = np.zeros((m, m), dtype=Kxx.dtype)
-    train[:start, :start] = Kxx[:start, :start]
-    train[:start, start:] = Kxx[:start, stop:]
-    train[start:, :start] = Kxx[stop:, :start]
-    train[start:, start:] = Kxx[stop:, stop:]
-    return eigdecompose(train, lower=lower)
+def fold_idx(n_samples, n_splits):
+    for start in range(n_splits):
+        test_idx = slice(start, n_samples, n_splits)
+        idx = np.arange(n_samples)
+        train_idx = np.delete(idx, idx[test_idx])
+        yield train_idx, test_idx
 
 
 @experiment.capture
@@ -130,35 +123,39 @@ def do_one_N(Kxx, Kxt, oh_train_Y, test_Y, n_grid_opt_points, n_splits,
     if n_splits == -1:
         return do_one_N_loo(Kxx, Kxt, oh_train_Y, test_Y, n_grid_opt_points,
                             FY=FY, lower=lower)
-    fold_eig = [fold_eigdecompose(Kxx, start, stop)
-                for start, stop in fold_test_idx(len(Kxx), n_splits)]
+
+    fold_eig = [eigdecompose(Kxx[train_idx, :][:, train_idx], lower=lower)
+                for train_idx, _ in fold_idx(len(Kxx), n_splits)]
+
     min_eigval = min(*[e.vals.min() for e in fold_eig])
-    eigval_floor = (0. if min_eigval > 0 else
-                    np.nextafter(np.abs(min_eigval), np.inf))
-    grid = np.exp(np.linspace(
+
+    eigval_floor = max(0., -min_eigval)
+    while min_eigval + eigval_floor <= 0.0:
+        eigval_floor = np.nextafter(eigval_floor, np.inf)
+
+    sigy_grid = np.exp(np.linspace(
         max(np.log(eigval_floor), -36), 5, n_grid_opt_points))
+    # Make sure that none is lower than eigval_floor
+    sigy_grid = np.clip(sigy_grid, eigval_floor, np.inf)
 
     folds = []
-    for (start, stop), eig in zip(fold_test_idx(len(Kxx), n_splits),
-                                fold_eig):
-        _Kxt = np.concatenate([Kxx[start:stop, :start].T,  # Use lower triangle
-                            Kxx[stop:, start:stop]], 0)
-        _oh_train_Y = np.concatenate(
-            [oh_train_Y[:start], oh_train_Y[stop:]], 0)
-        _test_Y = oh_train_Y[start:stop].argmax(-1)
-        fold = accuracy_eig(eig, _Kxt, _oh_train_Y, _test_Y, grid)
-        # fold = accuracy_eig(eigdecompose(Kxx), Kxt, oh_train_Y, test_Y, grid)
+    for (train_idx, test_idx), eig in zip(fold_idx(len(Kxx), n_splits),
+                                          fold_eig):
+        _Kxt = Kxx[train_idx, :][:, test_idx]
+        _oh_train_Y = oh_train_Y[train_idx, :]
+        _test_Y = oh_train_Y[test_idx, :].argmax(-1)
+        _, fold = accuracy_eig(eig, _Kxt, _oh_train_Y, _test_Y, sigy_grid)
         folds.append(fold)
 
-    grid_acc = np.sum(folds, axis=0)
-    sigy = np.expand_dims(grid[grid_acc.argmax()], 0)
+    grid_acc = np.mean(folds, axis=0)
+    sigy = np.expand_dims(sigy_grid[grid_acc.argmax()], 0)
 
-    return folds, accuracy_eig(
+    return (sigy_grid, grid_acc), accuracy_eig(
         eigdecompose(Kxx, lower=lower), Kxt, oh_train_Y, test_Y, sigy, FY=FY,
         lower=lower)
 
 @experiment.capture
-def do_one_N_loo(Kxx, Kxt, oh_train_Y, test_Y, n_grid_opt_points, n_splits,
+def do_one_N_loo(Kxx, Kxt, oh_train_Y, test_Y, n_grid_opt_points,
                  _log, FY=None, lower=True):
     eig = eigdecompose(Kxx, lower=lower)
     min_eigval = eig.vals.min()
@@ -170,6 +167,8 @@ def do_one_N_loo(Kxx, Kxt, oh_train_Y, test_Y, n_grid_opt_points, n_splits,
         max(np.log(eigval_floor), -36), 5, n_grid_opt_points))
     # Make sure that none is lower than eigval_floor
     sigy_grid = np.clip(sigy_grid, eigval_floor, np.inf)
+
+    assert np.all(np.isfinite(sigy_grid))
 
     eig = EigenOut(*map(jnp.asarray, eig))
     Kxt = jnp.asarray(Kxt)
@@ -202,7 +201,7 @@ def do_one_N_loo(Kxx, Kxt, oh_train_Y, test_Y, n_grid_opt_points, n_splits,
 
 
 @experiment.automain
-def main_no_eig(kernel_matrix_path, multiply_var, _log, apply_relu):
+def main_no_eig(kernel_matrix_path, multiply_var, _log, apply_relu, n_splits):
     kernel_matrix_path = Path(kernel_matrix_path)
     train_set, test_set = SU.load_sorted_dataset(
         dataset_treatment="load_train_idx",
@@ -213,15 +212,24 @@ def main_no_eig(kernel_matrix_path, multiply_var, _log, apply_relu):
     test_Y = dataset_targets(test_set)
 
     with h5py.File(kernel_matrix_path/"kernels.h5", "r") as f:
-        N_layers, _, _ = f['Kxx'].shape
+        N_layers, N_total, _ = f['Kxx'].shape
 
-        all_N = [2**i * 10 for i in range(8)]  # up to 1280
+        all_N = list(itertools.takewhile(
+            lambda a: a <= N_total,
+            (2**i * 10 for i in itertools.count(0))))
         data = pd.DataFrame(index=range(N_layers), columns=all_N)
         accuracy = pd.DataFrame(index=range(N_layers), columns=all_N)
-        N_total = 1280
+
+        new_base_dir = SU.base_dir()/f"n_splits_{n_splits}"
+        os.makedirs(new_base_dir, exist_ok=True)
 
         for layer in reversed(data.index):
             Kxx = f['Kxx'][layer].astype(np.float64)
+            mask = np.triu(np.ones(Kxx.shape, dtype=np.bool), k=1)
+            Kxx[mask] = Kxx.T[mask]
+            assert np.array_equal(Kxx, Kxx.T)
+            assert np.all(np.isfinite(Kxx))
+
             Kxt = f['Kxt'][layer].astype(np.float64)
             try:
                 Kx_diag = f['Kx_diag'][layer].astype(np.float64)
@@ -248,8 +256,8 @@ def main_no_eig(kernel_matrix_path, multiply_var, _log, apply_relu):
                 # Made a mistake, the same label are all contiguous in the training set.
                 train_idx = slice(0, N_total, N_total//N)
                 data.loc[layer, N], accuracy.loc[layer, N] = do_one_N(
-                    Kxx[train_idx, train_idx], Kxt[train_idx], oh_train_Y[train_idx], test_Y, FY=None,
-                    lower=True)
+                    Kxx[train_idx, train_idx], Kxt[train_idx], oh_train_Y[train_idx], test_Y, n_splits=n_splits,
+                    FY=None, lower=True)
                 _log.debug(f"For layer={layer}, N={N}, accuracy={accuracy.loc[layer, N]}")
-                pd.to_pickle(data, SU.base_dir()/"grid_acc.pkl.gz")
-                pd.to_pickle(accuracy, SU.base_dir()/"accuracy.pkl.gz")
+                pd.to_pickle(data, new_base_dir/"grid_acc.pkl.gz")
+                pd.to_pickle(accuracy, new_base_dir/"accuracy.pkl.gz")
