@@ -9,8 +9,6 @@ import pandas as pd
 
 import paramiko
 
-LOGS = "/scratch/ag919/logs"
-
 
 class ExperimentResults:
     _host_and_path = re.compile(r"^([a-zA-Z0-9.]+):(.*)$")

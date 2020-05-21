@@ -258,6 +258,7 @@ def main_no_eig(kernel_matrix_path, multiply_var, _log, apply_relu, n_splits):
                 data.loc[layer, N], accuracy.loc[layer, N] = do_one_N(
                     Kxx[train_idx, train_idx], Kxt[train_idx], oh_train_Y[train_idx], test_Y, n_splits=n_splits,
                     FY=None, lower=True)
-                _log.debug(f"For layer={layer}, N={N}, accuracy={accuracy.loc[layer, N]}")
+                (sigy, acc) = map(np.squeeze, accuracy.loc[layer, N])
+                _log.info(f"For layer={layer}, N={N}, sigy={sigy}; accuracy={acc}")
                 pd.to_pickle(data, new_base_dir/"grid_acc.pkl.gz")
                 pd.to_pickle(accuracy, new_base_dir/"accuracy.pkl.gz")

@@ -57,11 +57,14 @@ def print_experiment(_run):
 
 
 # File observer creation
-def add_file_observer(experiment, default_dir="/scratch/ag919/logs"):
-    log_dir = (os.environ['LOG_DIR'] if 'LOG_DIR' in os.environ
-               else os.path.join(default_dir, experiment.path))
+def add_file_observer(experiment, default_dir="/home/ag919/rds/hpc-work/logs"):
+    try:
+        log_dir = Path(os.environ['LOG_DIR'])
+    except KeyError:
+        log_dir = Path(os.environ['HOME'])/"rds/hpc-work/logs"
+    log_dir = log_dir/experiment.path
     experiment.observers.append(
-        sacred.observers.FileStorageObserver(log_dir))
+        sacred.observers.FileStorageObserver(str(log_dir)))
 
 
 # File handling
@@ -208,7 +211,7 @@ def load_sorted_dataset(sorted_dataset_path, N_train, N_test, ZCA_transform, tes
 
     if dataset_treatment == "unsorted":
         return load_unsorted_dataset()
-    elif dataset_treatment == "sorted":
+    elif dataset_treatment in ["sorted", "sorted_legacy"]:
         with _run.open_resource(os.path.join(sorted_dataset_path, "train.pkl"), "rb") as f:
             train_idx = pickle.load(f)
         with _run.open_resource(os.path.join(sorted_dataset_path, "test.pkl"), "rb") as f:
@@ -216,7 +219,10 @@ def load_sorted_dataset(sorted_dataset_path, N_train, N_test, ZCA_transform, tes
 
         if test_is_validation:
             assert N_train+N_test <= len(train_set), "Train+validation sets too large"
-            test_set = Subset(train_set, train_idx[-N_test:])
+            if dataset_treatment == "sorted_legacy":
+                test_set = Subset(train_set, train_idx[-N_test-1:-1])
+            else:
+                test_set = Subset(train_set, train_idx[-N_test:])
         else:
             test_set = Subset(test_set, test_idx[:N_test])
         train_set = Subset(train_set, train_idx[:N_train])
