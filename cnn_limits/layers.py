@@ -2,6 +2,7 @@ import jax
 import jax.numpy as np
 import torch
 from jax import lax, ops, random
+import warnings
 
 import neural_tangents.stax as stax
 from neural_tangents.stax import (_INPUT_REQ, Padding, _layer,
@@ -129,55 +130,85 @@ def conv4d_for_5or6d(mat, W_cov_tensor, strides, padding):
     strides_3d = (strides[0], strides[1], strides[1])
     kernel = np.reshape(W_cov_tensor, (*W_cov_tensor.shape, 1, 1))
 
-    if kernel.shape[0] != 3:
-        return naive_conv4d_for_5or6d(mat, W_cov_tensor, strides, padding)
     kwargs = dict(
         window_strides=strides_3d,
         padding=padding.name,
         dimension_numbers=("NHWQC", "HWQIO", "NHWQC"))
     _, new_X, new_Y, _, _ = lax.conv_general_shape_tuple(
         (1, X, Y, Y, 1), kernel.shape, **kwargs)
+    if new_X <= 0 or new_Y <= 0:
+        raise ValueError(
+            f"Filter shape {kernel.shape} does not fit in image shape {X}, {Y}")
+    if any(s > 5 for s in kernel.shape):
+        warnings.warn(f"Kernel shape {kernel.shape} larger than tested (up to 5)")
 
     """
     Reasoning:
     X + pad == 3 + (new_X-1) * strides[0]
     """
     s0 = strides[0]
-    pad = kernel.shape[0] + (new_X-1)*s0 - X
-    if pad <= 0:
-        idx_in = [slice(0, -2, s0),
-                  slice(1, -1, s0),
-                  slice(2, None, s0)]
-        idx_out = [slice(None), RuntimeError, slice(None)]
-    elif pad == 1:
-        idx_in = [slice(0, -1, s0),
-                  slice(1, None, s0),
-                  slice(2, None, s0)]
-        idx_out = [slice(None), RuntimeError, slice(None, -1)]
-    elif pad == 2:
-        idx_in = [slice(s0-1, -1, s0),
-                  slice(None, None, s0),
-                  slice(1, None, s0)]
-        idx_out = [slice(1, None), RuntimeError, slice(None, -1)]
-    else:
-        raise ValueError(f"Padding was too much: pad={pad}")
+    pad = max(0, kernel.shape[0] + (new_X-1)*s0 - X)
+    assert pad < kernel.shape[0]
+    ax_sz = mat.shape[-4]
+    # We have to add in total "pad" padding. Padding first gets added in the
+    # end, then in the beginning.
+    pad_begin = pad//2
+    pad_end = pad-pad_begin
+
+    # This means that the floor-rounded half point of the filter always has no
+    # padding.
+    no_padding_point = (kernel.shape[0]-1)//2
+
+    # Calculate: where does the `no_padding_point` fall, at the beginning and at the end of the convolution?
+    base_idx_in = slice(no_padding_point-pad_begin,
+                        (ax_sz+pad_end) - kernel.shape[0] + no_padding_point + 1,
+                        s0)
+
+    # idx_out is not used for the base index
+    idxes = [(no_padding_point, base_idx_in, RuntimeError)]
+    # Now move left:
+    for i in range(1, no_padding_point+1):
+        kernel_i = no_padding_point-i
+        start = base_idx_in.start - i
+        out_start = 0
+        while start < 0:
+            start += s0  # Take start modulo stride, plus as many strides needed to make it positive
+            out_start += 1
+        idx_in = slice(start, base_idx_in.stop-i, s0)
+        if out_start == 0:
+            idx_out = slice(None)
+        else:
+            idx_out = slice(out_start, new_X)
+        idxes.append((kernel_i, idx_in, idx_out))
+
+    # Now move right:
+    for i in range(1, kernel.shape[0]-no_padding_point):
+        kernel_i = no_padding_point+i
+        idx_in = slice(base_idx_in.start+i, min(base_idx_in.stop+i, ax_sz), s0)
+        n_elem_out = (idx_in.stop - idx_in.start -1)//s0 + 1
+        if n_elem_out == new_X:
+            idx_out = slice(None)
+        else:
+            idx_out = slice(0, n_elem_out)
+        idxes.append((kernel_i, idx_in, idx_out))
+
     conv_shape = (-1, X, Y, Y, 1)
     new_shape = (*data_dim, -1, new_X, new_Y, new_Y)
 
     out = [
         lax.conv_general_dilated(
-            mat[..., idx_in[i], :, :, :].reshape(conv_shape),
-            kernel[i],
+            mat[..., idx_in, :, :, :].reshape(conv_shape),
+            kernel[kernel_i],
             **kwargs).reshape(new_shape)
-           for i in range(len(idx_in))]
+        for (kernel_i, idx_in, _) in idxes]
 
-    def f(a, i):
-        b, j = out[i], idx_out[i]
+    res = out[0]
+    for (_, _, j), b in zip(idxes[1:], out[1:]):
         if j == slice(None):
-            return a+b
-        return ops.index_add(a, ops.index[..., j, :, :, :], b)
-
-    return f(f(out[1], 2), 0)
+            res = res+b
+        else:
+            res = ops.index_add(res, ops.index[..., j, :, :, :], b)
+    return res
 
 
 def _serial_init_fn(init_fns, readout_init_fns, init_intermediate, rng, input_shape):

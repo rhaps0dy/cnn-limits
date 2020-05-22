@@ -96,10 +96,10 @@ def make_tensor_with_shape(shape):
 
 class Conv4dTest(unittest.TestCase):
     @staticmethod
-    def one_shape_test(x_size, strides, padding):
+    def one_shape_test(x_size, strides, padding, cov_shape=(3, 3)):
         mat = make_tensor_with_shape(
             (1, 2, x_size[0], x_size[0], x_size[1], x_size[1]))
-        W_cov_tensor = make_tensor_with_shape((3, 3, 3, 3)) + 5
+        W_cov_tensor = make_tensor_with_shape((cov_shape[0], cov_shape[0], cov_shape[1], cov_shape[1])) + 5
         res1 = naive_conv4d_for_5or6d(mat, W_cov_tensor, strides, padding)
         res2 = conv4d_for_5or6d(mat, W_cov_tensor, strides, padding)
         assert np.allclose(res1, res2)
@@ -113,6 +113,26 @@ class Conv4dTest(unittest.TestCase):
         for sz in [(4, 4), (8, 8), (7, 4), (6, 4)]:
             for st in [(1, 1), (2, 2), (3, 1)]:
                 self.one_shape_test(sz, st, Padding.VALID)
+
+    def test_conv_same_4(self):
+        for sz in [(4, 4), (8, 8), (7, 4), (6, 4)]:
+            for st in [(1, 1), (2, 2), (3, 1)]:
+                self.one_shape_test(sz, st, Padding.SAME, cov_shape=(4, 4))
+
+    def test_conv_valid_4(self):
+        for sz in [(4, 4), (8, 8), (7, 4), (6, 4)]:
+            for st in [(1, 1), (2, 2), (3, 1)]:
+                self.one_shape_test(sz, st, Padding.VALID, cov_shape=(4, 4))
+
+    def test_conv_same_5(self):
+        for sz in [(4, 4), (8, 8), (7, 4), (6, 5)]:
+            for st in [(1, 1), (2, 2), (3, 1)]:
+                self.one_shape_test(sz, st, Padding.SAME, cov_shape=(5, 5))
+
+    def test_conv_valid_5(self):
+        for sz in [(5, 5), (8, 8), (7, 5), (6, 5)]:
+            for st in [(1, 1), (2, 2), (3, 1)]:
+                self.one_shape_test(sz, st, Padding.VALID, cov_shape=(5, 5))
 
 
 class TickSerialCheckpointTest(unittest.TestCase):
