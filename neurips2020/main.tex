@@ -266,7 +266,8 @@ Then, the mean and covariance functions of the corresponding GP are the mean and
 Looking at equation~\cref{eq:w-independent-dist}, the uncentered covariance of $W$ is $\ExpSymb\sqb{W\ssup{\ell}_{i,j,\nu}W\ssup{\ell}_{i',j',\nu'}} = \delta_{i,i'} \, \delta_{j, j'} \, \delta_{\nu, \nu'}\, \sigma_\text{w}^2/C\ssup{\ell}$. Thus, we can remove the double sum over $j$, and each output channel $i$ is independent of the others. The result is 
 \begin{equation*}
     K\ssup{\ell}_{i,\mu,\mu}(\vX, \vX') %= \ExpSymb\sqb{Z_{i,\mu}(\vX)\, Z_{i',\mu'}\bra{\vX'}} = \ExpSymb\sqb{}
-    = \sum_{j=1}^{C\ssup{\ell}} \sum_{\nu \in \mu\text{th patch}}  \ExpSymb\sqb{A\ssup{\ell}_{j,\nu}(\vX) A\ssup{\ell}_{j,\nu}(\vX')}.
+    = \sum_{j=1}^{C\ssup{\ell}} \sum_{\beta=1}^{p\ssup{\ell}q\ssup{\ell}}
+    \ExpSymb\sqb{A\ssup{\ell}_{j,\nu}(\vX) A\ssup{\ell}_{j,\nu}(\vX')}.
 \end{equation*}
 
 If additionally we are only interested in the diagonal ($\mu=\mu'$), then
