@@ -44,7 +44,9 @@ def config():
     optimizer_type = "sgd"
     line_search_fn=None
     variational_dist_type = "nat"
+    variational_strategy_type = "unwhitened"
     momentum = 0
+    load_file = None
 
     use_cuda = True
     sigy = 1.36301994e-05
@@ -115,7 +117,7 @@ class PrecomputedKernel(gpytorch.kernels.Kernel):
 
 class NaturalClassifier(gpytorch.models.ApproximateGP):
     @experiment.capture
-    def __init__(self, inducing_points, num_classes, base_kernel, variational_dist_type):
+    def __init__(self, inducing_points, num_classes, base_kernel, variational_dist_type, variational_strategy_type):
         if variational_dist_type == "nat":
             klass = NaturalVariationalDistribution
         elif variational_dist_type == "trilnat":
@@ -125,8 +127,15 @@ class NaturalClassifier(gpytorch.models.ApproximateGP):
         else:
             raise ValueError(f"variational_dist_type={variational_dist_type}")
         v_dist = klass(inducing_points.size(0), torch.Size([num_classes]))
+        if variational_strategy_type == "unwhitened":
+            v_strat_type = gpytorch.variational.UnwhitenedVariationalStrategy
+        elif variational_strategy_type == "whitened":
+            v_strat_type = gpytorch.variational.WhitenedVariationalStrategy
+        else:
+            raise ValueError(f"variational_strat_type={variational_strat_type}")
+
         v_strat = gpytorch.variational.MultitaskVariationalStrategy(
-            gpytorch.variational.WhitenedVariationalStrategy(
+            v_strat_type(
                 self, inducing_points, v_dist, learn_inducing_locations=False),
             num_tasks=num_classes)
 
@@ -170,7 +179,13 @@ def build_likelihood(N_classes, N_quadrature_points, likelihood_type, sigy):
 
 
 @experiment.capture
-def optimize(closure, parameters, optimizer_type, training_iter, lr, momentum, line_search_fn, _log):
+def optimize(closure, parameters, model, likelihood, n_train, test_Y, optimizer_type, training_iter, lr, momentum, line_search_fn, _log, load_file):
+    if load_file is not None:
+        model_sd, lik_sd = torch.load(load_file)
+        model.load_state_dict(model_sd)
+        likelihood.load_state_dict(lik_sd)
+        _log.info(f"Loaded from {load_file}")
+
     if optimizer_type == "lbfgsscipy":
         one_step = True
         optimizer = LBFGSScipy(parameters, max_iter=training_iter, history_size=20)
@@ -192,18 +207,25 @@ def optimize(closure, parameters, optimizer_type, training_iter, lr, momentum, l
             line_search_fn=line_search_fn)
     elif optimizer_type == "sgd":
         one_step = False
+        gamma = 1.2
         optimizer = torch.optim.SGD(parameters, lr=lr, momentum=momentum)
     elif optimizer_type == "asgd":
         one_step = False
         optimizer = torch.optim.ASGD(parameters, lr=lr)
+    elif optimizer_type == "adam":
+        one_step = False
+        gamma = 1.1
+        optimizer = torch.optim.Adam(parameters, lr=lr, amsgrad=False)
     elif optimizer_type == "amsgrad":
         one_step = False
         optimizer = torch.optim.Adam(parameters, lr=lr, amsgrad=True)
     else:
         raise ValueError(f"optimizer_type={optimizer_type}")
 
-    def _closure():
+    optimizer2 = torch.optim.Adam(likelihood.parameters(), lr=1.0)
+    def _closure(i):
         optimizer.zero_grad()
+        optimizer2.zero_grad()
         loss = closure()
         loss.backward()
         grad_norm = 0.
@@ -214,16 +236,33 @@ def optimize(closure, parameters, optimizer_type, training_iter, lr, momentum, l
         grad_norm = math.sqrt(grad_norm)
         # for group in optimizer.param_groups:
         #     group['lr'] = lr/min(1., grad_norm)
-        _log.info(f"ELBO={-loss.item()}, grad_norm={grad_norm}")
+        _log.info(f"i={i}, ELBO={-loss.item()}, grad_norm={grad_norm}, epsilon={likelihood.epsilon}")
         return loss
 
     if one_step:
         optimizer.step(_closure)
     else:
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[50, 200, 500], gamma=2., last_epoch=-1)
-        for _ in range(training_iter):
-            optimizer.step(_closure)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=gamma, last_epoch=-1)
+        for i in range(training_iter):
+            _closure(i)
+            optimizer.step()
+            optimizer2.step()
+            try:
+                model.variational_strategy.base_variational_strategy._variational_distribution.reparameterise()
+            except AttributeError:
+                pass
             scheduler.step()
+            for group in optimizer.param_groups:
+                group['lr'] = min(1280., group['lr'])
+            if i % 50 == 0:
+                model_ = model.cpu().eval()
+                with torch.no_grad(), gpytorch.settings.skip_posterior_variances(True):
+                    preds = model_(model_.covar_module.test_x).mean.cpu().numpy()
+                    acc = (preds.argmax(-1) == test_Y).mean()
+                _log.info(f"Accuracy at {i}: {acc}")
+                torch.save((model.state_dict(), likelihood.state_dict()), SU.base_dir()/f"model_{i}.pt")
+                model = model.cuda().train()
+
 
 
 @experiment.capture
@@ -258,7 +297,8 @@ def do_one_N(Kxx, Kxt, Kx_diag, Kt_diag, train_Y, test_Y, save_fname, _log, N_cl
         _target_train_Y = train_Y
 
     optimize(lambda: -mll(model(kernel.train_x), _target_train_Y).sum(),
-             model.variational_strategy.parameters())
+             model.variational_strategy.parameters(),
+             model=model, likelihood=likelihood, n_train=n_train, test_Y=test_Y)
     with torch.no_grad():
         elbo = mll(model(kernel.train_x), _target_train_Y).sum()
         _log.info(f"Final model ELBO: {elbo.item()}")

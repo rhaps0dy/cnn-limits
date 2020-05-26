@@ -21,7 +21,7 @@ ingredient = sacred.Ingredient("i_SU")
 @ingredient.config
 def config():
     # GPytorch
-    num_likelihood_samples = 10
+    num_likelihood_samples = 20
     default_dtype = "float64"
 
     # Dataset loading
@@ -205,6 +205,43 @@ def do_transforms(train_set, test_set, ZCA_transform: bool, ZCA_bias: float):
         W = None
     return TensorDataset(X.cpu(), y), TensorDataset(Xt.cpu(), yt), W
 
+
+def class_balanced_train_idx(train_set, N_train, forbidden_indices=None):
+    train_y = torch.tensor(train_set.targets)
+    argsort_y = torch.argsort(train_y)
+    N_classes = len(train_set.classes)
+
+    if forbidden_indices is not None:
+        assert isinstance(forbidden_indices, set)
+        new_argsort_y = filter(lambda x: x.item() not in forbidden_indices,
+                               argsort_y)
+        new_argsort_y = torch.tensor(list(new_argsort_y), dtype=torch.int64)
+
+        assert len(set(new_argsort_y.numpy()).intersection(forbidden_indices)) == 0
+        assert len(new_argsort_y) + len(forbidden_indices) == len(argsort_y)
+        argsort_y = new_argsort_y
+
+    starting_for_class = [None] * N_classes
+    for i, idx in enumerate(argsort_y):
+        if starting_for_class[train_y[idx]] is None:
+            starting_for_class[train_y[idx]] = i
+
+    min_gap = len(train_set)
+    for prev, nxt in zip(starting_for_class, starting_for_class[1:]):
+        min_gap = min(min_gap, nxt-prev)
+    assert min_gap >= N_train//N_classes, "Cannot draw balanced data set"
+    train_idx_oneclass = torch.randperm(min_gap)[:N_train//N_classes]
+
+    train_idx = torch.cat([argsort_y[train_idx_oneclass + start]
+                            for start in starting_for_class])
+    # Check that it is balanced
+    count = collections.Counter(a.item() for a in train_y[train_idx])
+    for label in range(N_classes):
+        assert count[label] == N_train // N_classes, "new set not balanced"
+    assert len(set(train_idx)) == N_train, "repeated indices"
+    return train_idx
+
+
 @ingredient.capture
 def load_sorted_dataset(sorted_dataset_path, N_train, N_test, ZCA_transform, test_is_validation, ZCA_bias, dataset_treatment, _run, train_idx_path):
     train_set, test_set = load_dataset()
@@ -235,26 +272,28 @@ def load_sorted_dataset(sorted_dataset_path, N_train, N_test, ZCA_transform, tes
         N_classes = len(train_set.classes)
 
         starting_for_class = [None] * N_classes
-        for i, idx in enumerate(argsort_y):
-            if starting_for_class[train_y[idx]] is None:
-                starting_for_class[train_y[idx]] = i
-
-        min_gap = len(train_set)
-        for prev, nxt in zip(starting_for_class, starting_for_class[1:]):
-            min_gap = min(min_gap, nxt-prev)
-        assert min_gap >= N_train//N_classes, "Cannot draw balanced data set"
-        train_idx_oneclass = torch.randperm(min_gap)[:N_train//N_classes]
-
-        train_idx = torch.cat([argsort_y[train_idx_oneclass + start]
-                               for start in starting_for_class])
-        # Check that it is balanced
-        count = collections.Counter(a.item() for a in train_y[train_idx])
-        for label in range(N_classes):
-            assert count[label] == N_train // N_classes, "new set not balanced"
-        assert len(set(train_idx)) == N_train, "repeated indices"
-
+        train_idx = class_balanced_train_idx(train_set, N_train)
         np.save(base_dir()/"train_idx.npy", train_idx.numpy())
         train_set = Subset(train_set, train_idx)
+
+    elif dataset_treatment == "extend_train_random_balanced":
+        old_train_idx = np.load(Path(train_idx_path)/"train_idx.npy")
+        old_train_idx = torch.from_numpy(old_train_idx)
+        train_idx = class_balanced_train_idx(
+            train_set, N_train, forbidden_indices=set(old_train_idx.numpy()))
+        np.save(base_dir()/"train_idx.npy", train_idx.numpy())
+        np.save(base_dir()/"old_train_idx.npy", old_train_idx.numpy())
+        _train_set = train_set
+        train_set = Subset(_train_set, train_idx)
+        test_set = Subset(_train_set, old_train_idx)
+
+    elif dataset_treatment == "extend_load_train_idx":
+        train_idx = np.load(Path(train_idx_path)/"train_idx.npy")
+        old_train_idx = np.load(Path(train_idx_path)/"old_train_idx.npy")
+        _train_set = train_set
+        train_set = Subset(_train_set, torch.from_numpy(train_idx))
+        test_set = Subset(_train_set, torch.from_numpy(old_train_idx))
+
     elif dataset_treatment == "load_train_idx":
         train_idx = np.load(Path(train_idx_path)/"train_idx.npy")
         train_set = Subset(train_set, torch.from_numpy(train_idx))

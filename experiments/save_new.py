@@ -84,7 +84,7 @@ def generate_sorted_dataset_idx(sorted_dataset_path):
 ## JAX Model
 @experiment.capture
 def jax_model(model, internal_lengthscale):
-    if model == "Myrtle10_fulltick_sweep":
+    if model in cnn_limits.models.need_internal_lengthscale:
         return getattr(cnn_limits.models, model)(internal_lengthscale, channels=1)
     return getattr(cnn_limits.models, model)(channels=1)
 

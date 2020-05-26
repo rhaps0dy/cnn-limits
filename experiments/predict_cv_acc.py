@@ -100,6 +100,7 @@ def accuracy_eig(Kxx, Kxt, oh_train_Y, test_Y, sigy_grid, _log, FY=None,
     alpha = eig.vecs.T @ FY
     gamma = Kxt.T @ eig.vecs
 
+    @jax.jit
     def jax_acc(sigy):
         pred_F = (gamma / (eig.vals + sigy)) @ alpha
         pred_Y = jnp.argmax(pred_F, axis=-1)
