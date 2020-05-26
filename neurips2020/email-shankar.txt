@@ -1,0 +1,35 @@
+
+Hi Vaishaal,
+
+Thank you for your very quick reply :)
+
+> When ZCA is done on very few examples, the parameters need to be changed quite a bit (more zca regularization is needed), or else you will get poor accuracies.
+
+Is this the `ZCA_bias` parameter in your config? https://github.com/modestyachts/neural_kernels_code/blob/master/config.py#L46  Which is basically adding a diagonal to the covariance matrix.
+
+> The important part here is the normalization the extra ReLU doesn't actually buy all that much!
+I didn't actually get much extra performance from normalizing the covariance matrix. In fact in the plot that I sent you, the un-normalized covariance is almost always better. Perhaps this is because I'm tuning the sigma parameter more? (I'm searching 1000 values between e^-36 and e^5, possible to do very quickly using the eigendecomposition of Kxx). In my experiments the value of sigma matters a lot and it often ends up being quite small.
+
+> This does seem to be a real error. We will fix this in the next version. 
+> Yes you seem to be understanding the code properly. We will make the changes.
+
+Good to know, thank you very much!
+
+--
+
+> tl;dr we did this intentionally because we were quite sure this would not overstate distributional performance. We in fact report accuracies on Cifar-10.1 to make sure our results are valid on a slightly different distribution (and they are).
+
+Our opinion is that this isn't quite right. Particularly if you had a lot of hyperparameters, you would overestimate the performance on the test set compared to a setting where you did not have access to it. Doesn't this also make it harder to compare with different papers that don't look at the test set?
+
+We will have to take a look at the papers you link. Given your tl;dr, we're willing to accept that the effect is not very large in this case for CIFAR. And like we said in our previous e-mail, this has been our experience empirically as well. However this choice is surprising to us, since it is not standard practice. Although we now see that it is mentioned in the paper in places, it could be helpful to state this more prominantly.
+
+Regarding CIFAR-10.1, we agree that this experiment is super useful, and shows the validity of your overall approach. But even here, we think that some readers may be surprised of your choice of also tuning on the CIFAR-10 test set.
+
+
+> For UCI its even more complicated, for basically all the datasets there is no "test set",  the initial work by Arora et al tuned on 5  train/test splits of the entire dataset, and then tested on 1 train/test split. Given the small size of the test sets this leads to an exceptionally high variance in test set performance. Thus we didn't find it problematic to tune on the train/test split we report.
+
+We think you're right that the UCI datasets are a bit odd, in the sense that they don't have a well-defined training set. However, the small test set size makes it particularly problematic to tune on it. The goal of measuring test set performance is to provide an indication of how a machine learning method will generalise if it were given a similar task in practice. For a similar setting to the UCI tasks, we could be given any random small dataset, and the variance in the predictive performance would simply be a fact of life we would have to live with. Because of this, we think that the correct thing to do would be to report the distribution of test performances over many random splits of the full data. The method should be trained on each split without looking at the test set. This way, the reported performance would be closest to what one would achieve in practice when you train on what is available to you, and are tested on points you are given afterwards. In addition, it also gives an indication into the variance in your performance based on sampling randomness in your training set.
+
+We are interested to hear your opinions on this, particularly because it seems like you have given this a lot of thought.
+
+Adrià and Mark
