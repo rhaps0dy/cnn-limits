@@ -30,7 +30,8 @@
 % \usepackage{subcaption}
 \usepackage{xcolor}
 \usepackage{amsmath}
-% \usepackage{amsthm}
+\usepackage{amsthm}
+\newtheorem{lemma}{Lemma}
 \usepackage{graphicx}
 \usepackage[colorinlistoftodos]{todonotes}
 \usepackage[colorlinks=true, allcolors=blue]{hyperref}
@@ -62,7 +63,9 @@
 %% Mathematical commands
 \usepackage{MarkMathCmds}
 
-
+\newcommand{\patchfun}[1]{{#1}\text{th patch}}
+\newcommand{\vecfun}{\text{vec}\bra}
+\newcommand{\simiid}{\overset{i.i.d.}{\sim}}
 
 
 
@@ -112,11 +115,7 @@
 \maketitle
 
 \begin{abstract}
-  The abstract paragraph should be indented \nicefrac{1}{2}~inch (3~picas) on
-  both the left- and right-hand margins. Use 10~point type, with a vertical
-  spacing (leading) of 11~points.  The word \textbf{Abstract} must be centered,
-  bold, and in point size 12. Two line spaces precede the abstract. The abstract
-  must be limited to one paragraph.
+  Infinite width limits of deep neural networks often have tractable forms. They have been used to analyse the behaviour of finite networks, as well as being useful methods in their own right. Currently used limits of deep convolutional networks lose correlating contributions from different spatial locations in the image, unlike their finite counterparts, even when those only use convolutions. We argue that this is undesirable, and remedy it by introducing spatial correlations in the prior over weights. This leads to correlated contributions being preserved in the wide limit. Varying the amount of correlation in the convolution weights allows interpolation between independent-weight limits and mean pooling (which is equivalent to complete correlation in the weights). Empirical evaluation of the infinitely wide network shows that optimal performance is achieved between the extremes, indicating the usefulness of considering correlations in the weights.
 \end{abstract}
 
 % Thoughts
@@ -241,11 +240,13 @@ The CNN takes an input image of width $P\ssup{0}$, height $Q\ssup{0}$, and $C\ss
 
 Given the activations $A$ of layer $\ell$, the preactivations $Z$ of layer $\ell+1$ are the result of the convolution 
 \begin{equation}
-Z\ssup{\ell+1}_{i,\mu}(\vX) = \sum_{j=1}^{C\ssup{\ell}} \sum_{\nu \in \mu\text{th patch}} W\ssup{\ell+1}_{i,j,\nu}\, A\ssup{\ell}_{j,\nu}(\vX).
+Z\ssup{\ell+1}_{i,\mu}(\vX) = \sum_{j=1}^{C\ssup{\ell}} \sum_{\nu \in \patchfun{\mu}} W\ssup{\ell}_{i,j,\nu}\, A\ssup{\ell}_{j,\nu}(\vX).
+\label{eq:def-nn-convolution}
 \end{equation}
 We have abstracted the definition of the convolution by expressing it as a sum over elements of image patches. The activations are
 \begin{align}
     A\ssup{0}_{i,\mu}(\vX) &= X_{i,\mu}  & A\ssup{\ell}_{i,\mu} &= \phi\ssup{\ell}(Z\ssup{\ell}_{i, \mu}(\vX)) \text{ for $\ell>0$},
+\label{eq:def-nn-activations}
 \end{align}
 where $\phi\ssup{\ell}$ is an elementwise activation function.
 
@@ -253,32 +254,67 @@ where $\phi\ssup{\ell}$ is an elementwise activation function.
 
 Previous work \citep{garriga2018infiniteconv, novak2019infiniteconv} proceeds by drawing each individual weight from an independent Gaussian distribution with zero mean
 \begin{equation}
-    W\ssup{\ell}_{i,j,\nu} \overset{i.i.d.}{\sim} \NormDist{0, \sigma_\text{w}^2/C\ssup{\ell}}.
+    W\ssup{\ell}_{i,j,\nu} \simiid \NormDist{0, \sigma_\text{w}^2/C\ssup{\ell}}.
     \label{eq:w-independent-dist}
 \end{equation}
 
 Then, the mean and covariance functions of the corresponding GP are the mean and covariance of the NN evaluated at inputs $\vX, \vX'$. The mean $m\ssup{\ell}_{i,\mu} = \ExpSymb\sqb{Z\ssup{\ell}_{i,\mu}} = 0$, because $\ExpSymb\sqb{W\ssup{\ell}_{i,j,\nu}}=0$. The covariance function $K$ is more involved:
 \begin{equation}
-    K\ssup{\ell}_{i,i',\mu,\mu'}(\vX, \vX') %= \ExpSymb\sqb{Z_{i,\mu}(\vX)\, Z_{i',\mu'}\bra{\vX'}} = \ExpSymb\sqb{}
-    = \sum_{j=1}^{C\ssup{\ell}} \sum_{j'=1}^{C\ssup{\ell}} \sum_{\nu \in \mu\text{th patch}} \sum_{\nu' \in \mu'\text{th patch}} \ExpSymb\sqb{
+    K\ssup{\ell+1}_{i,i',\mu,\mu'}(\vX, \vX') %= \ExpSymb\sqb{Z_{i,\mu}(\vX)\, Z_{i',\mu'}\bra{\vX'}} = \ExpSymb\sqb{}
+    = \sum_{j=1}^{C\ssup{\ell}} \sum_{j'=1}^{C\ssup{\ell}} \sum_{\nu \in \patchfun{\mu}} \sum_{\nu' \in \patchfun{\mu'}} \ExpSymb\sqb{
     W\ssup{\ell}_{i,j,\nu} W\ssup{\ell}_{i',j',\nu'}} \ExpSymb\sqb{A\ssup{\ell}_{j,\nu}(\vX) A\ssup{\ell}_{j',\nu'}(\vX')}.
+  \label{eq:cov-independent}
 \end{equation}
 Looking at equation~\cref{eq:w-independent-dist}, the uncentered covariance of $W$ is $\ExpSymb\sqb{W\ssup{\ell}_{i,j,\nu}W\ssup{\ell}_{i',j',\nu'}} = \delta_{i,i'} \, \delta_{j, j'} \, \delta_{\nu, \nu'}\, \sigma_\text{w}^2/C\ssup{\ell}$. Thus, we can remove the double sum over $j$, and each output channel $i$ is independent of the others. The result is 
-\begin{equation*}
-    K\ssup{\ell}_{i,\mu,\mu}(\vX, \vX') %= \ExpSymb\sqb{Z_{i,\mu}(\vX)\, Z_{i',\mu'}\bra{\vX'}} = \ExpSymb\sqb{}
-    = \sum_{j=1}^{C\ssup{\ell}} \sum_{\beta=1}^{p\ssup{\ell}q\ssup{\ell}}
-    \ExpSymb\sqb{A\ssup{\ell}_{j,\nu}(\vX) A\ssup{\ell}_{j,\nu}(\vX')}.
-\end{equation*}
+\begin{align}
+    K\ssup{\ell+1}_{i,\mu,\mu}(\vX, \vX') %= \ExpSymb\sqb{Z_{i,\mu}(\vX)\, Z_{i',\mu'}\bra{\vX'}} = \ExpSymb\sqb{}
+    &= \sum_{j=1}^{C\ssup{\ell}} \sum_{\nu \in \patchfun{\mu}} \sum_{\nu' \in \patchfun{\mu'}} \delta_{\nu,\nu'} \frac{\sigma^2_\text{w}}{C\ssup{\ell}}\,
+    \ExpSymb\sqb{A\ssup{\ell}_{j,\nu}(\vX) A\ssup{\ell}_{j,\nu}(\vX')} \\
+    &= \sum_{\nu \in \patchfun{\mu}} \sum_{\nu' \in \patchfun{\mu'}} \delta_{\nu,\nu'} \sigma^2_\text{w}\,
+      \ExpSymb\sqb{A\ssup{\ell}_{\cdot,\nu}(\vX) A\ssup{\ell}_{\cdot,\nu}(\vX')} 
+\end{align}
 
-If additionally we are only interested in the diagonal ($\mu=\mu'$), then
+If additionally we are only interested in the diagonal ($\mu=\mu'$), then this
+becomes a just a convolution:
 \begin{equation*}
-    K\ssup{\ell}_{i,\mu,\mu}(\vX, \vX') %= \ExpSymb\sqb{Z_{i,\mu}(\vX)\, Z_{i',\mu'}\bra{\vX'}} = \ExpSymb\sqb{}
-    = \sum_{j=1}^{C\ssup{\ell}} \sum_{\nu \in \mu\text{th patch}}  \ExpSymb\sqb{A\ssup{\ell}_{j,\nu}(\vX) A\ssup{\ell}_{j,\nu}(\vX')}.
+    K\ssup{\ell+1}_{i,\mu,\mu}(\vX, \vX') %= \ExpSymb\sqb{Z_{i,\mu}(\vX)\, Z_{i',\mu'}\bra{\vX'}} = \ExpSymb\sqb{}
+    = \sum_{j=1}^{C\ssup{\ell}} \sum_{\nu \in \patchfun{\mu}}  \ExpSymb\sqb{A\ssup{\ell}_{j,\nu}(\vX) A\ssup{\ell}_{j,\nu}(\vX')}.
 \end{equation*}
 
 Thus, the variance at the next layer is a convolution of the same specification as the NN.
 
 \subsection{Correlated Weights}
+Here, we place a Gaussian prior on the weights that is not independent. The weights
+corresponding to each input (output) channel $j$ ($i$) have joint covariance
+$\Sigma_\text{w}/C\ssup{\ell}$
+\begin{equation}
+  \vecfun{\vW\ssup{\ell}_{i,j}} \simiid \NormDist{\boldsymbol{0}, \Sigma_\text{w}/C\ssup{\ell}}.
+  \label{eq:w-correlated-dist}
+\end{equation}
+Crucially, the weights are still independent across channels. Intuitively this
+implies that, in the infinite width limit, each channel in layer $\ell+1$ is a
+sum of infinitely many independent channels from layer $\ell$. Thus, a random
+convolutional network initialized with these weights still converges in distribution
+to a GP.
+
+\begin{lemma}
+  Consider a convolutional neural network defined as in
+  \cref{eq:def-nn-convolution,eq:def-nn-activations}, with weights drawn from a
+  zero-mean Gaussian correlated within each channel, as in \cref{eq:w-correlated-dist}.
+  Set the number of channels to $C\ssup{\ell} = n$ for each layer $\ell$. Then,
+  as $n\to \infty$, each output channel $\vZ\ssup{L}_i(\vX)$ of the network converges in
+  distribution to an independent Gaussian process.
+\end{lemma}
+\begin{proof}
+  We express the network using the \textsc{Netsor} programming language due to
+  \citet{yang2019wide}. See \cref{app:netsor}.
+\end{proof}
+
+We can obtain an expression for the covariance $K\ssup{\ell}_{i,\mu,\mu'}(\vX,
+\vX')$ starting from \cref{eq:cov-independent}. This time, however,
+$\ExpSymb\sqb{W\ssup{\ell}_{i,j,\nu}W\ssup{\ell}_{i',j',\nu'}} = \delta_{i,i'} \, \delta_{j, j'} \, \Sigma_{\text{w}}\bra{\nu,\nu'}/C\ssup{\ell}$.
+
+  
 \begin{itemize}
     \item Derivation with correlated weights.
 \end{itemize}
@@ -287,6 +323,9 @@ Summary of this: D-dimensional convolutions of NN weights become 2D-dimensional 
 Highlight the differences and the different computational choices we need to make.
 
 We could have taken another path to generalize TICK to multiple layers.
+
+What choice of covariance do we make ?
+This was inspired by TICK
 
 \section{Experiments}
 Here we seek to answer the question:
@@ -330,4 +369,9 @@ Do {\bf not} include this section in the anonymized submission, only in the fina
 \end{ack}
 
 \printbibliography
+
+\newpage
+
+\input{supplementary.tex}
+
 \end{document}

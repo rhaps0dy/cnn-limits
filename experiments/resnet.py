@@ -5,8 +5,8 @@ from jax.config import config
 from jax import jit, grad, random
 from jax.experimental import optimizers
 from neural_tangents import stax
-from neural_tangents.stax import (AvgPool, BatchNorm, Conv, Dense, FanInSum,
-                                  FanOut, Flatten, GeneralConv, Identity, Relu, MaxPool)
+from neural_tangents.stax import (AvgPool, Conv, Dense, FanInSum,
+                                  FanOut, Flatten, GeneralConv, Identity, Relu)
 import neural_tangents as nt
 import jax
 import functools
@@ -18,7 +18,6 @@ import torchvision.models as models
 import torch
 
 import matplotlib.pyplot as plt
-import seaborn as sns
 
 W, H = 5, 5
 x1 = np.arange(1, W*H+1).reshape((1, W, H, 1)).astype(np.float32)
@@ -95,32 +94,32 @@ if __name__ == "__main__":
 
 
     key, key1, key2 = random.split(random.PRNGKey(1223), 3)
-    W, H = 5, 5
+    W, H = 7, 7
     # x1 = random.normal(key1, (1, W, H, 1))
     # x2 = random.normal(key2, (1, W, H, 1))
     x1 = np.arange(1, W*H+1).reshape((1, W, H, 1)).astype(np.float32)
     x2 = np.arange(4, W*H+4).reshape((1, W, H, 1)).astype(np.float32)
 
-    stride = 2
+    stride = 1
     size = 3
     init_fn, apply_fn, k = stax.serial(
         # stax.Conv(1, (size, size), (1, 1), padding='SAME'),
         # stax.Conv(1, (size, size), (1, 1), padding='SAME'),
         # stax.Relu(),
         # stax.Conv(1, (size, size), (1, 1), padding='SAME'),
-        stax.Conv(1, (size, size), (stride, stride), padding='SAME'),
+        stax.Conv(1, (size, size), (stride, stride), padding='VALID'),
         stax.Relu(),
         # stax.Conv(1, (size, size), (stride, stride), padding='VALID'),
-        stax.Conv(1, (size, size), (stride, stride), padding='SAME'),
+        stax.Conv(1, (size, size), (stride, stride), padding='VALID'),
         stax.Relu(),
         )
     init_fn2, apply_fn2, kernel_fn2 = stax.serial(
         # (init_fn, apply_fn, k),
-        stax.Conv(1, (size, size), (stride, stride), padding='SAME'),
+        stax.Conv(1, (size, size), (stride, stride), padding='VALID'),
         stax.Relu(),
-        stax.Conv(1, (size, size), (stride, stride), padding='SAME'),
+        stax.Conv(1, (size, size), (stride, stride), padding='VALID'),
         stax.Relu(),
-        stax.AvgPool((2, 2)),
+        stax.GlobalAvgPool(),
     )
     init_fn3, apply_fn3, k_valid = stax.serial(
         stax.Conv(1, (size, size), (stride, stride), padding='VALID'),
@@ -164,7 +163,7 @@ if __name__ == "__main__":
     K = 0.
     K2 = 0.
     numel = (2*2) ** 2  # Size of pool^2
-    stride_iter = 2*2
+    stride_iter = 1
     # fig, axes = plt.subplots(3, 3)
     post_padded = []
     for i in range(-1, 2):  # Depends on stride and size

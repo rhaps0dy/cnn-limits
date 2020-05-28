@@ -372,7 +372,7 @@ def GaussianLayer(do_backprop=False):
             kernels.var1, kernels.nngp, kernels.var2, kernels.ntk, kernels.marginal
         if ntk is not None:
             raise NotImplementedError
-        prod11, prod12, prod22 = stax._get_normalising_prod(var1, var2, marginal)
+        prod11, prod12, prod22 = stax._get_normalising_prod(var1, var2, marginal, kernels.var_slices)
         nngp = _gaussian_kernel(nngp, prod12, do_backprop)
         var1 = _gaussian_kernel(var1, prod11, do_backprop)
         if var2 is not None:
@@ -402,7 +402,7 @@ def CorrelationRelu(do_backprop=False):
             kernels.var1, kernels.nngp, kernels.var2, kernels.ntk, kernels.marginal
         if ntk is not None:
             raise NotImplementedError
-        prod11, prod12, prod22 = stax._get_normalising_prod(var1, var2, marginal)
+        prod11, prod12, prod22 = stax._get_normalising_prod(var1, var2, marginal, kernels.var_slices)
         nngp = proj_relu_kernel(nngp, prod12, do_backprop)
         return kernels._replace(
             var1=var1, nngp=nngp, var2=var2, ntk=ntk, is_gaussian=False,

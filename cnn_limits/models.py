@@ -575,7 +575,7 @@ def MyrtleBastard_v3_sweep(internal_lengthscale, channels=16):
     Wcov_for_conv = covariance_tensor(6, 6, kern_internal)
 
     kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
-    log_lengthscales = np.linspace(-1.5, 4.5, 100)
+    log_lengthscales = np.linspace(-1.5, 4.5, 25)
 
     Wcovs = []
     for lsc in 10**log_lengthscales:
@@ -682,14 +682,14 @@ def BigMyrtle(internal_lengthscale, channels=16):
 
 
 @reg_internal_lengthscale
-def BigMyrtleBastard(internal_lengthscale, channels=16):
+def MyrtleBastard_5x5(internal_lengthscale, channels=16):
     kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
     log_lengthscales = np.linspace(-1.5, 3.5, 25)
 
     Wcovs = []
-    for lsc in 10**log_lengthscales:
+    for lsc in 10**log_lengthscales * 2:
         kern.lengthscale = lsc
-        Wcovs.append(covariance_tensor(8, 8, kern))
+        Wcovs.append(covariance_tensor(16, 16, kern))
 
     kern.lengthscale = internal_lengthscale
     Wcov_low = covariance_tensor(5, 5, kern)
@@ -697,9 +697,9 @@ def BigMyrtleBastard(internal_lengthscale, channels=16):
     # pool = AvgPool(window_shape=(2, 2), strides=(2, 2))
     relu = Relu()
     # conv = Conv(channels, filter_shape=(3, 3), strides=(1, 1), padding='SAME')
-    conv = CorrelatedConv(channels, (7, 7), strides=(1, 1), padding='SAME',
+    conv = CorrelatedConv(channels, (5, 5), strides=(1, 1), padding='SAME',
                           W_cov_tensor=Wcov_low)
-    conv_st = CorrelatedConv(channels, (7, 7), strides=(2, 2), padding='SAME',
+    conv_st = CorrelatedConv(channels, (5, 5), strides=(2, 2), padding='SAME',
                              W_cov_tensor=Wcov_low)
 
     return TickSweep(stax.serial(

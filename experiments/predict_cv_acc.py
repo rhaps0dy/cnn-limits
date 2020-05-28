@@ -87,16 +87,15 @@ def accuracy_eig(Kxx, Kxt, oh_train_Y, test_Y, sigy_grid, _log, FY=None,
     """
     N, D = oh_train_Y.shape
     Kxt = jnp.asarray(Kxt)
-    oh_train_Y = jnp.asarray(oh_train_Y)
     test_Y = jnp.asarray(test_Y)
     if FY is not None:
         FY = jnp.asarray(FY)
+    else:
+        FY = jnp.asarray(oh_train_Y)
 
     eig = EigenOut(*map(jnp.asarray, eigdecompose(Kxx)))
 
     _log.debug("Calculating alpha and beta")
-    if FY is None:
-        FY = oh_train_Y
     alpha = eig.vecs.T @ FY
     gamma = Kxt.T @ eig.vecs
 
@@ -260,6 +259,6 @@ def main_no_eig(kernel_matrix_path, multiply_var, _log, apply_relu, n_splits):
                     Kxx[train_idx, train_idx], Kxt[train_idx], oh_train_Y[train_idx], test_Y, n_splits=n_splits,
                     FY=None, lower=True)
                 (sigy, acc) = map(np.squeeze, accuracy.loc[layer, N])
-                _log.info(f"For layer={layer}, N={N}, sigy={sigy}; accuracy={acc}")
+                _log.info(f"For layer={layer}, N={N}, sigy={sigy}; accuracy={acc}, cv_accuracy={np.max(data.loc[layer, N][1])}")
                 pd.to_pickle(data, new_base_dir/"grid_acc.pkl.gz")
                 pd.to_pickle(accuracy, new_base_dir/"accuracy.pkl.gz")
