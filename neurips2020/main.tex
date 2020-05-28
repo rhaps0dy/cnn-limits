@@ -112,11 +112,7 @@
 \maketitle
 
 \begin{abstract}
-  The abstract paragraph should be indented \nicefrac{1}{2}~inch (3~picas) on
-  both the left- and right-hand margins. Use 10~point type, with a vertical
-  spacing (leading) of 11~points.  The word \textbf{Abstract} must be centered,
-  bold, and in point size 12. Two line spaces precede the abstract. The abstract
-  must be limited to one paragraph.
+  Infinite limits of deep neural networks often have tractable forms and have been used for analysing properties as well as methods in their own right. Currently analysed infinite limits of convolutional neural networks lose their desirable property of correlating contributions from different spatial locations in the image. We argue that this is undesirable, and remedy it by modifying the prior distribution on weights, which leads to an infinite limit that retains spatial correlation. Varying the amount of weight correlation allows interpolation between existing limits and mean-pooling. Empirical evaluation shows that optimal performance is achieved with intermediate values, indicating the usefulness of weight correlation.
 \end{abstract}
 
 % Thoughts
@@ -186,31 +182,25 @@ A different class of limiting kernels, the Neural Tangent Kernel (NTK), originat
 The two approaches end up with subtly different kernels, which both can be computed as a recursive kernel.
 
 With the general tools in place, \citet{garriga2018infiniteconv,novak2019infiniteconv} derived limits of the prior of convolutional neural networks with infinite filters. %\footnote{This time with \citet{garriga2018infiniteconv} using the simpler sequential infinite limits, and \citet{novak2019infiniteconv} blah blah}
-These two papers directly motivated this work by noting that spatial correlations disappeared in the infinite limit. Spatial mean pooling at the last layer was suggested as one way to recover correlations, with \citet{novak2019infiniteconv} providing initial evidence of its importance. Due to computational constraints, they were limited to using a Monte Carlo approximation to the limiting kernel, while \citet{arora2019exact} performed the computation with the exact NTK. Very recent papers provide follow-on work that pushes the performance of limit kernels \citep{shankar2020without} and demonstrated the utility of limit kernels for small data tasks \citep{arora2020small}. 
+These two papers directly motivated this work by noting that spatial correlations disappeared in the infinite limit. Spatial mean pooling at the last layer was suggested as one way to recover correlations, with \citet{novak2019infiniteconv} providing initial evidence of its importance. Due to computational constraints, they were limited to using a Monte Carlo approximation to the limiting kernel, while \citet{arora2019exact} performed the computation with the exact NTK. Very recent preprints provide follow-on work that pushes the performance of limit kernels \citep{shankar2020without} and demonstrated the utility of limit kernels for small data tasks \citep{arora2020small}. Extending on the results for convolutional architectures, \citet{yang2019} showed how infinite limits could be derived for a much wider range of network architectures.
+
+In the kernel and Gaussian process community, kernels with convolutional structure have also been proposed. Notably, these retained spatial correlation in either a fixed \citep{vdw2017convgp} or adjustable \citep{mairal2014ckn,dutordoir2020} way. While these methods were not derived using an infinite limit, \citet{vdw2019thesis} provided an initial construction from an infinitely wide neural network limit. Inspired by these results, we propose limits of deep convolutional neural networks which retain spatial correlation in a similar way.
 
 
 
-
-
-
-
-
-
-\adriacomment{mention NTK? it's a somewhat different connection}
-
-This needs to be good, and I will have to rely on you to a large degree Adrià.
-\begin{itemize}
-    \item Summarise work along the line of infinite-width models and results
-    \begin{itemize}
-        \item Early work, Neal. Single hidden layer
-        \item More recent work. Matthews 2018 has good references
-        \item Noticing specialised architectures: Convolutions. Adrià and Brain.
-        \item Generalising: Greg Yang's paper showing how things can be done for general architectures, Neural Tangents package, ...
-        \item NTK: A different kind of infinite limit relying on optimisation rather than Bayes rule.
-        \item Recent uses of infinite width. Ben Recht, Arora.
-    \end{itemize}
-    \item Summarise parallel advancements in Gaussian processes (few sentences). ConvGP, TickGP. ``In parallel, there has been work on directly constructing Gaussian processes with properties that are known to be useful in NNs. In analogy, ConvGP has been shown to be infinite limit of single-layer convgp.''
-\end{itemize}
+% This needs to be good, and I will have to rely on you to a large degree Adrià.
+% \begin{itemize}
+%     \item Summarise work along the line of infinite-width models and results
+%     \begin{itemize}
+%         \item Early work, Neal. Single hidden layer
+%         \item More recent work. Matthews 2018 has good references
+%         \item Noticing specialised architectures: Convolutions. Adrià and Brain.
+%         \item Generalising: Greg Yang's paper showing how things can be done for general architectures, Neural Tangents package, ...
+%         \item NTK: A different kind of infinite limit relying on optimisation rather than Bayes rule.
+%         \item Recent uses of infinite width. Ben Recht, Arora.
+%     \end{itemize}
+%     \item Summarise parallel advancements in Gaussian processes (few sentences). ConvGP, TickGP. ``In parallel, there has been work on directly constructing Gaussian processes with properties that are known to be useful in NNs. In analogy, ConvGP has been shown to be infinite limit of single-layer convgp.''
+% \end{itemize}
 
 
 \section{Disappearing Correlations in Infinite Limits}
@@ -231,62 +221,7 @@ There are various parallel lines of work that are relevant here. The first conne
 
 \section{Infinite Limits for correlated weights}
 
-As a summary: $N$-dimensional convolutions in weight space correspond to $2N$-dimensional convolutions in kernel space.
-
-\adriacomment{Need to argue that the infinite limit still follows the CLT!}
-
-In this section we derive the kernel corresponding to an infinitely wide convolutional neural network (CNN) with correlated weights. Our analysis applies to all numbers of dimensions of convolutions, and more generally all settings where "groups" of weights would be applied to different inputs \adriacomment{make precise using Greg Yang's stuff}.
-
-The CNN takes an input image of width $P\ssup{0}$, height $Q\ssup{0}$, and $C\ssup{0}$ input channels, which we denote as $\vX \in \mathbb{R}^{C\ssup{0} \times P\ssup{0}Q\ssup{0}}$. Each layer $\ell$ has a convolution filter $\vW\ssup{\ell} \in \mathbb{R}^{C\ssup{\ell-1} \times C\ssup{\ell} \times p\ssup{\ell}}$, of width $p\ssup{\ell}$ and height $q\ssup{\ell}$. Usually the filter is square, $p\ssup{\ell}=q\ssup{\ell}$ and its size is 1 or 3.
-
-Given the activations $A$ of layer $\ell$, the preactivations $Z$ of layer $\ell+1$ are the result of the convolution 
-\begin{equation}
-Z\ssup{\ell+1}_{i,\mu}(\vX) = \sum_{j=1}^{C\ssup{\ell}} \sum_{\nu \in \mu\text{th patch}} W\ssup{\ell+1}_{i,j,\nu}\, A\ssup{\ell}_{j,\nu}(\vX).
-\end{equation}
-We have abstracted the definition of the convolution by expressing it as a sum over elements of image patches. The activations are
-\begin{align}
-    A\ssup{0}_{i,\mu}(\vX) &= X_{i,\mu}  & A\ssup{\ell}_{i,\mu} &= \phi\ssup{\ell}(Z\ssup{\ell}_{i, \mu}(\vX)) \text{ for $\ell>0$},
-\end{align}
-where $\phi\ssup{\ell}$ is an elementwise activation function.
-
-\subsection{Independent Weights}
-
-Previous work \citep{garriga2018infiniteconv, novak2019infiniteconv} proceeds by drawing each individual weight from an independent Gaussian distribution with zero mean
-\begin{equation}
-    W\ssup{\ell}_{i,j,\nu} \overset{i.i.d.}{\sim} \NormDist{0, \sigma_\text{w}^2/C\ssup{\ell}}.
-    \label{eq:w-independent-dist}
-\end{equation}
-
-Then, the mean and covariance functions of the corresponding GP are the mean and covariance of the NN evaluated at inputs $\vX, \vX'$. The mean $m\ssup{\ell}_{i,\mu} = \ExpSymb\sqb{Z\ssup{\ell}_{i,\mu}} = 0$, because $\ExpSymb\sqb{W\ssup{\ell}_{i,j,\nu}}=0$. The covariance function $K$ is more involved:
-\begin{equation}
-    K\ssup{\ell}_{i,i',\mu,\mu'}(\vX, \vX') %= \ExpSymb\sqb{Z_{i,\mu}(\vX)\, Z_{i',\mu'}\bra{\vX'}} = \ExpSymb\sqb{}
-    = \sum_{j=1}^{C\ssup{\ell}} \sum_{j'=1}^{C\ssup{\ell}} \sum_{\nu \in \mu\text{th patch}} \sum_{\nu' \in \mu'\text{th patch}} \ExpSymb\sqb{
-    W\ssup{\ell}_{i,j,\nu} W\ssup{\ell}_{i',j',\nu'}} \ExpSymb\sqb{A\ssup{\ell}_{j,\nu}(\vX) A\ssup{\ell}_{j',\nu'}(\vX')}.
-\end{equation}
-Looking at equation~\cref{eq:w-independent-dist}, the uncentered covariance of $W$ is $\ExpSymb\sqb{W\ssup{\ell}_{i,j,\nu}W\ssup{\ell}_{i',j',\nu'}} = \delta_{i,i'} \, \delta_{j, j'} \, \delta_{\nu, \nu'}\, \sigma_\text{w}^2/C\ssup{\ell}$. Thus, we can remove the double sum over $j$, and each output channel $i$ is independent of the others. The result is 
-\begin{equation*}
-    K\ssup{\ell}_{i,\mu,\mu}(\vX, \vX') %= \ExpSymb\sqb{Z_{i,\mu}(\vX)\, Z_{i',\mu'}\bra{\vX'}} = \ExpSymb\sqb{}
-    = \sum_{j=1}^{C\ssup{\ell}} \sum_{\beta=1}^{p\ssup{\ell}q\ssup{\ell}}
-    \ExpSymb\sqb{A\ssup{\ell}_{j,\nu}(\vX) A\ssup{\ell}_{j,\nu}(\vX')}.
-\end{equation*}
-
-If additionally we are only interested in the diagonal ($\mu=\mu'$), then
-\begin{equation*}
-    K\ssup{\ell}_{i,\mu,\mu}(\vX, \vX') %= \ExpSymb\sqb{Z_{i,\mu}(\vX)\, Z_{i',\mu'}\bra{\vX'}} = \ExpSymb\sqb{}
-    = \sum_{j=1}^{C\ssup{\ell}} \sum_{\nu \in \mu\text{th patch}}  \ExpSymb\sqb{A\ssup{\ell}_{j,\nu}(\vX) A\ssup{\ell}_{j,\nu}(\vX')}.
-\end{equation*}
-
-Thus, the variance at the next layer is a convolution of the same specification as the NN.
-
-\subsection{Correlated Weights}
-\begin{itemize}
-    \item Derivation with correlated weights.
-\end{itemize}
-Summary of this: D-dimensional convolutions of NN weights become 2D-dimensional convolutions of covariance tensors. 
-
-Highlight the differences and the different computational choices we need to make.
-
-We could have taken another path to generalize TICK to multiple layers.
+Please don't write here I'm editing this section offline.
 
 \section{Experiments}
 Here we seek to answer the question:
