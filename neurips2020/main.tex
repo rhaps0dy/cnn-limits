@@ -115,7 +115,7 @@
 \maketitle
 
 \begin{abstract}
-  Infinite width limits of deep neural networks often have tractable forms. They have been used to analyse the behaviour of finite networks, as well as being useful methods in their own right. Currently used limits of deep convolutional networks lose correlating contributions from different spatial locations in the image, unlike their finite counterparts, even when those only use convolutions. We argue that this is undesirable, and remedy it by introducing spatial correlations in the prior over weights. This leads to correlated contributions being preserved in the wide limit. Varying the amount of correlation in the convolution weights allows interpolation between independent-weight limits and mean pooling (which is equivalent to complete correlation in the weights). Empirical evaluation of the infinitely wide network shows that optimal performance is achieved between the extremes, indicating the usefulness of considering correlations in the weights.
+Infinite width limits of deep neural networks often have tractable forms. They have been used to analyse the behaviour of finite networks, as well as being useful methods in their own right. Currently used limits of deep convolutional networks lose correlating contributions from different spatial locations in the image, unlike their finite counterparts, even when those only use convolutions. We argue that this is undesirable, and remedy it by introducing spatial correlations in the prior over weights. This leads to correlated contributions being preserved in the wide limit. Varying the amount of correlation in the convolution weights allows interpolation between independent-weight limits and mean pooling (which is equivalent to complete correlation in the weights). Empirical evaluation of the infinitely wide network shows that optimal performance is achieved between the extremes, indicating the usefulness of considering correlations in the weights.
 \end{abstract}
 
 % Thoughts
@@ -185,31 +185,25 @@ A different class of limiting kernels, the Neural Tangent Kernel (NTK), originat
 The two approaches end up with subtly different kernels, which both can be computed as a recursive kernel.
 
 With the general tools in place, \citet{garriga2018infiniteconv,novak2019infiniteconv} derived limits of the prior of convolutional neural networks with infinite filters. %\footnote{This time with \citet{garriga2018infiniteconv} using the simpler sequential infinite limits, and \citet{novak2019infiniteconv} blah blah}
-These two papers directly motivated this work by noting that spatial correlations disappeared in the infinite limit. Spatial mean pooling at the last layer was suggested as one way to recover correlations, with \citet{novak2019infiniteconv} providing initial evidence of its importance. Due to computational constraints, they were limited to using a Monte Carlo approximation to the limiting kernel, while \citet{arora2019exact} performed the computation with the exact NTK. Very recent papers provide follow-on work that pushes the performance of limit kernels \citep{shankar2020without} and demonstrated the utility of limit kernels for small data tasks \citep{arora2020small}. 
+These two papers directly motivated this work by noting that spatial correlations disappeared in the infinite limit. Spatial mean pooling at the last layer was suggested as one way to recover correlations, with \citet{novak2019infiniteconv} providing initial evidence of its importance. Due to computational constraints, they were limited to using a Monte Carlo approximation to the limiting kernel, while \citet{arora2019exact} performed the computation with the exact NTK. Very recent preprints provide follow-on work that pushes the performance of limit kernels \citep{shankar2020without} and demonstrated the utility of limit kernels for small data tasks \citep{arora2020small}. Extending on the results for convolutional architectures, \citet{yang2019} showed how infinite limits could be derived for a much wider range of network architectures.
+
+In the kernel and Gaussian process community, kernels with convolutional structure have also been proposed. Notably, these retained spatial correlation in either a fixed \citep{vdw2017convgp} or adjustable \citep{mairal2014ckn,dutordoir2020} way. While these methods were not derived using an infinite limit, \citet{vdw2019thesis} provided an initial construction from an infinitely wide neural network limit. Inspired by these results, we propose limits of deep convolutional neural networks which retain spatial correlation in a similar way.
 
 
 
-
-
-
-
-
-
-\adriacomment{mention NTK? it's a somewhat different connection}
-
-This needs to be good, and I will have to rely on you to a large degree Adrià.
-\begin{itemize}
-    \item Summarise work along the line of infinite-width models and results
-    \begin{itemize}
-        \item Early work, Neal. Single hidden layer
-        \item More recent work. Matthews 2018 has good references
-        \item Noticing specialised architectures: Convolutions. Adrià and Brain.
-        \item Generalising: Greg Yang's paper showing how things can be done for general architectures, Neural Tangents package, ...
-        \item NTK: A different kind of infinite limit relying on optimisation rather than Bayes rule.
-        \item Recent uses of infinite width. Ben Recht, Arora.
-    \end{itemize}
-    \item Summarise parallel advancements in Gaussian processes (few sentences). ConvGP, TickGP. ``In parallel, there has been work on directly constructing Gaussian processes with properties that are known to be useful in NNs. In analogy, ConvGP has been shown to be infinite limit of single-layer convgp.''
-\end{itemize}
+% This needs to be good, and I will have to rely on you to a large degree Adrià.
+% \begin{itemize}
+%     \item Summarise work along the line of infinite-width models and results
+%     \begin{itemize}
+%         \item Early work, Neal. Single hidden layer
+%         \item More recent work. Matthews 2018 has good references
+%         \item Noticing specialised architectures: Convolutions. Adrià and Brain.
+%         \item Generalising: Greg Yang's paper showing how things can be done for general architectures, Neural Tangents package, ...
+%         \item NTK: A different kind of infinite limit relying on optimisation rather than Bayes rule.
+%         \item Recent uses of infinite width. Ben Recht, Arora.
+%     \end{itemize}
+%     \item Summarise parallel advancements in Gaussian processes (few sentences). ConvGP, TickGP. ``In parallel, there has been work on directly constructing Gaussian processes with properties that are known to be useful in NNs. In analogy, ConvGP has been shown to be infinite limit of single-layer convgp.''
+% \end{itemize}
 
 
 \section{Disappearing Correlations in Infinite Limits}
