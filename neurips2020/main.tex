@@ -185,9 +185,9 @@ A different class of limiting kernels, the Neural Tangent Kernel (NTK), originat
 The two approaches end up with subtly different kernels, which both can be computed as a recursive kernel.
 
 With the general tools in place, \citet{garriga2018infiniteconv,novak2019infiniteconv} derived limits of the prior of convolutional neural networks with infinite filters. %\footnote{This time with \citet{garriga2018infiniteconv} using the simpler sequential infinite limits, and \citet{novak2019infiniteconv} blah blah}
-These two papers directly motivated this work by noting that spatial correlations disappeared in the infinite limit. Spatial mean pooling at the last layer was suggested as one way to recover correlations, with \citet{novak2019infiniteconv} providing initial evidence of its importance. Due to computational constraints, they were limited to using a Monte Carlo approximation to the limiting kernel, while \citet{arora2019exact} performed the computation with the exact NTK. Very recent preprints provide follow-on work that pushes the performance of limit kernels \citep{shankar2020without} and demonstrated the utility of limit kernels for small data tasks \citep{arora2020small}. Extending on the results for convolutional architectures, \citet{yang2019} showed how infinite limits could be derived for a much wider range of network architectures.
+These two papers directly motivated this work by noting that spatial correlations disappeared in the infinite limit. Spatial mean pooling at the last layer was suggested as one way to recover correlations, with \citet{novak2019infiniteconv} providing initial evidence of its importance. Due to computational constraints, they were limited to using a Monte Carlo approximation to the limiting kernel, while \citet{arora2019exact} performed the computation with the exact NTK. Very recent preprints provide follow-on work that pushes the performance of limit kernels \citep{shankar2020without} and demonstrated the utility of limit kernels for small data tasks \citep{arora2020small}. Extending on the results for convolutional architectures, \citet{yang2019wide} showed how infinite limits could be derived for a much wider range of network architectures.
 
-In the kernel and Gaussian process community, kernels with convolutional structure have also been proposed. Notably, these retained spatial correlation in either a fixed \citep{vdw2017convgp} or adjustable \citep{mairal2014ckn,dutordoir2020} way. While these methods were not derived using an infinite limit, \citet{vdw2019thesis} provided an initial construction from an infinitely wide neural network limit. Inspired by these results, we propose limits of deep convolutional neural networks which retain spatial correlation in a similar way.
+In the kernel and Gaussian process community, kernels with convolutional structure have also been proposed. Notably, these retained spatial correlation in either a fixed \citep{vdw2017convgp} or adjustable \citep{mairal2014ckn,dutordoir2020} way. While these methods were not derived using an infinite limit, \Citet{vdw2019thesis} provided an initial construction from an infinitely wide neural network limit. Inspired by these results, we propose limits of deep convolutional neural networks which retain spatial correlation in a similar way.
 
 
 
@@ -206,8 +206,17 @@ In the kernel and Gaussian process community, kernels with convolutional structu
 % \end{itemize}
 
 
-\section{Disappearing Correlations in Infinite Limits}
-Give a high-level commentary on the infinite-width line of work. Summarise commentary on this line of work. As far as I see, the main point here is MacKay's point on the baby and the bathwater, and who else has discussed it (I know Matthews has). \adriacomment{This section is really similar to "related work".}
+\section{Spatial Correlations in Single Layer Networks}
+To begin, we will analyse the infinite limit of a single hidden layer convolutional neural network. We first show how spatial correlations disappear when using infinite weights \citet{garriga2018infiniteconv,novak2019infiniteconv}, and how mean pooling reintroduces them \citet{novak2019infiniteconv}. This leads to kernels with the same structure as \Citet{vdw2017convgp}. Next, we show how spatial correlations can be recovered by adding weight correlations instead of making the discrete architectural modification of adding mean pooling. This leads to the 
+``Translation Insensitive Convolutional Kernel'' (TICK) considered by \citet{dutordoir2020}. In the next section, we will generalise this to deep convolutional networks.
+
+A single layer Convolutional Neural Network (CNN) takes in an image input $\vX \in \Reals^{C^0\times P^0\times Q^0}$ with width $P^0$, height $Q^0$, and $C^0$ channels (e.g.~one per colour). A patch 
+The first layer applies the weights $\vW^1\in\Reals^{C^0\times C^1\times p^1\times q^1}$ to all image patches of width $p^1$ and height $q^1$, where an inner product is taken between 
+\begin{align}
+    \vX
+\end{align}
+
+Give a high-level commentary on the infinite-width line of work. Summarise commentary on this line of work. As far as I see, the main point here is MacKay's point on the baby and the bathwater, and who else has discussed it (I know Matthews has).
 \begin{itemize}
     \item Note MacKay's point about disappearing correlations. Have we thrown out the baby with the bathwater?
     \item Note that both \citet{garriga2018infiniteconv} and \citet{novak2019infiniteconv} show that correlations disappeard in infinite limit.
