@@ -444,15 +444,15 @@ def TickSweep(model, W_covs_list):
         meanpool_var1 = var1.mean(-1)
         meanpool_var2 = (None if var2 is None else var2.mean(-1))
         if kernel.is_height_width:
-            tick_nngp = [nngp @ W_cov for W_cov in W_covs]
-            tick_var1 = [var1 @ W_cov for W_cov in W_covs]
-            tick_var2 = [(None if var2 is None else var2 @ W_cov)
-                         for W_cov in W_covs]
-        else:
             tick_nngp = [nngp @ W_cov_T for W_cov_T in W_covs_T]
             tick_var1 = [var1 @ W_cov_T for W_cov_T in W_covs_T]
             tick_var2 = [(None if var2 is None else var2 @ W_cov_T)
                          for W_cov_T in W_covs_T]
+        else:
+            tick_nngp = [nngp @ W_cov for W_cov in W_covs]
+            tick_var1 = [var1 @ W_cov for W_cov in W_covs]
+            tick_var2 = [(None if var2 is None else var2 @ W_cov)
+                         for W_cov in W_covs]
         return [
             dense_kernel(kernel),
             *[kernel._replace(nngp=n, var1=v1, var2=v2, ntk=None)
