@@ -21,7 +21,9 @@ gpytorch_kern.lengthscale = math.exp(1)
 pool_W_cov = covariance_tensor(5, 5, gpytorch_kern)
 pool = CorrelatedConv(1, (5, 5), (1, 1), padding='VALID',
                       W_cov_tensor=pool_W_cov)
+# pool_W_cov = None
 # pool = GlobalAvgPool()
+
 
 cntk14_nopool = stax.serial(*([conv, relu]*2))
 cntk14 = stax.serial(cntk14_nopool, pool, stax.Flatten())
@@ -39,8 +41,9 @@ def quick_cntk14(x1, x2, get):
 
     res = None
 
-    for i in tqdm.trange(-size+1, size):
+    for i in range(-size+1, size):
         for j in range(-size+1, size):
+            print(f"i={i} , j={j}")
             kernel = cntk14_patch(i, j, x1, x2, get=('var1', 'nngp'))
             if res is None:
                 res = np.sum(kernel.nngp, (-1, -2))
@@ -55,5 +58,5 @@ W, H = size, size
 x1 = jax.random.normal(key1, (2, W, H, 3), dtype=np.float32)
 x2 = jax.random.normal(key2, (3, W, H, 3), dtype=np.float32)
 
-print(quick_cntk14(x1, x2, 'nngp'))
-print(cntk14_kfn(x1, x2, 'nngp'))
+print(quick_cntk14(x1, x1, 'nngp'))
+print(cntk14_kfn(x1, None, 'var1'))

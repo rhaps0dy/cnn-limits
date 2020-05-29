@@ -2,7 +2,7 @@ from neural_tangents.stax import _INPUT_REQ, M, _get_variance, _get_covariance, 
 import functools
 import warnings
 import jax.numpy as np
-
+import torch
 
 def gen_slices(stride, i):
     if i == 0:
@@ -25,8 +25,8 @@ def patch_kernel_fn(kernel_fn, strides, W_cov):
     marginal = M.OVER_PIXELS
     cross = M.OVER_PIXELS
 
-    # if W_cov is not None:
-    #     W_cov = W_cov / np.prod(W_cov.shape[::2])
+    if W_cov is not None:
+        W_cov = W_cov * (1/W_cov.sum())
 
     @functools.wraps(kernel_fn)
     def _patch_kernel_fn(i, j, x1, x2, get='nngp'):
@@ -45,9 +45,16 @@ def patch_kernel_fn(kernel_fn, strides, W_cov):
         inputs = Kernel(
             var1, nngp, var2, ntk, is_gaussian, is_height_width, marginal,
             cross, x1.shape, x2.shape, x1_is_x2, is_input, var_slices)
-        outputs = kernel_fn(inputs)
+        if isinstance(get, tuple):
+            get = (*get, 'is_height_width')
+        else:
+            get = (get, 'is_height_width')
+        outputs = kernel_fn(inputs, get=get)
 
-        if W_cov is not None:
+        if W_cov is None:
+            _, H, W, _ = x1.shape
+            nngp = outputs.nngp * (1/(H*H*W*W))
+        else:
             matching_W_cov = np.diagonal(
                 np.diagonal(W_cov, offset=j, axis1=2, axis2=3),
                 offset=i, axis1=0, axis2=1)
@@ -55,10 +62,24 @@ def patch_kernel_fn(kernel_fn, strides, W_cov):
                 nngp = outputs.nngp * matching_W_cov.T
             else:
                 nngp = outputs.nngp * matching_W_cov
-            return outputs._replace(nngp=nngp)
-        return outputs
+        return outputs._replace(nngp=nngp)
 
     return _patch_kernel_fn
 
 
-
+def patch_kernel_fn_torch(kernel_fn, strides, W_cov):
+    def _patch_kernel_fn(i, j, x1, x2):
+        i1, i2 = gen_slices(strides[0], i)
+        j1, j2 = gen_slices(strides[1], j)
+        out = kernel_fn(x1, (x1 if x2 is None else x2), same=(x2 is None),
+                        diag=False, var_slices=(i1, j1, i2, j2))
+        if W_cov is None:
+            _, _, H, W = x1.shape
+            nngp = out.sum((-1, -2)) * (1/(H*H*W*W))
+        else:
+            matching_W_cov = torch.diagonal(
+                torch.diagonal(W_cov, offset=j, dim1=2, dim2=3),
+                offset=i, dim1=0, dim2=1)
+            nngp = (out * matching_W_cov).sum((-1, -2))
+        return nngp
+    return _patch_kernel_fn

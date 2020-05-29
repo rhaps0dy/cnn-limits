@@ -1,4 +1,5 @@
 import collections
+from neural_tangents import stax
 import contextlib
 import faulthandler
 import itertools
@@ -19,19 +20,31 @@ import scipy.optimize
 import torch
 from torch.utils.data import DataLoader, Subset
 
-import cnn_limits
+import cnn_limits.models
+import cnn_limits.models_torch
 import cnn_limits.sacred_utils as SU
 from cnn_gp import create_h5py_dataset
 from cnn_limits.layers import proj_relu_kernel
 from experiments.predict_cv_acc import (dataset_targets, centered_one_hot,
                                         EigenOut, eigdecompose, accuracy_eig, fold_idx)
 from experiments.predict_cv_acc import experiment as predict_cv_acc_experiment
+from cnn_limits.sparse import patch_kernel_fn, patch_kernel_fn_torch
+from nigp.tbx import PrintTimings
 
 faulthandler.enable()
 
 experiment = sacred.Experiment("sparse_classify", [SU.ingredient, predict_cv_acc_experiment])
 if __name__ == '__main__':
     SU.add_file_observer(experiment)
+
+@experiment.config
+def config():
+    batch_size = 1000
+    print_interval = 2.
+    model = "CNTK_nopool"
+    stride = 1
+    model_args = dict()
+    N_inducing = 4096
 
 
 @experiment.capture
@@ -197,8 +210,8 @@ def test_rbf(_log, i_SU):
 
 
 
-@experiment.automain
-def main(predict_cv_acc, _log):
+@experiment.command
+def stored_kernel(predict_cv_acc, _log):
     kernel_matrix_path = predict_cv_acc['kernel_matrix_path']
     multiply_var = predict_cv_acc['multiply_var']
     apply_relu = predict_cv_acc['apply_relu']
@@ -265,3 +278,256 @@ def main(predict_cv_acc, _log):
                 _log.info(f"For layer={layer}, N={N}, sigy={sigy}; accuracy={acc}, cv_accuracy={np.max(data.loc[layer, N][1])}")
                 pd.to_pickle(data, new_base_dir/"grid_acc.pkl.gz")
                 pd.to_pickle(accuracy, new_base_dir/"accuracy.pkl.gz")
+
+@experiment.capture
+def torch_interdomain_kernel(model, model_args, stride):
+    no_pool = getattr(cnn_limits.models_torch, model)(channels=1, **model_args)
+    no_pool = no_pool.cuda()
+
+    nngp_zz_fn = patch_kernel_fn_torch(no_pool, (stride, stride), W_cov=None)
+
+    def kern_zz_fn(i, z1, j, z2):
+        z1 = z1.unsqueeze(0).to(device='cuda', dtype=torch.float32)
+        z2 = (None if z2 is None else z2.unsqueeze(0).to(device='cuda', dtype=torch.float32))
+        return nngp_zz_fn(i, j, z1, z2).cpu().numpy()
+
+    def kern_zx_fn(i, z1, x2):
+        z1 = z1.unsqueeze(0).to(device='cuda', dtype=torch.float32)
+        x2 = x2.to(device='cuda', dtype=torch.float32)
+        _, _, _, W = x2.shape
+        if W%stride != 0:
+            raise NotImplementedError("W%stride != 0")
+
+        res = nngp_zz_fn(i, -(W//stride)+1, z1, x2)
+        for j in range(-(W//stride)+2, (W//stride)):
+            res += nngp_zz_fn(i, j, z1, x2)
+        return res.cpu().numpy()
+
+    return kern_zz_fn, kern_zx_fn, NotImplemented
+
+
+@experiment.capture
+def interdomain_kernel(model, model_args, stride):
+    no_pool = getattr(cnn_limits.models, model)(channels=1, **model_args)
+
+    _, _, _pool_kernel_fn = stax.serial(no_pool, stax.GlobalAvgPool(), stax.Flatten())
+
+    _, _, _no_pool_kfn = no_pool
+    _kern_zz_fn = patch_kernel_fn(_no_pool_kfn, (stride, stride), W_cov=None)
+
+    def _nngp_zz_fn(i, j, z1, z2):
+        print(f"When jitting: use i={i}, j={j}")
+        return jnp.sum(_kern_zz_fn(i, j, z1, z2, get='nngp').nngp, (-1, -2))
+    #_nngp_zz_fn = jax.jit(_nngp_zz_fn, static_argnums=(0, 1))
+
+    _compile_cache = {}
+    def nngp_zz_fn(i, j, z1, z2):
+        try:
+            return _compile_cache[i, j](z1, z2)
+        except KeyError:
+            _compile_cache[i, j] = jax.jit(lambda x, y: _nngp_zz_fn(i, j, x, y))
+            return nngp_zz_fn(i, j, z1, z2)
+
+    @jax.jit
+    def _kern_x_fn(x1):
+        # NCHW->NHWC
+        x1 = jnp.moveaxis(x1, 1, -1)
+        return _pool_kernel_fn(x1, x2=None, get='var1')
+
+    def zx_kernel_fn(i, z1, x):
+        assert isinstance(i, int)
+
+        z1 = jnp.expand_dims(z1, 0)
+        # NCHW->NHWC
+        z1 = jnp.moveaxis(z1, 1, -1)
+        x = jnp.moveaxis(x, 1, -1)
+
+        _, _, W, _ = x.shape
+        if W%stride != 0:
+            raise NotImplementedError("W%stride != 0")
+
+        res = None
+        for j in range(-(W//stride)+1, (W//stride)):
+            out = nngp_zz_fn(i, j, z1, x)
+            if res is None:
+                res = out
+            else:
+                res = res + out
+        return res
+    zx_kernel_fn = jax.jit(zx_kernel_fn, static_argnums=(0,))
+
+    def zz_kernel_fn(i, j, z1, z2):
+        assert isinstance(i, int) and isinstance(j, int)
+        z1 = jnp.moveaxis(jnp.expand_dims(z1, 0), 1, -1)
+        z2 = jnp.moveaxis(jnp.expand_dims(z2, 0), 1, -1)
+        return nngp_zz_fn(i, j, z1, z2)
+    #zz_kernel_fn = jax.jit(zz_kernel_fn, static_argnums=(0, 1))
+
+
+    def kern_zz_fn(i, z1, j, z2):
+        z1 = jnp.asarray(z1.numpy())
+        if z2 is not None:
+            z2 = jnp.asarray(z2.numpy())
+        else:
+            z2 = z1
+        return zz_kernel_fn(i, j, z1, z2)
+
+    def kern_zx_fn(i, z1, x2):
+        z1 = jnp.asarray(z1.numpy())
+        x2 = jnp.asarray(x2.numpy())
+        return zx_kernel_fn(i, z1, x2)
+
+    def kern_x_fn(x):
+        return _kern_x_fn(jnp.asarray(x.numpy()))
+
+    return kern_zz_fn, kern_zx_fn, kern_x_fn
+
+
+@experiment.command
+def test_kernels():
+    train_set, test_set = SU.load_sorted_dataset()
+    __kern_zz_fn, __kern_zx_fn, kern_x_fn = interdomain_kernel()
+    kern_zz_fn, kern_zx_fn, _ = torch_interdomain_kernel()
+
+    Z = train_set[0][0][:, :5, :5]
+    X = Z.unsqueeze(0)
+
+    print("x")
+    print(kern_x_fn(X))
+
+    out = None
+    _, _, H, W = X.shape
+    for i in range(-H+1, H):
+        if out is None:
+            out = kern_zx_fn(i, Z, X)
+        else:
+            out = kern_zx_fn(i, Z, X) + out
+    print("zx")
+    print(out)
+
+    out = None
+    for i in range(-4, 5):
+        for j in range(-4, 5):
+            if out is None:
+                out = kern_zz_fn(i, Z, j, Z)
+            else:
+                out = kern_zz_fn(i, Z, j, Z) + out
+    print("zz")
+    print(out)
+
+@experiment.automain
+def main(N_inducing, batch_size, print_interval, _log):
+    train_set, test_set = SU.load_sorted_dataset()
+    train_Y = dataset_targets(train_set)
+    oh_train_Y = centered_one_hot(train_Y).astype(np.float64)
+    test_Y = dataset_targets(test_set)
+
+    kern_zz_fn, _, _ = torch_interdomain_kernel()
+    _, kern_zx_fn, _ = interdomain_kernel()
+    _, img_h, _ = train_set[0][0].shape
+
+    Kux = np.zeros((N_inducing, len(train_set)), np.float64)
+    Kut = np.zeros((N_inducing, len(test_set)), np.float64)
+    Kuu = np.zeros((N_inducing, N_inducing), np.float64)
+    Kux[...] = np.nan
+    Kut[...] = np.nan
+    Kuu[...] = np.nan
+
+    Z_X_idx = []
+    Z_is = []
+    existing_inducing = set()
+
+    timings_obj = PrintTimings(
+        desc="sparse_classify",
+        print_interval=print_interval)
+    timings = timings_obj(
+            itertools.count(),
+            ((len(train_set) + len(test_set))//batch_size + N_inducing) * N_inducing)
+
+
+    data_series = pd.Series()
+    accuracy_series = pd.Series()
+
+    milestone = 4
+    with h5py.File(SU.base_dir()/"kernels.h5", "w") as h5_file:
+        h5_file.create_dataset("Kuu", shape=(1, *Kuu.shape), dtype=np.float32,
+                               fillvalue=np.nan, chunks=(1, 128, 128),
+                               maxshape=(None, *Kuu.shape))
+        h5_file.create_dataset("Kux", shape=(1, *Kux.shape), dtype=np.float32,
+                               fillvalue=np.nan, chunks=(1, 1, Kux.shape[1]),
+                               maxshape=(None, *Kux.shape))
+        h5_file.create_dataset("Kut", shape=(1, *Kut.shape), dtype=np.float32,
+                               fillvalue=np.nan, chunks=(1, 1, Kut.shape[1]),
+                               maxshape=(None, *Kut.shape))
+
+        for step in range(N_inducing):
+            # Select new inducing point
+            while True:
+                Z_i_in_X = np.random.randint(len(train_set))
+                Z_i = np.random.randint(-img_h+1, img_h)
+                if (Z_i_in_X, Z_i) not in existing_inducing:
+                    break
+            existing_inducing.add((Z_i_in_X, Z_i))
+            Z_X_idx.append(Z_i_in_X)
+            Z_is.append(Z_i)
+
+            assert len(Z_is) == len(Z_X_idx) and len(Z_is) == step+1 and len(existing_inducing) == step+1
+
+            current_Z, _ = train_set[Z_X_idx[-1]]
+            current_Zi = Z_is[-1]
+
+            timings_obj.desc = f"Updating Kuu (inducing point #{step})"
+            for a in range(step+1):
+                other_Z, _ = train_set[Z_X_idx[a]]
+                Kuu[a, step] = Kuu[step, a] = np.squeeze(kern_zz_fn(
+                    Z_is[a], other_Z,
+                    current_Zi, current_Z), axis=(0, 1))
+                next(timings)
+            h5_file["Kuu"][0, step, :step+1] = Kuu[step, :step+1]
+            h5_file["Kuu"][0, :step+1, step] = Kuu[:step+1, step]
+
+            timings_obj.desc = f"Updating Kux (inducing point #{step})"
+            for slice_start, slice_end, (train_x, _) in zip(
+                    itertools.count(start=0, step=batch_size),
+                    itertools.count(start=batch_size, step=batch_size),
+                    DataLoader(train_set, batch_size=batch_size, shuffle=False)):
+                Kux[step, slice_start:slice_end] = np.squeeze(
+                    kern_zx_fn(current_Zi, current_Z, train_x), axis=0)
+                next(timings)
+            h5_file["Kux"][0, step, :] = Kux[step, :]
+
+            timings_obj.desc = f"Updating Kut (inducing point #{step})"
+            for slice_start, slice_end, (test_x, _) in zip(
+                    itertools.count(start=0, step=batch_size),
+                    itertools.count(start=batch_size, step=batch_size),
+                    DataLoader(test_set, batch_size=batch_size, shuffle=False)):
+                Kut[step, slice_start:slice_end] = np.squeeze(
+                    kern_zx_fn(current_Zi, current_Z, test_x), axis=0)
+                next(timings)
+            h5_file["Kut"][0, step, :] = Kut[step, :]
+
+
+            if step+1 == milestone or step+1 == N_inducing:
+                milestone *= 2
+                _log.info(f"Performing classification (n. inducing #{step+1})")
+                _Kuu = Kuu[:len(Z_X_idx), :len(Z_X_idx)]
+                _Kux = Kux[:len(Z_X_idx)]
+                _Kut = Kut[:len(Z_X_idx)]
+                assert not np.any(np.isnan(_Kuu))
+                assert not np.any(np.isnan(_Kux))
+                assert not np.any(np.isnan(_Kut))
+
+                data, accuracy = do_one_N_chol(_Kuu, _Kux, _Kut, oh_train_Y, test_Y,
+                                               n_splits=4)
+                data_series.loc[step+1] = data
+                accuracy_series.loc[step+1] = accuracy
+                pd.to_pickle(data_series, SU.base_dir()/"grid_acc.pkl.gz")
+                pd.to_pickle(accuracy_series, SU.base_dir()/"accuracy.pkl.gz")
+                pd.to_pickle((Z_X_idx, Z_is), SU.base_dir()/"inducing_indices.pkl.gz")
+
+                (sigy, acc) = map(np.squeeze, accuracy)
+                _log.info(
+                    f"For RBF kernel, N_inducing={step+1}, sigy={sigy}; accuracy={acc}, cv_accuracy={np.max(data[1])}")
+
+
+

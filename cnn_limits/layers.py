@@ -55,12 +55,16 @@ def CorrelatedConv(out_chan,
             W_init = W_init_scalar
             W_cov_tensor = np.eye(filter_numel).reshape(
                 (filter_shape[0], filter_shape[1], filter_shape[0], filter_shape[1])
+                # Has only the diagonal so we divide by filter_numel
             ).transpose([0, 2, 1, 3]) * (W_std**2 / filter_numel)
         else:
             W_init = W_init_tensor
             assert W_std.shape == (height, height, width, width)
-            W_cov_tensor = np.einsum("ahcw,bhdw->abcd", W_std, W_std) / filter_numel
+            W_cov_tensor = np.einsum("ahcw,bhdw->abcd", W_std, W_std)
+            # Has the whole tensor so we divide by filter_numel**2
+            W_cov_tensor = W_cov_tensor * (1/W_cov_tensor.sum())
     else:
+        W_cov_tensor = W_cov_tensor * (1/W_cov_tensor.sum())
         W_init = W_init_tensor
         W_std = tensor_cholesky(W_cov_tensor)
 
@@ -273,8 +277,7 @@ def TickSerialCheckpoint(*layers, intermediate_outputs=True):
 
     def f(W_cov):
         a = W_cov.ravel()
-        filter_numel = np.sqrt(a.shape[0])
-        return a / filter_numel
+        return a * (1/a.sum())
     W_covs_T = [f(W_cov.transpose((2, 3, 0, 1)))
                 for W_cov in W_covs_list]
     W_covs = [f(W_cov) for W_cov in W_covs_list]
@@ -426,8 +429,7 @@ def TickSweep(model, W_covs_list):
 
     def f(W_cov):
         a = W_cov.ravel()
-        filter_numel = np.sqrt(a.shape[0])
-        return a / filter_numel
+        return a * (1/a.sum())
     W_covs_T = [f(W_cov.transpose((2, 3, 0, 1)))
                 for W_cov in W_covs_list]
     W_covs = [f(W_cov) for W_cov in W_covs_list]

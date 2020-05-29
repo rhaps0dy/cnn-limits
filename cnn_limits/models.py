@@ -425,6 +425,12 @@ def CNTK14_sweep(channels=16):
 
 
 
+def CNTK_nopool(channels=15, depth=14):
+    relu = Relu()
+    conv = Conv(channels, filter_shape=(3, 3), strides=(1, 1), padding='SAME')
+    return stax.serial(*([conv, relu]*depth))
+
+
 def PreResnet32_sweep(channels=16):
     kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
     log_lengthscales = np.linspace(-1.5, 4.5, 100)
