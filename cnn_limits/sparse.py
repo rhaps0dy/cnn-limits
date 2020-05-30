@@ -6,6 +6,7 @@ import collections
 import jax.numpy as np
 import numpy as onp
 import torch
+from jax import lax
 
 def gen_slices(stride, size, i):
     if i == 0:
@@ -43,8 +44,23 @@ def patch_kernel_fn(kernel_fn, strides, W_cov):
     marginal = M.OVER_PIXELS
     cross = M.OVER_PIXELS
 
-    if W_cov is not None:
-        W_cov = W_cov * (1/W_cov.sum())
+
+    if W_cov is None:
+        W_cov_diagonals = None
+    else:
+        sz1, sz2, _, _ = W_cov.shape
+        W_cov_diagonals = onp.zeros((sz1*2-1, sz2*2-1, *W_cov.shape[2:]),
+                                    dtype=onp.float32)
+        W_cov = onp.asarray(W_cov).copy()
+        W_cov *= (1/W_cov.sum())
+        for i in range(-sz1+1, sz1):
+            for j in range(-sz2+1, sz2):
+                d = onp.diagonal(
+                    onp.diagonal(W_cov, offset=j, axis1=2, axis2=3),
+                    offset=i, axis1=0, axis2=1)
+                W_cov_diagonals[i+sz1-1, j+sz2-1, :d.shape[0], :d.shape[1]] = d
+        W_cov_diagonals = np.asarray(W_cov_diagonals)
+
 
     @functools.wraps(kernel_fn)
     def _patch_kernel_fn(z1, start_idx1, mask1, z2, start_idx2, mask2):
@@ -91,21 +107,25 @@ def patch_kernel_fn(kernel_fn, strides, W_cov):
         outputs = kernel_fn(inputs, get=('nngp', 'is_height_width'))
         nngp = outputs.nngp
 
-        if W_cov is None:
+        if W_cov_diagonals is None:
             nngp *= outputs.var_mask
             _, _, H, W = nngp.shape
             nngp = nngp.sum((2, 3)) * (1/(H*H*W*W))
         else:
-            raise NotImplementedError
-            matching_W_cov = np.diagonal(
-                np.diagonal(W_cov, offset=j, axis1=2, axis2=3),
-                offset=i, axis1=0, axis2=1)
-            if outputs.is_height_width:
-                nngp = nngp * matching_W_cov.T
-            else:
-                nngp = nngp * matching_W_cov
-        return nngp
+            assert sz1 == sz2, "not implemented"
+            _out_ij_1, _out_ij_2 = outputs.var_start_idx
+            idx = np.transpose(_out_ij_1[:, :, 1:], (1, 0, 2)) - _out_ij_2[:, :, 1:] + (sz1-1)
 
+            W = np.squeeze(lax.gather(
+                W_cov_diagonals, idx, lax.GatherDimensionNumbers(
+                    offset_dims=(2, 3, 4, 5),
+                    collapsed_slice_dims=(),
+                    start_index_map=(0, 1)),
+                slice_sizes=(1, 1, *W_cov_diagonals.shape[2:])), axis=(2, 3))
+
+            W_idx = ('ji' if outputs.is_height_width else 'ij')
+            nngp = np.einsum(f"abij,ab{W_idx}->ab", nngp, W)
+        return nngp
     return _patch_kernel_fn
 
 

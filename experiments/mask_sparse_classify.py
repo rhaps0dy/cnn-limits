@@ -24,12 +24,13 @@ import cnn_limits.models
 import cnn_limits.models_torch
 import cnn_limits.sacred_utils as SU
 from cnn_gp import create_h5py_dataset
-from cnn_limits.layers import proj_relu_kernel
+from cnn_limits.layers import covariance_tensor, CorrelatedConv
 from experiments.predict_cv_acc import (dataset_targets, centered_one_hot,
                                         EigenOut, eigdecompose, accuracy_eig, fold_idx)
 from experiments.predict_cv_acc import experiment as predict_cv_acc_experiment
 import experiments.sparse_classify
 from cnn_limits.sparse import patch_kernel_fn, patch_kernel_fn_torch, InducingPatches, mask_and_start_idx
+import gpytorch
 from nigp.tbx import PrintTimings
 
 faulthandler.enable()
@@ -54,14 +55,21 @@ do_one_N_chol = experiments.sparse_classify.do_one_N_chol
 def interdomain_kernel(img_w, model, model_args, stride):
     no_pool = getattr(cnn_limits.models, model)(channels=1, **model_args)
 
-    _, _, _pool_kernel_fn = stax.serial(no_pool, stax.GlobalAvgPool(), stax.Flatten())
-    _, _, _no_pool_kfn = no_pool
-    kern_zz_fn = patch_kernel_fn(_no_pool_kfn, (stride, stride), W_cov=None)
-    kern_zz_fn = jax.jit(kern_zz_fn)
+    gpytorch_kern = gpytorch.kernels.MaternKernel(nu=3/2)
+    gpytorch_kern.lengthscale = math.exp(1)
 
-    @jax.jit
-    def kern_x_fn(x1):
-        return _pool_kernel_fn(x1, x2=None, get='var1')
+    pool_W_cov = covariance_tensor(8, 8, gpytorch_kern)
+    pool = CorrelatedConv(1, (8, 8), (1, 1), padding='VALID',
+                          W_cov_tensor=pool_W_cov)
+    # pool_W_cov = None
+    # pool = GlobalAvgPool()
+
+    _, _, _pool_kernel_fn = stax.serial(no_pool, pool, stax.Flatten())
+    _, _, _no_pool_kfn = no_pool
+    kern_zz_fn = patch_kernel_fn(_no_pool_kfn, (stride, stride), W_cov=pool_W_cov)
+
+    def kern_x_fn(x1, x2):
+        return _pool_kernel_fn(x1, x2=x2, get='nngp')
 
     _, _, all_start_idx, all_mask = mask_and_start_idx(
         stride, img_w, range(-(img_w//stride)+1, (img_w//stride)), None, None)
@@ -69,12 +77,11 @@ def interdomain_kernel(img_w, model, model_args, stride):
     all_mask = jnp.asarray(np.expand_dims(all_mask, 1))
     _zz_batched = jax.vmap(kern_zz_fn, (None, None, None, None, 0, 0), 0)
 
-    @jax.jit
     def kern_zx_fn(z1, start_idx1, mask1, x2):
         k = _zz_batched(z1, start_idx1, mask1, x2, all_start_idx, all_mask)
         return k.sum(0)
 
-    return kern_zz_fn, kern_zx_fn, kern_x_fn
+    return tuple(map(jax.jit, (kern_zz_fn, kern_zx_fn, kern_x_fn)))
 
 
 @experiment.command
@@ -82,21 +89,28 @@ def test_kernels(stride):
     train_set, test_set = SU.load_sorted_dataset()
 
     X = train_set[0][0].unsqueeze(0).transpose(1, -1).numpy()
+    X2 = train_set[1][0].unsqueeze(0).transpose(1, -1).numpy()
     _, _, img_w, _ = X.shape
     kern_zz_fn, kern_zx_fn, kern_x_fn = interdomain_kernel(img_w)
 
     print("x")
-    print(kern_x_fn(X))
+    print(kern_x_fn(X, X2))
 
     _, _, all_start_idx, all_mask = mask_and_start_idx(
         stride, img_w, range(-(img_w//stride)+1, (img_w//stride)), None, None)
     Z = jnp.tile(X, (len(all_start_idx), 1, 1, 1))
 
-    Kzx = kern_zx_fn(Z, all_start_idx, all_mask, X)
+    rand_i1 = np.arange(len(all_start_idx))
+    np.random.shuffle(rand_i1)
+    rand_i2 = np.arange(len(all_start_idx))
+    np.random.shuffle(rand_i2)
+
+    Kzx = kern_zx_fn(Z, all_start_idx[rand_i1], all_mask[rand_i1], X2)
     print("zx")
     print(jnp.sum(Kzx, 0))
 
-    Kzz = kern_zz_fn(Z, all_start_idx, all_mask, Z, all_start_idx, all_mask)
+    Z2 = jnp.tile(X2, (len(all_start_idx), 1, 1, 1))
+    Kzz = kern_zz_fn(Z, all_start_idx[rand_i1], all_mask[rand_i1], Z2, all_start_idx[rand_i2], all_mask[rand_i2])
     print("zz")
     print(jnp.sum(Kzz, (0, 1)))
 
