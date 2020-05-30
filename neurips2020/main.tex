@@ -63,6 +63,11 @@
 %% Mathematical commands
 \usepackage{MarkMathCmds}
 
+\newcommand{\vX}{\mathbf{X}}
+\newcommand{\vW}{\mathbf{W}}
+\newcommand{\vZ}{\mathbf{Z}}
+\newcommand{\vA}{\mathbf{A}}
+
 \newcommand{\patchfun}[1]{{#1}\text{th patch}}
 \newcommand{\vecfun}{\text{vec}\bra}
 \newcommand{\simiid}{\overset{i.i.d.}{\sim}}
@@ -206,15 +211,22 @@ In the kernel and Gaussian process community, kernels with convolutional structu
 % \end{itemize}
 
 
-\section{Spatial Correlations in Single Layer Networks}
+\section{Spatial Correlations in Single-Layer Networks}
 To begin, we will analyse the infinite limit of a single hidden layer convolutional neural network. We first show how spatial correlations disappear when using infinite weights \citet{garriga2018infiniteconv,novak2019infiniteconv}, and how mean pooling reintroduces them \citet{novak2019infiniteconv}. This leads to kernels with the same structure as \Citet{vdw2017convgp}. Next, we show how spatial correlations can be recovered by adding weight correlations instead of making the discrete architectural modification of adding mean pooling. This leads to the 
 ``Translation Insensitive Convolutional Kernel'' (TICK) considered by \citet{dutordoir2020}. In the next section, we will generalise this to deep convolutional networks.
 
-A single layer Convolutional Neural Network (CNN) takes in an image input $\vX \in \Reals^{C^0\times P^0\times Q^0}$ with width $P^0$, height $Q^0$, and $C^0$ channels (e.g.~one per colour). A patch 
-The first layer applies the weights $\vW^1\in\Reals^{C^0\times C^1\times p^1\times q^1}$ to all image patches of width $p^1$ and height $q^1$, where an inner product is taken between 
+A single-layer Convolutional Neural Network (CNN) takes in an image input $\vX \in \Reals^{C^0\times P^0 \times Q^0}$ with width $P^0$, height $Q^0$, and $C^0$ channels (e.g.~one per colour). The image is divided up into patches of size $C^0\times\!p^1\times\!q^1$ with zero padding at the edges giving a total of $P^0Q^0$. Weights are applied by taking an inner product with all patches, which we do $C^1$ times to give multiple channels in the next layer. We collect all weights in the matrix $\vW^1\in\Reals^{C^1\times C^0\times p^1\times q^1}$. We obtain the activations after applying an element-wise non-linearity:
 \begin{align}
-    \vX
+    A_{cpq} = \phi\Big(\sum_{\gamma pq} X_{cpq} W^1_{c\gamma pq}\Big) \,.
 \end{align}
+In a single-layer CNN, these activations are directly followed by a fully-connected layer with weights $\vW^2 \in \Reals^{C^1\times P^0\times Q^0}$. Our final output is again given by a summation reduction over the activations:
+\begin{align}
+    f(\vX) = \sum_{cpq} A_{cpq} W^{(2)}_{cpq} \,.
+\end{align}
+
+As in \citet{garriga2018infiniteconv,novak2019infiniteconv}, our goal is to analyse the distribution on function outputs $f(\vX)$ for some prior on the weights $p(\vW)$, where $\vW$ is the collection of the weights at all layers.
+
+\subsection{Notes}
 
 Give a high-level commentary on the infinite-width line of work. Summarise commentary on this line of work. As far as I see, the main point here is MacKay's point on the baby and the bathwater, and who else has discussed it (I know Matthews has).
 \begin{itemize}
