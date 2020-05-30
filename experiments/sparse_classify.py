@@ -320,14 +320,6 @@ def interdomain_kernel(model, model_args, stride):
         return jnp.sum(_kern_zz_fn(i, j, z1, z2, get='nngp').nngp, (-1, -2))
     #_nngp_zz_fn = jax.jit(_nngp_zz_fn, static_argnums=(0, 1))
 
-    _compile_cache = {}
-    def nngp_zz_fn(i, j, z1, z2):
-        try:
-            return _compile_cache[i, j](z1, z2)
-        except KeyError:
-            _compile_cache[i, j] = jax.jit(lambda x, y: _nngp_zz_fn(i, j, x, y))
-            return nngp_zz_fn(i, j, z1, z2)
-
     @jax.jit
     def _kern_x_fn(x1):
         # NCHW->NHWC
@@ -335,8 +327,6 @@ def interdomain_kernel(model, model_args, stride):
         return _pool_kernel_fn(x1, x2=None, get='var1')
 
     def zx_kernel_fn(i, z1, x):
-        assert isinstance(i, int)
-
         z1 = jnp.expand_dims(z1, 0)
         # NCHW->NHWC
         z1 = jnp.moveaxis(z1, 1, -1)
@@ -348,7 +338,7 @@ def interdomain_kernel(model, model_args, stride):
 
         res = None
         for j in range(-(W//stride)+1, (W//stride)):
-            out = nngp_zz_fn(i, j, z1, x)
+            out = _nngp_zz_fn(i, j, z1, x)
             if res is None:
                 res = out
             else:
@@ -357,10 +347,9 @@ def interdomain_kernel(model, model_args, stride):
     zx_kernel_fn = jax.jit(zx_kernel_fn, static_argnums=(0,))
 
     def zz_kernel_fn(i, j, z1, z2):
-        assert isinstance(i, int) and isinstance(j, int)
         z1 = jnp.moveaxis(jnp.expand_dims(z1, 0), 1, -1)
         z2 = jnp.moveaxis(jnp.expand_dims(z2, 0), 1, -1)
-        return nngp_zz_fn(i, j, z1, z2)
+        return _nngp_zz_fn(i, j, z1, z2)
     #zz_kernel_fn = jax.jit(zz_kernel_fn, static_argnums=(0, 1))
 
 
@@ -384,20 +373,29 @@ def interdomain_kernel(model, model_args, stride):
 
 
 @experiment.command
-def test_kernels():
+def test_kernels(stride):
     train_set, test_set = SU.load_sorted_dataset()
     __kern_zz_fn, __kern_zx_fn, kern_x_fn = interdomain_kernel()
     kern_zz_fn, kern_zx_fn, _ = torch_interdomain_kernel()
 
-    Z = train_set[0][0][:, :5, :5]
+    Z = train_set[0][0]
     X = Z.unsqueeze(0)
+
+    # a = 0.
+    # import tqdm
+    # bar = tqdm.tqdm()
+    # for i in itertools.count():
+    #     i = i%63 - 31
+    #     for j in range(-31, 32):
+    #         a = a + kern_zz_fn(i, Z, j, Z)
+    #         bar.update(1)
 
     print("x")
     print(kern_x_fn(X))
 
     out = None
     _, _, H, W = X.shape
-    for i in range(-H+1, H):
+    for i in range(-(H//stride)+1, (H//stride)):
         if out is None:
             out = kern_zx_fn(i, Z, X)
         else:
@@ -406,8 +404,8 @@ def test_kernels():
     print(out)
 
     out = None
-    for i in range(-4, 5):
-        for j in range(-4, 5):
+    for i in range(-(H//stride)+1, H//stride):
+        for j in range(-(H//stride)+1, W//stride):
             if out is None:
                 out = kern_zz_fn(i, Z, j, Z)
             else:
@@ -441,8 +439,9 @@ def main(N_inducing, batch_size, print_interval, _log):
         desc="sparse_classify",
         print_interval=print_interval)
     timings = timings_obj(
-            itertools.count(),
-            ((len(train_set) + len(test_set))//batch_size + N_inducing) * N_inducing)
+        itertools.count(),
+        ((len(train_set) + len(test_set))//batch_size * N_inducing
+         + N_inducing * (N_inducing+1) // 2))
 
 
     data_series = pd.Series()
@@ -527,7 +526,7 @@ def main(N_inducing, batch_size, print_interval, _log):
 
                 (sigy, acc) = map(np.squeeze, accuracy)
                 _log.info(
-                    f"For RBF kernel, N_inducing={step+1}, sigy={sigy}; accuracy={acc}, cv_accuracy={np.max(data[1])}")
+                    f"For N_inducing={step+1}, sigy={sigy}; accuracy={acc}, cv_accuracy={np.max(data[1])}")
 
 
 

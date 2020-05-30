@@ -1,15 +1,33 @@
 from neural_tangents.stax import _INPUT_REQ, M, _get_variance, _get_covariance, Kernel
+from neural_tangents.gather_rolled_idx import gather_rolled_idx
 import functools
 import warnings
+import collections
 import jax.numpy as np
+import numpy as onp
 import torch
 
-def gen_slices(stride, i):
+def gen_slices(stride, size, i):
     if i == 0:
-        return slice(None), slice(None)
-    i1 = slice(0, -stride*abs(i))
-    i2 = slice(stride*abs(i), None)
+        return slice(0, size), slice(0, size)
+    i1 = slice(0, size-stride*abs(i))
+    i2 = slice(stride*abs(i), size)
     return ((i1, i2) if i<0 else (i2, i1))
+
+
+InducingPatches = collections.namedtuple("InducingPatches", ("Z", "i", "start_idx", "mask"))
+def mask_and_start_idx(stride, size, indices, out_start_idx, out_mask):
+    if out_start_idx is None:
+        out_start_idx = onp.zeros((len(indices), 2), dtype=int)
+    if out_mask is None:
+        out_mask = onp.zeros((len(indices), size), dtype=bool)
+
+    for i, idx in enumerate(indices):
+        i1, i2 = gen_slices(stride, size, idx)
+        out_start_idx[i, 0] = i1.start
+        out_start_idx[i, 1] = i2.start
+        out_mask[i, :(i1.stop - i1.start)] = 1
+    return InducingPatches(None, indices, out_start_idx, out_mask)
 
 
 def patch_kernel_fn(kernel_fn, strides, W_cov):
@@ -29,40 +47,59 @@ def patch_kernel_fn(kernel_fn, strides, W_cov):
         W_cov = W_cov * (1/W_cov.sum())
 
     @functools.wraps(kernel_fn)
-    def _patch_kernel_fn(i, j, x1, x2, get='nngp'):
-        if 'var1' in get or 'var2' in get:
-            warnings.warn("`var1` and `var2` won't have the correct value in the output")
-        i1, i2 = gen_slices(strides[0], i)
-        j1, j2 = gen_slices(strides[1], j)
+    def _patch_kernel_fn(z1, start_idx1, mask1, z2, start_idx2, mask2):
+        var1 = _get_variance(z1, marginal, 0, -1)
+        var2 = _get_variance(z2, marginal, 0, -1)
 
-        var1 = _get_variance(x1, marginal, 0, -1)
-        var2 = _get_variance(x2, marginal, 0, -1)
-        nngp = _get_covariance(x1[:, i1, j1, :], x2[:, i2, j2, :], cross, 0, -1)
+        cross_mask = (mask1[:, None, :, None] *
+                      mask2[None, :, None, :])
 
-        var_slices = (i1, j1, i2, j2)
-        ntk = (0. if 'ntk' in get else None)
+        # test = onp.zeros((32, 32), dtype=bool)
+        # for i in range(63):
+        #     for j in range(63):
+        #         i1, i2 = gen_slices(1, 32, i-31)
+        #         j1, j2 = gen_slices(1, 32, j-31)
+        #         assert cross_mask[i, j].sum() == (i1.stop - i1.start)*(j1.stop - j1.start)
+
+        ij_1 = np.stack([
+            np.tile(np.arange(len(z1))[None, :], (len(z2), 1)),
+            np.tile(start_idx1[None, :, 0], (len(z2), 1)),
+            np.tile(start_idx2[:, 0, None], (1, len(z1))),
+        ], axis=2)
+        z1_sliced = gather_rolled_idx(z1, ij_1)
+
+        ij_2 = np.stack([
+            np.tile(np.arange(len(z2))[None, :], (len(z1), 1)),
+            np.tile(start_idx1[:, 1, None], (1, len(z2))),
+            np.tile(start_idx2[None, :, 1], (len(z1), 1)),
+        ], axis=2)
+        z2_sliced = gather_rolled_idx(z2, ij_2)
+
+        nngp = np.einsum("bahwc,abhwc->abhw", z1_sliced, z2_sliced)
+        nngp /= z1.shape[-1]
+
+        ntk = None
 
         inputs = Kernel(
             var1, nngp, var2, ntk, is_gaussian, is_height_width, marginal,
-            cross, x1.shape, x2.shape, x1_is_x2, is_input, var_slices)
-        if isinstance(get, tuple):
-            get = (*get, 'is_height_width')
-        else:
-            get = (get, 'is_height_width')
-        outputs = kernel_fn(inputs, get=get)
+            cross, z1.shape, z2.shape, x1_is_x2, is_input,
+            (ij_1, ij_2), cross_mask)
+        outputs = kernel_fn(inputs, get=('nngp', 'is_height_width'))
+        nngp = outputs.nngp * outputs.var_mask
 
         if W_cov is None:
-            _, H, W, _ = x1.shape
-            nngp = outputs.nngp * (1/(H*H*W*W))
+            _, _, H, W = nngp.shape
+            nngp = nngp.sum((2, 3)) * (1/(H*H*W*W))
         else:
+            raise NotImplementedError
             matching_W_cov = np.diagonal(
                 np.diagonal(W_cov, offset=j, axis1=2, axis2=3),
                 offset=i, axis1=0, axis2=1)
             if outputs.is_height_width:
-                nngp = outputs.nngp * matching_W_cov.T
+                nngp = nngp * matching_W_cov.T
             else:
-                nngp = outputs.nngp * matching_W_cov
-        return outputs._replace(nngp=nngp)
+                nngp = nngp * matching_W_cov
+        return nngp
 
     return _patch_kernel_fn
 
