@@ -47,26 +47,38 @@ def config():
     stride = 1
     model_args = dict()
     N_inducing = 4096
+    lengthscale = None
+    inducing_strat = "random"
+    sample_in_init = False
 
 do_one_N_chol = experiments.sparse_classify.do_one_N_chol
 
 
 @experiment.capture
-def interdomain_kernel(img_w, model, model_args, stride):
+def interdomain_kernel(img_w, model, model_args, stride, lengthscale):
     no_pool = getattr(cnn_limits.models, model)(channels=1, **model_args)
 
-    gpytorch_kern = gpytorch.kernels.MaternKernel(nu=3/2)
-    gpytorch_kern.lengthscale = math.exp(1)
+    if lengthscale is None:
+        pool_W_cov = None
+        pool = stax.GlobalAvgPool()
+    else:
+        gpytorch_kern = gpytorch.kernels.MaternKernel(nu=3/2)
+        gpytorch_kern.lengthscale = lengthscale
 
-    pool_W_cov = covariance_tensor(8, 8, gpytorch_kern)
-    pool = CorrelatedConv(1, (8, 8), (1, 1), padding='VALID',
-                          W_cov_tensor=pool_W_cov)
-    # pool_W_cov = None
-    # pool = GlobalAvgPool()
+        pool_W_cov = covariance_tensor(32//stride, 32//stride, gpytorch_kern)
+        pool = CorrelatedConv(1, (32//stride, 32//stride), (1, 1), padding='VALID',
+                              W_cov_tensor=pool_W_cov)
 
     _, _, _pool_kernel_fn = stax.serial(no_pool, pool, stax.Flatten())
     _, _, _no_pool_kfn = no_pool
-    kern_zz_fn = patch_kernel_fn(_no_pool_kfn, (stride, stride), W_cov=pool_W_cov)
+    kern_zz_fn, sum_of_covs = patch_kernel_fn(_no_pool_kfn, (stride, stride), W_cov=pool_W_cov)
+    if sum_of_covs is None:
+        offset = 32//stride-1
+        sum_of_covs = np.zeros((64//stride-1, 64//stride-1), dtype=np.float32)
+        for i in range(sum_of_covs.shape[0]):
+            for j in range(sum_of_covs.shape[1]):
+                sum_of_covs[i, j] = (32//stride - abs(i-offset))*(32//stride - abs(j-offset))
+
 
     def kern_x_fn(x1, x2):
         return _pool_kernel_fn(x1, x2=x2, get='nngp')
@@ -81,7 +93,7 @@ def interdomain_kernel(img_w, model, model_args, stride):
         k = _zz_batched(z1, start_idx1, mask1, x2, all_start_idx, all_mask)
         return k.sum(0)
 
-    return tuple(map(jax.jit, (kern_zz_fn, kern_zx_fn, kern_x_fn)))
+    return tuple(map(jax.jit, (kern_zz_fn, kern_zx_fn, kern_x_fn))), sum_of_covs
 
 
 @experiment.command
@@ -91,7 +103,7 @@ def test_kernels(stride):
     X = train_set[0][0].unsqueeze(0).transpose(1, -1).numpy()
     X2 = train_set[1][0].unsqueeze(0).transpose(1, -1).numpy()
     _, _, img_w, _ = X.shape
-    kern_zz_fn, kern_zx_fn, kern_x_fn = interdomain_kernel(img_w)
+    (kern_zz_fn, kern_zx_fn, kern_x_fn), _ = interdomain_kernel(img_w)
 
     print("x")
     print(kern_x_fn(X, X2))
@@ -115,15 +127,101 @@ def test_kernels(stride):
     print(jnp.sum(Kzz, (0, 1)))
 
 
+@experiment.capture
+def _compute_initialisation(inducing, inducing_training_set, kern_zz_fn, N_inducing, sample_in_init):
+    """
+    Reference: TODO add several references,
+    TODO: IF M ==1 this throws errors, currently throws an assertion error, but should fix
+    Initializes based on variance of noiseless GP fit on inducing points currently in active set
+    Complexity: O(NM) memory, O(NM^2) time
+    :param training_inputs: [N,D] numpy array,
+    :param M: int, number of points desired. If threshold is None actual number returned may be less than M
+    :param kernel: kernelwrapper object
+    :return: inducing inputs, indices,
+    [M,D] np.array to use as inducing inputs,  [M], np.array of ints indices of these inputs in training data array
+    """
+    M = N_inducing
+    assert M > 1
+    N = inducing_training_set.Z.shape[0]
+    perm = np.random.permutation(N)  # permute entries so tiebreaking is random
+    training_inputs = inducing_training_set.Z[perm]
+    start_idx = inducing_training_set.start_idx[perm]
+    mask = inducing_training_set.mask[perm]
+
+    # note this will throw an out of bounds exception if we do not update each entry
+    indices = np.zeros(M, dtype=int) + N
+    di = jax.vmap(kern_zz_fn)(training_inputs[:, None, ...], start_idx[:, None, ...], mask[:, None, ...],
+                              training_inputs[:, None, ...], start_idx[:, None, ...], mask[:, None, ...])
+    di = np.squeeze(di, (1, 2))
+    assert di.shape == (N,)
+
+    if sample_in_init:
+        indices[0] = sample_discrete(di)
+    else:
+        indices[0] = np.argmax(di)  # select first point, add to index 0
+    ci = np.zeros((M - 1, N))  # [M,N]
+    for m in range(M - 1):
+        j = int(indices[m])  # int
+        yield j
+        new_Z = training_inputs[j:j + 1]  # [1,D]
+        new_start_idx = start_idx[j:j+1]
+        new_mask = mask[j:j+1]
+        dj = np.sqrt(di[j])  # float
+        cj = ci[:m, j]  # [m, 1]
+        L = np.squeeze(kernel(training_inputs, start_idx, mask, new_Z, new_start_idx, new_mask))  # [N]
+        ei = (L - np.dot(cj, ci[:m])) / dj
+        ci[m, :] = ei
+        di -= ei ** 2
+        if sample_in_init:
+            indices[m + 1] = sample_discrete(di)
+        else:
+            indices[m + 1] = np.argmax(di)  # select first point, add to index 0
+        # sum of di is tr(Kff-Qff), if this is small things are ok
+        # if np.sum(np.clip(di, 0, None)) < self.threshold:
+        #     indices = indices[:m]
+        #     warnings.warn("ConditionalVariance: Terminating selection of inducing points early.")
+        #     break
+    yield int(indices[-1])
+
+
+@experiment.capture
+def _random_strategy(inducing, inducing_training_set, stride, N_inducing):
+    existing_inducing = set()
+    max_rint, img_h, _, _ = inducing_training_set.Z.shape
+    while len(existing_inducing) < N_inducing:
+        Z_i_in_X = np.random.randint(max_rint)
+        Z_i = np.random.randint(-(img_h//stride)+1, (img_h//stride))
+        if (Z_i_in_X, Z_i) not in existing_inducing:
+            yield (Z_i_in_X, Z_i)
+            existing_inducing.add((Z_i_in_X, Z_i))
+
+
+@experiment.capture
+def populate_inducing_points(inducing, inducing_training_set, kern_zz_fn, inducing_strat):
+    if inducing_strat == "random":
+        return _random_strategy(inducing, inducing_training_set)
+    elif inducing_strat == "conditional_variance":
+        return _compute_initialisation(inducing, inducing_training_set, kern_zz_fn)
+    else:
+        raise ValueError(inducing_strat)
+
+
+def draw_patch_i(n_samples, p):
+    assert np.all(p>=0)
+    assert p.shape[0] == p.shape[1], "This might break if p is not square"
+    idx = np.random.choice(p.shape[0], n_samples, replace=True, p=p.sum(1)/p.sum())
+    return idx-p.shape[0]//2
+
+
 @experiment.automain
-def main(N_inducing, batch_size, print_interval, stride, _log):
+def main(N_inducing, batch_size, print_interval, stride, _log, inducing_strat):
     train_set, test_set = SU.load_sorted_dataset()
     train_Y = dataset_targets(train_set)
     oh_train_Y = centered_one_hot(train_Y).astype(np.float64)
     test_Y = dataset_targets(test_set)
 
     img_c, img_h, img_w = train_set[0][0].shape
-    kern_zz_fn, kern_zx_fn, _ = interdomain_kernel(img_w)
+    (kern_zz_fn, kern_zx_fn, _), sum_of_covs = interdomain_kernel(img_w)
 
     Kux = np.zeros((N_inducing, len(train_set)), np.float64)
     Kut = np.zeros((N_inducing, len(test_set)), np.float64)
@@ -137,7 +235,6 @@ def main(N_inducing, batch_size, print_interval, stride, _log):
         i=[],
         start_idx=np.zeros((N_inducing, 2), dtype=int),
         mask=np.zeros((N_inducing, img_h), dtype=bool))
-    existing_inducing = set()
     Z_X_idx = []
 
     timings_obj = PrintTimings(
@@ -150,13 +247,20 @@ def main(N_inducing, batch_size, print_interval, stride, _log):
     data_series = pd.Series()
     accuracy_series = pd.Series()
 
-    train_batches = [
-        train_x.transpose(1, -1).to(torch.float32).numpy()
-        for (train_x, _) in DataLoader(train_set, batch_size=batch_size, shuffle=False)]
+    train_x = np.concatenate([
+        _train_x.transpose(1, -1).to(torch.float32).numpy()
+        for (_train_x, _) in DataLoader(train_set, batch_size=batch_size, shuffle=False)], 0)
 
-    test_batches = [
-        test_x.transpose(1, -1).to(torch.float32).numpy()
-        for (test_x, _) in DataLoader(test_set, batch_size=batch_size, shuffle=False)]
+    test_x = np.concatenate([
+        _test_x.transpose(1, -1).to(torch.float32).numpy()
+        for (_test_x, _) in DataLoader(test_set, batch_size=batch_size, shuffle=False)], 0)
+
+    inducing_training_set_i = draw_patch_i(len(train_x), sum_of_covs)
+    np.save(SU.base_dir()/"inducing_training_set_i.npy", inducing_training_set_i)
+    inducing_training_set = InducingPatches(
+        train_x,  # Z=
+        inducing_training_set_i,  # i=
+        *mask_and_start_idx(stride, img_h, inducing_training_set_i, None, None)[2:])
 
     milestone = 4
     with h5py.File(SU.base_dir()/"kernels.h5", "w") as h5_file:
@@ -170,14 +274,9 @@ def main(N_inducing, batch_size, print_interval, stride, _log):
                                fillvalue=np.nan, chunks=(1, 1, Kut.shape[1]),
                                maxshape=(None, *Kut.shape))
 
-        for step in range(N_inducing):
+        for step, (Z_i, Z_i_in_X) in enumerate(populate_inducing_points(
+                inducing, inducing_training_set, kern_zz_fn)):
             # Select new inducing point
-            while True:
-                Z_i_in_X = np.random.randint(len(train_set))
-                Z_i = np.random.randint(-(img_h//stride)+1, (img_h//stride))
-                if (Z_i_in_X, Z_i) not in existing_inducing:
-                    break
-            existing_inducing.add((Z_i_in_X, Z_i))
             current_Z = slice(step, step+1)
             inducing.Z[step] = torch.transpose(
                 train_set[Z_i_in_X][0], 0, -1).numpy()
@@ -191,31 +290,29 @@ def main(N_inducing, batch_size, print_interval, stride, _log):
             Kuu[step, :step+1] = Kuu[:step+1, step] = np.squeeze(kern_zz_fn(
                 inducing.Z[current_Z], inducing.start_idx[current_Z],
                 inducing.mask[current_Z],
-                inducing.Z[:step+1], inducing.start_idx[:step+1],
-                inducing.mask[:step+1],
-            ), axis=0)
+                inducing.Z, inducing.start_idx,
+                inducing.mask,   # Always calculate with all the Z to avoid recompilation
+            ), axis=0)[:step+1]
             h5_file["Kuu"][0, step, :step+1] = Kuu[step, :step+1]
             h5_file["Kuu"][0, :step+1, step] = Kuu[:step+1, step]
 
             timings_obj.desc = f"Updating Kux (inducing point #{step})"
-            for slice_start, slice_end, train_x in zip(
-                    itertools.count(start=0, step=batch_size),
-                    itertools.count(start=batch_size, step=batch_size),
-                    train_batches):
-                Kux[step, slice_start:slice_end] = np.squeeze(kern_zx_fn(
+            for batch_start, batch_end in zip(
+                    range(0, len(train_set), batch_size),
+                    itertools.count(start=batch_size, step=batch_size)):
+                Kux[step, batch_start:batch_end] = np.squeeze(kern_zx_fn(
                     inducing.Z[current_Z], inducing.start_idx[current_Z],
-                    inducing.mask[current_Z], train_x), axis=0)
+                    inducing.mask[current_Z], train_x[batch_start:batch_end]), axis=0)
                 next(timings)
             h5_file["Kux"][0, step, :] = Kux[step, :]
 
             timings_obj.desc = f"Updating Kut (inducing point #{step})"
-            for slice_start, slice_end, test_x in zip(
-                    itertools.count(start=0, step=batch_size),
-                    itertools.count(start=batch_size, step=batch_size),
-                    test_batches):
-                Kut[step, slice_start:slice_end] = np.squeeze(kern_zx_fn(
+            for batch_start, batch_end in zip(
+                    range(0, len(test_set), batch_size),
+                    itertools.count(start=batch_size, step=batch_size)):
+                Kut[step, batch_start:batch_end] = np.squeeze(kern_zx_fn(
                     inducing.Z[current_Z], inducing.start_idx[current_Z],
-                    inducing.mask[current_Z], test_x), axis=0)
+                    inducing.mask[current_Z], test_x[batch_start:batch_end]), axis=0)
                 next(timings)
             h5_file["Kut"][0, step, :] = Kut[step, :]
 

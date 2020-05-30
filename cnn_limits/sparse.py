@@ -47,6 +47,7 @@ def patch_kernel_fn(kernel_fn, strides, W_cov):
 
     if W_cov is None:
         W_cov_diagonals = None
+        sum_of_covs = None
     else:
         sz1, sz2, _, _ = W_cov.shape
         W_cov_diagonals = onp.zeros((sz1*2-1, sz2*2-1, *W_cov.shape[2:]),
@@ -59,6 +60,7 @@ def patch_kernel_fn(kernel_fn, strides, W_cov):
                     onp.diagonal(W_cov, offset=j, axis1=2, axis2=3),
                     offset=i, axis1=0, axis2=1)
                 W_cov_diagonals[i+sz1-1, j+sz2-1, :d.shape[0], :d.shape[1]] = d
+        sum_of_covs = W_cov_diagonals.sum((-1, -2))
         W_cov_diagonals = np.asarray(W_cov_diagonals)
 
 
@@ -126,7 +128,7 @@ def patch_kernel_fn(kernel_fn, strides, W_cov):
             W_idx = ('ji' if outputs.is_height_width else 'ij')
             nngp = np.einsum(f"abij,ab{W_idx}->ab", nngp, W)
         return nngp
-    return _patch_kernel_fn
+    return _patch_kernel_fn, sum_of_covs
 
 
 def patch_kernel_fn_torch(kernel_fn, strides, W_cov):
