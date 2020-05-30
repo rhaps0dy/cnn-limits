@@ -67,12 +67,12 @@ def interdomain_kernel(img_w, model, model_args, stride):
         stride, img_w, range(-(img_w//stride)+1, (img_w//stride)), None, None)
     all_start_idx = jnp.asarray(np.expand_dims(all_start_idx, 1))
     all_mask = jnp.asarray(np.expand_dims(all_mask, 1))
-    _zz_batched = jax.vmap(kern_zz_fn, (None, None, None, None, 0, 0), 2)
+    _zz_batched = jax.vmap(kern_zz_fn, (None, None, None, None, 0, 0), 0)
 
     @jax.jit
     def kern_zx_fn(z1, start_idx1, mask1, x2):
         k = _zz_batched(z1, start_idx1, mask1, x2, all_start_idx, all_mask)
-        return k.sum(2)
+        return k.sum(0)
 
     return kern_zz_fn, kern_zx_fn, kern_x_fn
 
@@ -121,9 +121,10 @@ def main(N_inducing, batch_size, print_interval, stride, _log):
     inducing = InducingPatches(
         Z=np.zeros((N_inducing, img_h, img_w, img_c), np.float32), # 50 MB
         i=[],
-        start_idx=np.zeros((N_inducing, 2)),
+        start_idx=np.zeros((N_inducing, 2), dtype=int),
         mask=np.zeros((N_inducing, img_h), dtype=bool))
     existing_inducing = set()
+    Z_X_idx = []
 
     timings_obj = PrintTimings(
         desc="sparse_classify",
@@ -134,6 +135,14 @@ def main(N_inducing, batch_size, print_interval, stride, _log):
 
     data_series = pd.Series()
     accuracy_series = pd.Series()
+
+    train_batches = [
+        train_x.transpose(1, -1).to(torch.float32).numpy()
+        for (train_x, _) in DataLoader(train_set, batch_size=batch_size, shuffle=False)]
+
+    test_batches = [
+        test_x.transpose(1, -1).to(torch.float32).numpy()
+        for (test_x, _) in DataLoader(test_set, batch_size=batch_size, shuffle=False)]
 
     milestone = 4
     with h5py.File(SU.base_dir()/"kernels.h5", "w") as h5_file:
@@ -157,13 +166,14 @@ def main(N_inducing, batch_size, print_interval, stride, _log):
             existing_inducing.add((Z_i_in_X, Z_i))
             current_Z = slice(step, step+1)
             inducing.Z[step] = torch.transpose(
-                train_set[Z_i_in_X][0], 1, -1).numpy()
+                train_set[Z_i_in_X][0], 0, -1).numpy()
             inducing.i.append(Z_i)
+            Z_X_idx.append(Z_i_in_X)
             mask_and_start_idx(stride, img_h, inducing.i[current_Z],
                                out_start_idx=inducing.start_idx[current_Z],
                                out_mask=inducing.mask[current_Z])
 
-            _log.info("Updating Kuu (inducing point #{step})")
+            _log.info(f"Updating Kuu (inducing point #{step})")
             Kuu[step, :step+1] = Kuu[:step+1, step] = np.squeeze(kern_zz_fn(
                 inducing.Z[current_Z], inducing.start_idx[current_Z],
                 inducing.mask[current_Z],
@@ -174,26 +184,24 @@ def main(N_inducing, batch_size, print_interval, stride, _log):
             h5_file["Kuu"][0, :step+1, step] = Kuu[:step+1, step]
 
             timings_obj.desc = f"Updating Kux (inducing point #{step})"
-            for slice_start, slice_end, (train_x, _) in zip(
+            for slice_start, slice_end, train_x in zip(
                     itertools.count(start=0, step=batch_size),
                     itertools.count(start=batch_size, step=batch_size),
-                    DataLoader(train_set, batch_size=batch_size, shuffle=False)):
+                    train_batches):
                 Kux[step, slice_start:slice_end] = np.squeeze(kern_zx_fn(
                     inducing.Z[current_Z], inducing.start_idx[current_Z],
-                    inducing.mask[current_Z],
-                    train_x.transpose(1, -1).to(torch.float32).numpy()), axis=0)
+                    inducing.mask[current_Z], train_x), axis=0)
                 next(timings)
             h5_file["Kux"][0, step, :] = Kux[step, :]
 
             timings_obj.desc = f"Updating Kut (inducing point #{step})"
-            for slice_start, slice_end, (test_x, _) in zip(
+            for slice_start, slice_end, test_x in zip(
                     itertools.count(start=0, step=batch_size),
                     itertools.count(start=batch_size, step=batch_size),
-                    DataLoader(test_set, batch_size=batch_size, shuffle=False)):
-                Kux[step, slice_start:slice_end] = np.squeeze(kern_zx_fn(
+                    test_batches):
+                Kut[step, slice_start:slice_end] = np.squeeze(kern_zx_fn(
                     inducing.Z[current_Z], inducing.start_idx[current_Z],
-                    inducing.mask[current_Z],
-                    test_x.transpose(1, -1).to(torch.float32).numpy()), axis=0)
+                    inducing.mask[current_Z], test_x), axis=0)
                 next(timings)
             h5_file["Kut"][0, step, :] = Kut[step, :]
 
@@ -201,9 +209,9 @@ def main(N_inducing, batch_size, print_interval, stride, _log):
             if step+1 == milestone or step+1 == N_inducing:
                 milestone = min(milestone*2, milestone+512)
                 _log.info(f"Performing classification (n. inducing #{step+1})")
-                _Kuu = Kuu[:len(Z_X_idx), :len(Z_X_idx)]
-                _Kux = Kux[:len(Z_X_idx)]
-                _Kut = Kut[:len(Z_X_idx)]
+                _Kuu = Kuu[:len(inducing.i), :len(inducing.i)]
+                _Kux = Kux[:len(inducing.i)]
+                _Kut = Kut[:len(inducing.i)]
                 assert not np.any(np.isnan(_Kuu))
                 assert not np.any(np.isnan(_Kux))
                 assert not np.any(np.isnan(_Kut))
@@ -214,7 +222,7 @@ def main(N_inducing, batch_size, print_interval, stride, _log):
                 accuracy_series.loc[step+1] = accuracy
                 pd.to_pickle(data_series, SU.base_dir()/"grid_acc.pkl.gz")
                 pd.to_pickle(accuracy_series, SU.base_dir()/"accuracy.pkl.gz")
-                pd.to_pickle((Z_X_idx, Z_is), SU.base_dir()/"inducing_indices.pkl.gz")
+                pd.to_pickle((Z_X_idx, inducing.i), SU.base_dir()/"inducing_indices.pkl.gz")
 
                 (sigy, acc) = map(np.squeeze, accuracy)
                 _log.info(

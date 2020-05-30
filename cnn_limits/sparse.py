@@ -60,6 +60,10 @@ def patch_kernel_fn(kernel_fn, strides, W_cov):
         #         i1, i2 = gen_slices(1, 32, i-31)
         #         j1, j2 = gen_slices(1, 32, j-31)
         #         assert cross_mask[i, j].sum() == (i1.stop - i1.start)*(j1.stop - j1.start)
+        if start_idx1.shape[0] == 1 and z1.shape[0] != 1:
+            start_idx1 = np.tile(start_idx1, (z1.shape[0], 1))
+        if start_idx2.shape[0] == 1 and z2.shape[0] != 1:
+            start_idx2 = np.tile(start_idx2, (z2.shape[0], 1))
 
         ij_1 = np.stack([
             np.tile(np.arange(len(z1))[None, :], (len(z2), 1)),
@@ -85,9 +89,10 @@ def patch_kernel_fn(kernel_fn, strides, W_cov):
             cross, z1.shape, z2.shape, x1_is_x2, is_input,
             (ij_1, ij_2), cross_mask)
         outputs = kernel_fn(inputs, get=('nngp', 'is_height_width'))
-        nngp = outputs.nngp * outputs.var_mask
+        nngp = outputs.nngp
 
         if W_cov is None:
+            nngp *= outputs.var_mask
             _, _, H, W = nngp.shape
             nngp = nngp.sum((2, 3)) * (1/(H*H*W*W))
         else:
