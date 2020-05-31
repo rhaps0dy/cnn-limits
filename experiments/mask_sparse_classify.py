@@ -287,12 +287,16 @@ def main(N_inducing, batch_size, print_interval, stride, _log, inducing_strat):
                                out_mask=inducing.mask[current_Z])
 
             _log.info(f"Updating Kuu (inducing point #{step})")
-            Kuu[step, :step+1] = Kuu[:step+1, step] = np.squeeze(kern_zz_fn(
-                inducing.Z[current_Z], inducing.start_idx[current_Z],
-                inducing.mask[current_Z],
-                inducing.Z, inducing.start_idx,
-                inducing.mask,   # Always calculate with all the Z to avoid recompilation
-            ), axis=0)[:step+1]
+            for slice_start, slice_end in zip(
+                    range(0, step+1, batch_size//10),
+                    itertools.count(start=batch_size//10, step=batch_size//10)):
+                _end = min(slice_end, step+1)
+                Kuu[step, slice_start:_end] = Kuu[slice_start:_end, step] = np.squeeze(kern_zz_fn(
+                    inducing.Z[current_Z], inducing.start_idx[current_Z],
+                    inducing.mask[current_Z],
+                    inducing.Z[slice_start:slice_end], inducing.start_idx[slice_start:slice_end],
+                    inducing.mask[slice_start:slice_end],
+                ), axis=0)[:_end - slice_start]
             h5_file["Kuu"][0, step, :step+1] = Kuu[step, :step+1]
             h5_file["Kuu"][0, :step+1, step] = Kuu[:step+1, step]
 
