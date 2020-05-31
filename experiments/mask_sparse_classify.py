@@ -47,22 +47,25 @@ def config():
     stride = 1
     model_args = dict()
     N_inducing = 4096
+    lengthscale = None
 
 do_one_N_chol = experiments.sparse_classify.do_one_N_chol
 
 
 @experiment.capture
-def interdomain_kernel(img_w, model, model_args, stride):
+def interdomain_kernel(img_w, model, model_args, stride, lengthscale):
     no_pool = getattr(cnn_limits.models, model)(channels=1, **model_args)
 
-    gpytorch_kern = gpytorch.kernels.MaternKernel(nu=3/2)
-    gpytorch_kern.lengthscale = math.exp(1)
+    if lengthscale is None:
+        pool_W_cov = None
+        pool = stax.GlobalAvgPool()
+    else:
+        gpytorch_kern = gpytorch.kernels.MaternKernel(nu=3/2)
+        gpytorch_kern.lengthscale = lengthscale
 
-    pool_W_cov = covariance_tensor(8, 8, gpytorch_kern)
-    pool = CorrelatedConv(1, (8, 8), (1, 1), padding='VALID',
-                          W_cov_tensor=pool_W_cov)
-    # pool_W_cov = None
-    # pool = GlobalAvgPool()
+        pool_W_cov = covariance_tensor(32//stride, 32//stride, gpytorch_kern)
+        pool = CorrelatedConv(1, (32//stride, 32//stride), (1, 1), padding='VALID',
+                              W_cov_tensor=pool_W_cov)
 
     _, _, _pool_kernel_fn = stax.serial(no_pool, pool, stax.Flatten())
     _, _, _no_pool_kfn = no_pool
@@ -188,12 +191,16 @@ def main(N_inducing, batch_size, print_interval, stride, _log):
                                out_mask=inducing.mask[current_Z])
 
             _log.info(f"Updating Kuu (inducing point #{step})")
-            Kuu[step, :step+1] = Kuu[:step+1, step] = np.squeeze(kern_zz_fn(
-                inducing.Z[current_Z], inducing.start_idx[current_Z],
-                inducing.mask[current_Z],
-                inducing.Z[:step+1], inducing.start_idx[:step+1],
-                inducing.mask[:step+1],
-            ), axis=0)
+            for slice_start, slice_end in zip(
+                    range(0, step+1, batch_size//10),
+                    itertools.count(start=batch_size//10, step=batch_size//10)):
+                _end = min(slice_end, step+1)
+                Kuu[step, slice_start:_end] = Kuu[slice_start:_end, step] = np.squeeze(kern_zz_fn(
+                    inducing.Z[current_Z], inducing.start_idx[current_Z],
+                    inducing.mask[current_Z],
+                    inducing.Z[slice_start:slice_end], inducing.start_idx[slice_start:slice_end],
+                    inducing.mask[slice_start:slice_end],
+                ), axis=0)[:_end - slice_start]
             h5_file["Kuu"][0, step, :step+1] = Kuu[step, :step+1]
             h5_file["Kuu"][0, :step+1, step] = Kuu[:step+1, step]
 
