@@ -65,9 +65,10 @@ def patch_kernel_fn(kernel_fn, strides, W_cov):
 
 
     @functools.wraps(kernel_fn)
-    def _patch_kernel_fn(z1, start_idx1, mask1, z2, start_idx2, mask2):
+    def _patch_kernel_fn(z1, start_idx1, mask1, z2, start_idx2, mask2, get='nngp'):
         var1 = _get_variance(z1, marginal, 0, -1)
         var2 = _get_variance(z2, marginal, 0, -1)
+        assert get=='nngp' or get=='ntk'
 
         cross_mask = (mask1[:, None, :, None] *
                       mask2[None, :, None, :])
@@ -100,14 +101,14 @@ def patch_kernel_fn(kernel_fn, strides, W_cov):
         nngp = np.einsum("bahwc,abhwc->abhw", z1_sliced, z2_sliced)
         nngp /= z1.shape[-1]
 
-        ntk = None
+        ntk = (0. if get=='ntk' else None)
 
         inputs = Kernel(
             var1, nngp, var2, ntk, is_gaussian, is_height_width, marginal,
             cross, z1.shape, z2.shape, x1_is_x2, is_input,
             (ij_1, ij_2), cross_mask)
-        outputs = kernel_fn(inputs, get=('nngp', 'is_height_width'))
-        nngp = outputs.nngp
+        outputs = kernel_fn(inputs, get=(get, 'is_height_width'))
+        nngp = getattr(outputs, get)
 
         if W_cov_diagonals is None:
             nngp *= outputs.var_mask

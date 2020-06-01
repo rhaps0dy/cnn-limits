@@ -110,6 +110,52 @@ def do_one_N_chol(Kuu, Kux, Kut, oh_train_Y, test_Y, n_splits, predict_cv_acc, _
         oh_train_Y, test_Y, sigy, FY=Luu_Kux @ oh_train_Y)
 
 
+def solve_gp(B, Kut, FY, test_Y):
+    LB = np.linalg.cholesky(B)
+    rhs = scipy.linalg.solve_triangular(LB, FY)
+    lhs = scipy.linalg.solve_triangular(LB, Kut)
+    preds = np.argmax(lhs.T @ rhs, -1)
+    assert preds.shape == test_Y.shape
+    acc = (preds == test_Y).mean()
+    return acc
+
+
+@experiment.capture
+def do_one_N(Kuu, Kux, Kut, oh_train_Y, test_Y, n_splits, predict_cv_acc, _log):
+    n_grid_opt_points = predict_cv_acc['n_grid_opt_points']
+    if n_splits == -1:
+        raise NotImplementedError("leave-one-out")
+
+    sigy_grid = make_sigy_grid(0., 20)
+
+    folds = []
+    for train_idx, test_idx in fold_idx(Kux.shape[1], n_splits):
+        A = Kux[:, train_idx] @ Kux[:, train_idx].T
+        FY = Kux[:,  train_idx] @ oh_train_Y[train_idx, :]
+        _Kut = Kux[:, test_idx]
+        _test_Y = oh_train_Y[test_idx, :].argmax(-1)
+
+        fold = []
+        for sigy in sigy_grid:
+            B = Kuu*sigy + A
+            try:
+                acc = solve_gp(B, _Kut, FY, _test_Y)
+                _log.debug(f"For a fold, sigy={sigy}, acc={acc}")
+                assert acc.shape == ()
+                fold.append(acc)
+            except np.linalg.LinAlgError:
+                fold.append(-1e-10)
+        folds.append(fold)
+
+    grid_acc = np.mean(folds, axis=0)
+    sigy = np.expand_dims(sigy_grid[grid_acc.argmax()], 0)
+
+    B = Kuu*sigy + Kux @ Kux.T
+    FY = Kux @ oh_train_Y
+    acc = solve_gp(B, Kut, FY, test_Y)
+    return (sigy_grid, grid_acc), (sigy, acc)
+
+
 def make_sigy_grid(min_eigval, n_grid_opt_points):
     eigval_floor = max(0., -min_eigval)
     while min_eigval + eigval_floor <= 0.0:
@@ -148,7 +194,7 @@ def find_cv_opt(Kuu_eig, Kux, Kut, oh_train_Y, n_splits, predict_cv_acc):
 
 
 @experiment.capture
-def do_one_N(Kuu, Kux, Kut, oh_train_Y, test_Y, n_splits, predict_cv_acc, _log):
+def do_one_N_old(Kuu, Kux, Kut, oh_train_Y, test_Y, n_splits, predict_cv_acc, _log):
     if n_splits == -1:
         raise NotImplementedError("leave-one-out")
 
@@ -276,6 +322,57 @@ def stored_kernel(predict_cv_acc, _log):
                     n_splits=n_splits)
                 (sigy, acc) = map(np.squeeze, accuracy.loc[layer, N])
                 _log.info(f"For layer={layer}, N={N}, sigy={sigy}; accuracy={acc}, cv_accuracy={np.max(data.loc[layer, N][1])}")
+                pd.to_pickle(data, new_base_dir/"grid_acc.pkl.gz")
+                pd.to_pickle(accuracy, new_base_dir/"accuracy.pkl.gz")
+
+
+@experiment.command
+def stored_sparse_kernel(predict_cv_acc, _log):
+    kernel_matrix_path = predict_cv_acc['kernel_matrix_path']
+    multiply_var = predict_cv_acc['multiply_var']
+    apply_relu = predict_cv_acc['apply_relu']
+    n_splits = 4  # predict_cv_acc['n_splits']
+
+    kernel_matrix_path = Path(kernel_matrix_path)
+    train_set, test_set = SU.load_sorted_dataset(
+        dataset_treatment="load_train_idx",
+        train_idx_path=kernel_matrix_path)
+
+    train_Y = dataset_targets(train_set)
+    oh_train_Y = centered_one_hot(train_Y).astype(np.float64)
+    test_Y = dataset_targets(test_set)
+
+    with h5py.File(kernel_matrix_path/"kernels.h5", "r") as f:
+        N_layers, N_inducing, N_total = f['Kux'].shape
+
+        all_N = list(itertools.takewhile(
+            lambda a: a <= N_total,
+            (2**i * 10 for i in itertools.count(0))))
+        if all_N[-1] < N_total:
+            all_N.append(N_total)
+        data = pd.DataFrame(index=range(N_layers), columns=all_N)
+        accuracy = pd.DataFrame(index=range(N_layers), columns=all_N)
+
+        new_base_dir = SU.base_dir()/f"n_splits_{n_splits}"
+        os.makedirs(new_base_dir, exist_ok=True)
+
+        for layer in reversed(data.index):
+            Kuu = f['Kuu'][layer, :700, :700].astype(np.float64)
+            Kux = f['Kux'][layer, :700, :].astype(np.float64)
+            Kut = f['Kut'][layer, :700, :].astype(np.float64)
+
+            for N in reversed(all_N):
+                train_idx = slice(0, N_total, N_total//N)
+                _data, _acc = do_one_N(
+                    Kuu, Kux[:, train_idx], Kut, oh_train_Y[train_idx], test_Y,
+                    n_splits=n_splits)
+                _log.info(f"For layer={layer}, N={N}, sigy={_acc[0]} solver=direct; accuracy={_acc[1]}, cv_accuracy={np.max(_data[1])}")
+                data.loc[layer, N], accuracy.loc[layer, N] = do_one_N_chol(
+                    Kuu, Kux[:, train_idx], Kut, oh_train_Y[train_idx], test_Y,
+                    n_splits=n_splits)
+                (sigy, acc) = map(np.squeeze, accuracy.loc[layer, N])
+                _log.info(f"For layer={layer}, N={N}, sigy={sigy} solver=chol; accuracy={acc}, cv_accuracy={np.max(data.loc[layer, N][1])}")
+
                 pd.to_pickle(data, new_base_dir/"grid_acc.pkl.gz")
                 pd.to_pickle(accuracy, new_base_dir/"accuracy.pkl.gz")
 

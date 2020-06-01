@@ -50,12 +50,14 @@ def config():
     lengthscale = None
     inducing_strat = "random"
     sample_in_init = False
+    inducing_training_multiple = 3
+    ntk=False
 
 do_one_N_chol = experiments.sparse_classify.do_one_N_chol
 
 
 @experiment.capture
-def interdomain_kernel(img_w, model, model_args, stride, lengthscale):
+def interdomain_kernel(img_w, model, model_args, stride, lengthscale, ntk):
     no_pool = getattr(cnn_limits.models, model)(channels=1, **model_args)
 
     if lengthscale is None:
@@ -71,7 +73,11 @@ def interdomain_kernel(img_w, model, model_args, stride, lengthscale):
 
     _, _, _pool_kernel_fn = stax.serial(no_pool, pool, stax.Flatten())
     _, _, _no_pool_kfn = no_pool
-    kern_zz_fn, sum_of_covs = patch_kernel_fn(_no_pool_kfn, (stride, stride), W_cov=pool_W_cov)
+    _kern_zz_fn, sum_of_covs = patch_kernel_fn(_no_pool_kfn, (stride, stride), W_cov=pool_W_cov)
+    get = ('ntk' if ntk else 'nngp')
+    def kern_zz_fn(z1, start_idx1, mask1, z2, start_idx2, mask2):
+        return _kern_zz_fn(z1, start_idx1, mask1, z2, start_idx2, mask2, get=get)
+
     if sum_of_covs is None:
         offset = 32//stride-1
         sum_of_covs = np.zeros((64//stride-1, 64//stride-1), dtype=np.float32)
@@ -79,9 +85,8 @@ def interdomain_kernel(img_w, model, model_args, stride, lengthscale):
             for j in range(sum_of_covs.shape[1]):
                 sum_of_covs[i, j] = (32//stride - abs(i-offset))*(32//stride - abs(j-offset))
 
-
     def kern_x_fn(x1, x2):
-        return _pool_kernel_fn(x1, x2=x2, get='nngp')
+        return _pool_kernel_fn(x1, x2=x2, get=get)
 
     _, _, all_start_idx, all_mask = mask_and_start_idx(
         stride, img_w, range(-(img_w//stride)+1, (img_w//stride)), None, None)
@@ -128,7 +133,7 @@ def test_kernels(stride):
 
 
 @experiment.capture
-def _compute_initialisation(inducing, inducing_training_set, kern_zz_fn, N_inducing, sample_in_init):
+def _conditional_variance_initialisation(inducing, inducing_training_set, kern_zz_fn, N_inducing, sample_in_init, batch_size, inducing_training_multiple, _log):
     """
     Reference: TODO add several references,
     TODO: IF M ==1 this throws errors, currently throws an assertion error, but should fix
@@ -143,17 +148,28 @@ def _compute_initialisation(inducing, inducing_training_set, kern_zz_fn, N_induc
     M = N_inducing
     assert M > 1
     N = inducing_training_set.Z.shape[0]
+    true_len = N // inducing_training_multiple
+    _log.info(f"Length of training set: N={N}, true_len={true_len}")
+
     perm = np.random.permutation(N)  # permute entries so tiebreaking is random
+
     training_inputs = inducing_training_set.Z[perm]
     start_idx = inducing_training_set.start_idx[perm]
     mask = inducing_training_set.mask[perm]
 
+
     # note this will throw an out of bounds exception if we do not update each entry
     indices = np.zeros(M, dtype=int) + N
-    di = jax.vmap(kern_zz_fn)(training_inputs[:, None, ...], start_idx[:, None, ...], mask[:, None, ...],
-                              training_inputs[:, None, ...], start_idx[:, None, ...], mask[:, None, ...])
-    di = np.squeeze(di, (1, 2))
-    assert di.shape == (N,)
+    diag_kern_zz_fn = jax.vmap(kern_zz_fn)
+    di = np.zeros((N,), dtype=np.float64)
+    di[...] = np.nan
+    for b_slice in batch_slices(N, batch_size):
+        di[b_slice] = np.squeeze(diag_kern_zz_fn(
+            training_inputs[b_slice, None, ...], start_idx[b_slice, None, ...], mask[b_slice, None, ...],
+            training_inputs[b_slice, None, ...], start_idx[b_slice, None, ...], mask[b_slice, None, ...]), (1, 2))
+    assert not np.any(np.isnan(di))
+
+    L = np.zeros((N,), dtype=np.float64)
 
     if sample_in_init:
         indices[0] = sample_discrete(di)
@@ -162,13 +178,15 @@ def _compute_initialisation(inducing, inducing_training_set, kern_zz_fn, N_induc
     ci = np.zeros((M - 1, N))  # [M,N]
     for m in range(M - 1):
         j = int(indices[m])  # int
-        yield j
+        yield perm[j]%true_len, inducing_training_set.i[perm[j]]
         new_Z = training_inputs[j:j + 1]  # [1,D]
         new_start_idx = start_idx[j:j+1]
         new_mask = mask[j:j+1]
         dj = np.sqrt(di[j])  # float
         cj = ci[:m, j]  # [m, 1]
-        L = np.squeeze(kernel(training_inputs, start_idx, mask, new_Z, new_start_idx, new_mask))  # [N]
+        for b_slice in batch_slices(N, 5*batch_size):
+            L[b_slice] = np.squeeze(kern_zz_fn(
+                training_inputs[b_slice], start_idx[b_slice], mask[b_slice], new_Z, new_start_idx, new_mask), axis=1)
         ei = (L - np.dot(cj, ci[:m])) / dj
         ci[m, :] = ei
         di -= ei ** 2
@@ -176,12 +194,14 @@ def _compute_initialisation(inducing, inducing_training_set, kern_zz_fn, N_induc
             indices[m + 1] = sample_discrete(di)
         else:
             indices[m + 1] = np.argmax(di)  # select first point, add to index 0
+        _log.info(f"Remaining variance: sum(di)={np.sum(np.clip(di, 0, None))}")
         # sum of di is tr(Kff-Qff), if this is small things are ok
         # if np.sum(np.clip(di, 0, None)) < self.threshold:
         #     indices = indices[:m]
         #     warnings.warn("ConditionalVariance: Terminating selection of inducing points early.")
         #     break
-    yield int(indices[-1])
+    j = int(indices[-1])
+    yield perm[j]%true_len, inducing_training_set.i[perm[j]]
 
 
 @experiment.capture
@@ -197,11 +217,11 @@ def _random_strategy(inducing, inducing_training_set, stride, N_inducing):
 
 
 @experiment.capture
-def populate_inducing_points(inducing, inducing_training_set, kern_zz_fn, inducing_strat):
+def inducing_point_indices(inducing, inducing_training_set, kern_zz_fn, inducing_strat):
     if inducing_strat == "random":
         return _random_strategy(inducing, inducing_training_set)
     elif inducing_strat == "conditional_variance":
-        return _compute_initialisation(inducing, inducing_training_set, kern_zz_fn)
+        return _conditional_variance_initialisation(inducing, inducing_training_set, kern_zz_fn)
     else:
         raise ValueError(inducing_strat)
 
@@ -213,8 +233,14 @@ def draw_patch_i(n_samples, p):
     return idx-p.shape[0]//2
 
 
+def batch_slices(N, batch_size):
+    return (slice(slice_start, slice_end) for slice_start, slice_end in zip(
+        range(0, N, batch_size),
+        itertools.count(start=batch_size, step=batch_size)))
+
+
 @experiment.automain
-def main(N_inducing, batch_size, print_interval, stride, _log, inducing_strat):
+def main(N_inducing, batch_size, print_interval, stride, _log, inducing_strat, inducing_training_multiple):
     train_set, test_set = SU.load_sorted_dataset()
     train_Y = dataset_targets(train_set)
     oh_train_Y = centered_one_hot(train_Y).astype(np.float64)
@@ -255,26 +281,29 @@ def main(N_inducing, batch_size, print_interval, stride, _log, inducing_strat):
         _test_x.transpose(1, -1).to(torch.float32).numpy()
         for (_test_x, _) in DataLoader(test_set, batch_size=batch_size, shuffle=False)], 0)
 
-    inducing_training_set_i = draw_patch_i(len(train_x), sum_of_covs)
-    np.save(SU.base_dir()/"inducing_training_set_i.npy", inducing_training_set_i)
-    inducing_training_set = InducingPatches(
-        train_x,  # Z=
-        inducing_training_set_i,  # i=
-        *mask_and_start_idx(stride, img_h, inducing_training_set_i, None, None)[2:])
+    if inducing_strat == "random":
+        inducing_training_set = InducingPatches(train_x, None, None, None)
+    else:
+        inducing_training_set_i = draw_patch_i(inducing_training_multiple*len(train_x), sum_of_covs)
+        np.save(SU.base_dir()/"inducing_training_set_i.npy", inducing_training_set_i)
+        inducing_training_set = InducingPatches(
+            np.tile(train_x, (inducing_training_multiple, 1, 1, 1)),  # Z=
+            inducing_training_set_i,  # i=
+            *mask_and_start_idx(stride, img_h, inducing_training_set_i, None, None)[2:])
 
     milestone = 4
     with h5py.File(SU.base_dir()/"kernels.h5", "w") as h5_file:
-        h5_file.create_dataset("Kuu", shape=(1, *Kuu.shape), dtype=np.float32,
+        h5_file.create_dataset("Kuu", shape=(1, *Kuu.shape), dtype=np.float64,
                                fillvalue=np.nan, chunks=(1, 128, 128),
                                maxshape=(None, *Kuu.shape))
-        h5_file.create_dataset("Kux", shape=(1, *Kux.shape), dtype=np.float32,
+        h5_file.create_dataset("Kux", shape=(1, *Kux.shape), dtype=np.float64,
                                fillvalue=np.nan, chunks=(1, 1, Kux.shape[1]),
                                maxshape=(None, *Kux.shape))
-        h5_file.create_dataset("Kut", shape=(1, *Kut.shape), dtype=np.float32,
+        h5_file.create_dataset("Kut", shape=(1, *Kut.shape), dtype=np.float64,
                                fillvalue=np.nan, chunks=(1, 1, Kut.shape[1]),
                                maxshape=(None, *Kut.shape))
 
-        for step, (Z_i, Z_i_in_X) in enumerate(populate_inducing_points(
+        for step, (Z_i_in_X, Z_i) in enumerate(inducing_point_indices(
                 inducing, inducing_training_set, kern_zz_fn)):
             # Select new inducing point
             current_Z = slice(step, step+1)
@@ -287,36 +316,30 @@ def main(N_inducing, batch_size, print_interval, stride, _log, inducing_strat):
                                out_mask=inducing.mask[current_Z])
 
             _log.info(f"Updating Kuu (inducing point #{step})")
-            for slice_start, slice_end in zip(
-                    range(0, step+1, batch_size//10),
-                    itertools.count(start=batch_size//10, step=batch_size//10)):
-                _end = min(slice_end, step+1)
-                Kuu[step, slice_start:_end] = Kuu[slice_start:_end, step] = np.squeeze(kern_zz_fn(
+            for b_slice in batch_slices(step+1, batch_size//10):
+                _end = min(b_slice.stop, step+1)
+                Kuu[step, b_slice.start:_end] = Kuu[b_slice.start:_end, step] = np.squeeze(kern_zz_fn(
                     inducing.Z[current_Z], inducing.start_idx[current_Z],
                     inducing.mask[current_Z],
-                    inducing.Z[slice_start:slice_end], inducing.start_idx[slice_start:slice_end],
-                    inducing.mask[slice_start:slice_end],
-                ), axis=0)[:_end - slice_start]
+                    inducing.Z[b_slice], inducing.start_idx[b_slice],
+                    inducing.mask[b_slice],
+                ), axis=0)[:_end - b_slice.start]
             h5_file["Kuu"][0, step, :step+1] = Kuu[step, :step+1]
             h5_file["Kuu"][0, :step+1, step] = Kuu[:step+1, step]
 
             timings_obj.desc = f"Updating Kux (inducing point #{step})"
-            for batch_start, batch_end in zip(
-                    range(0, len(train_set), batch_size),
-                    itertools.count(start=batch_size, step=batch_size)):
-                Kux[step, batch_start:batch_end] = np.squeeze(kern_zx_fn(
+            for b_slice in batch_slices(len(train_set), batch_size):
+                Kux[step, b_slice] = np.squeeze(kern_zx_fn(
                     inducing.Z[current_Z], inducing.start_idx[current_Z],
-                    inducing.mask[current_Z], train_x[batch_start:batch_end]), axis=0)
+                    inducing.mask[current_Z], train_x[b_slice]), axis=0)
                 next(timings)
             h5_file["Kux"][0, step, :] = Kux[step, :]
 
             timings_obj.desc = f"Updating Kut (inducing point #{step})"
-            for batch_start, batch_end in zip(
-                    range(0, len(test_set), batch_size),
-                    itertools.count(start=batch_size, step=batch_size)):
-                Kut[step, batch_start:batch_end] = np.squeeze(kern_zx_fn(
+            for b_slice in batch_slices(len(test_set), batch_size):
+                Kut[step, b_slice] = np.squeeze(kern_zx_fn(
                     inducing.Z[current_Z], inducing.start_idx[current_Z],
-                    inducing.mask[current_Z], test_x[batch_start:batch_end]), axis=0)
+                    inducing.mask[current_Z], test_x[b_slice]), axis=0)
                 next(timings)
             h5_file["Kut"][0, step, :] = Kut[step, :]
 

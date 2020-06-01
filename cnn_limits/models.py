@@ -423,12 +423,27 @@ def CNTK14_sweep(channels=16):
     return TickSweep(stax.serial(
         *([conv, relu] * 14)), Wcovs)
 
+def CNTK14_sweep_fewer_lengthscales(channels=16):
+    kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
+    log_lengthscales = np.linspace(-1.5, 4.5, 25)[[9,10,11,12]]
+
+    Wcovs = []
+    for lsc in 10**log_lengthscales:
+        kern.lengthscale = lsc
+        Wcovs.append(covariance_tensor(32, 32, kern))
+
+    relu = Relu()
+    conv = Conv(channels, filter_shape=(3, 3), strides=(1, 1), padding='SAME')
+
+    return TickSweep(stax.serial(
+        *([conv, relu] * 14)), Wcovs)
+
 
 
 def CNTK_nopool(channels=15, depth=14):
     relu = Relu()
     conv = Conv(channels, filter_shape=(3, 3), strides=(1, 1), padding='SAME')
-    return stax.serial(*([conv, relu]*depth))
+    return stax.serial(*([conv, relu]*(depth-1)), conv)
 
 
 def PreResnet32_sweep(channels=16):
@@ -543,10 +558,16 @@ def Myrtle10_replaced_tick_v3_sweep(internal_lengthscale, channels=16):
 
 @reg_internal_lengthscale
 def RBFMyrtle_v3(internal_lengthscale, channels=16):
-    assert internal_lengthscale is not None
-    kern_internal = gpytorch.kernels.RBFKernel()
-    kern_internal.lengthscale = internal_lengthscale
-    Wcov_for_conv = covariance_tensor(6, 6, kern_internal)
+    if internal_lengthscale is None:
+        print("Interal lengthscale is None")
+        pool_and_conv = Conv(channels, (6, 6), strides=(2, 2), padding='SAME')
+    else:
+        print("Interal lengthscale is ", internal_lengthscale)
+        kern_internal = gpytorch.kernels.RBFKernel()
+        kern_internal.lengthscale = internal_lengthscale
+        Wcov_for_conv = covariance_tensor(6, 6, kern_internal)
+        pool_and_conv = CorrelatedConv(channels, (6, 6), strides=(2, 2),
+                                       padding='SAME', W_cov_tensor=Wcov_for_conv)
 
     kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
     log_lengthscales = np.linspace(-1.5, 3.5, 25)
@@ -557,8 +578,6 @@ def RBFMyrtle_v3(internal_lengthscale, channels=16):
         Wcovs.append(covariance_tensor(8, 8, kern))
 
     relu = Relu()
-    pool_and_conv = CorrelatedConv(channels, (6, 6), strides=(2, 2),
-                                   padding='SAME', W_cov_tensor=Wcov_for_conv)
     conv = Conv(channels, filter_shape=(3, 3), strides=(1, 1), padding='SAME')
 
     return TickSweep(stax.serial(

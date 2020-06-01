@@ -36,7 +36,7 @@ def dataset_targets(dset):
 
 
 def centered_one_hot(y, N_classes=10):
-    return np.eye(N_classes)[y]
+    return np.eye(N_classes)[y] - 1/N_classes
     # oh = y[:, None] == np.arange(N_classes)
     # return (oh*2-1).astype(np.float64)
     # return (oh.astype(np.float64)*N_classes - 1) / (N_classes-1)

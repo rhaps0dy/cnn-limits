@@ -18,7 +18,7 @@ from neural_tangents import stax
 from neural_tangents.utils.kernel import Marginalisation as M
 from cnn_limits.tbx import PrintTimings
 
-experiment = sacred.Experiment("save_new", [SU.ingredient])
+experiment = sacred.Experiment("final_save_new", [SU.ingredient])
 if __name__ == '__main__':
     SU.add_file_observer(experiment)
 
@@ -143,19 +143,20 @@ def main(worker_rank, print_interval, n_workers, save_variance):
             for it in timings_obj(Kt_diag):
                 kern_save(it, kern, Kt_diag_out, True)
 
-        Kxx, Kxx_out = kern_iterator(
-            f, kern_name="Kxx", X=train_set, X2=None,     diag=False)
+        # Kxx, Kxx_out = kern_iterator(
+        #     f, kern_name="Kxx", X=train_set, X2=None,     diag=False)
         Kxt, Kxt_out = kern_iterator(
             f, kern_name="Kxt", X=train_set, X2=test_set, diag=False)
-        timings = timings_obj(itertools.count(), len(Kxx) + len(Kxt))
+        timings = timings_obj(itertools.count(), len(Kxt))
 
         Kxx_ongoing = Kxt_ongoing = True
+        Kxx_ongoing = False
         while Kxx_ongoing or Kxt_ongoing:
-            if Kxx_ongoing:
-                try:
-                    kern_save(next(Kxx), kern, Kxx_out, False); next(timings)
-                except StopIteration:
-                    Kxx_ongoing = False
+            # if Kxx_ongoing:
+            #     try:
+            #         kern_save(next(Kxx), kern, Kxx_out, False); next(timings)
+            #     except StopIteration:
+            #         Kxx_ongoing = False
             if Kxt_ongoing:
                 try:
                     kern_save(next(Kxt), kern, Kxt_out, False); next(timings)

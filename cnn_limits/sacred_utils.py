@@ -287,6 +287,14 @@ def load_sorted_dataset(sorted_dataset_path, N_train, N_test, ZCA_transform, tes
         train_set = Subset(_train_set, train_idx)
         test_set = Subset(_train_set, old_train_idx)
 
+    elif dataset_treatment == "newtest_train_random_balanced":
+        old_train_idx = np.load(Path(train_idx_path)/"train_idx.npy")
+        old_train_idx = torch.from_numpy(old_train_idx)
+        np.save(base_dir()/"train_idx.npy", old_train_idx.numpy())
+        _train_set = train_set
+        train_set = Subset(_train_set, old_train_idx)
+        test_set = test_set
+
     elif dataset_treatment == "extend_load_train_idx":
         train_idx = np.load(Path(train_idx_path)/"train_idx.npy")
         old_train_idx = np.load(Path(train_idx_path)/"old_train_idx.npy")
