@@ -1,7 +1,75 @@
 \appendix
-\section{\textsc{Netsor} program}
+\section{Proof that the weight-correlated CNN converges to a GP}
 \label{app:netsor}
-TODO
+{  % This bracket defines the scope for commands:
+  \newcommand{\Gva}{\mathsf{G}}
+  \newcommand{\Hva}{\mathsf{H}}
+  \newcommand{\Ava}{\mathsf{A}}
+  \newcommand{\MatMul}{\texttt{MatMul}}
+  \newcommand{\LinComb}{\texttt{LinComb}}
+  \newcommand{\Nonlin}{\texttt{Nonlin}}
+  \newcommand{\NonLin}{\texttt{Nonlin}}
+  \newcommand{\Netsor}{\textsc{Netsor} }
+
+In this section, we formally prove that a CNN with correlated weights converges
+to a Gaussian process in the limit of infinite width. Using the \Netsor
+programming language due to \citet{yang2019wide}, the proof becomes really simple.
+
+\subsection{The \Netsor programming language}
+For the reader's convenience, we informally recall the \Netsor programming language
+\citep{yang2019wide}. The outline of our presentation here also closely follows \citet{yang2019wide}.
+
+There are three types of variables: $\Gva(n)$-vars, $\Ava(n_1,
+n_2)$-vars, and $\Hva(n)$-vars. Each of these have one or two
+parameters, which are the widths we will take to infinity. For a
+given index in $1,\dots,n$ (or $n_1,n_2$), each of these variables is a \emph{scalar}. To
+represent vectors that do not grow to infinity, we need to use collections of variables.
+
+$\Gva$(aussian)-vars are $n$-wise approximately
+independent, identically distributed and Gaussian. They converge in
+distribution to i.i.d. Gaussian in the limit of all widths $n_i \to \infty$.
+
+$\Ava$-vars represent matrices,
+like those used in a dense neural network, and their entries are always i.i.d.
+Gaussian, even for finite instantiations of the program.
+
+$\Hva$-vars represent variables that become i.i.d. $n$-wise in the
+infinite limit. $\Gva$ is a subtype of $\Hva$, so all $\Gva$-vars are also $\Hva$-vars.
+
+A \textsc{Netsor} program consists of:
+\paragraph{Input} A set of $\Gva$-vars or $\Ava$-vars.
+
+\paragraph{Body} We indicate the type of a variable, or each variable in a
+collection, using ``$\text{var} : \text{Type}$''.
+New variables defined using the following rules:
+\begin{enumerate}
+  \item[\MatMul] $\Ava(n_1, n_2) \times \Hva(n_2) \to \Gva(n_1)$. Multiply an
+    an i.i.d. Gaussian matrix times an i.i.d. vector, which becomes a Gaussian
+    vector in the limit $n_2 \to \infty$.
+  \item[\LinComb] Given constants $\alpha_1,\dots,\alpha_K$, and $\Gva$-vars
+    $x_1,\dots,x_K : \Gva(n_1)$, their linear combination $\sum_{k=1}^K \alpha_k
+    x_k$ is a $\Gva$-var.
+  \item[\NonLin] applying an elementwise nonlinear function $\phi$, we map
+    $\Gva(n) \to \Hva(n)$.
+\end{enumerate}
+
+\paragraph{Output} A tuple of scalars $(v_1^\tp y_1/\sqrt{n_1}, \;\dots, \; v_K^\tp
+y_K/\sqrt{n_K})$. Each each $v_k : \Gva(n_k)$ is an input $\Gva$-var \emph{not
+used outside of the output tuple}, and each $y_k : \Hva(n_k)$ is some
+$\Hva$-var.
+
+\subsection{The \Netsor master theorem}
+\begin{definition}
+
+\end{definition}
+
+
+
+
+}  % End command scope
+
+
+
 
 %%% Local Variables:
 %%% mode: latex

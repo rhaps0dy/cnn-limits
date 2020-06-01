@@ -57,35 +57,31 @@
     \put(0.23178993,0.03741329){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$\patchw{0}$}}}%
     \put(0.14961295,0.06159237){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$\patchh{0}$}}}%
     \put(0,0){\includegraphics[width=\unitlength,page=2]{net_diagram.pdf}}%
-    \put(0.45920947,0.15455826){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$\phi,*$}}}%
-    \put(0,0){\includegraphics[width=\unitlength,page=3]{net_diagram.pdf}}%
     \put(0.78231076,0.15455826){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$\phi,*$}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=3]{net_diagram.pdf}}%
+    \put(0.43058386,0.03772516){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$\patch$}}}%
     \put(0,0){\includegraphics[width=\unitlength,page=4]{net_diagram.pdf}}%
-    \put(0.43058386,0.03772516){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$\nu$}}}%
-    \put(0,0){\includegraphics[width=\unitlength,page=5]{net_diagram.pdf}}%
-    \put(0.59509458,0.21403236){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$j$}}}%
+    \put(0.25861634,0.21403236){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$\chan$}}}%
     \put(0.16385906,0.15284562){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$*$}}}%
     \put(0.80142617,0.19076261){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{}}}%
-    \put(0,0){\includegraphics[width=\unitlength,page=6]{net_diagram.pdf}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=5]{net_diagram.pdf}}%
     \put(0.31110298,-0.00994594){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$\layerC{1}$}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=6]{net_diagram.pdf}}%
+    \put(0.20321631,0.24464971){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$\prevchan$}}}%
     \put(0,0){\includegraphics[width=\unitlength,page=7]{net_diagram.pdf}}%
-    \put(0.53969454,0.24464971){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$i$}}}%
-    \put(0,0){\includegraphics[width=\unitlength,page=8]{net_diagram.pdf}}%
     \put(0.52600563,-0.00382917){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$\layerC{2}$}}}%
-    \put(0,0){\includegraphics[width=\unitlength,page=9]{net_diagram.pdf}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=8]{net_diagram.pdf}}%
     \put(0.63517383,-0.00994594){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$\layerC{2}$}}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=9]{net_diagram.pdf}}%
+    \put(0.75509538,0.03772516){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$\nextpatch$}}}%
+    \put(0.54380098,0.25272064){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$\layerC{1}$}}}%
     \put(0,0){\includegraphics[width=\unitlength,page=10]{net_diagram.pdf}}%
-    \put(0.75509538,0.03772516){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$\mu$}}}%
-    \put(0.89120963,0.24193813){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$\layerC{1}$}}}%
-    \put(0,0){\includegraphics[width=\unitlength,page=11]{net_diagram.pdf}}%
     \put(0.10121845,0.2398329){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$\vX$}}}%
     \put(0.36448616,0.2398329){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$\layerAs{1}(\vX)$}}}%
     \put(0.68808604,0.24182736){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$\layerAs{2}(\vX)$}}}%
     \put(0.93651841,0.16285111){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$\layerAs{3}(\vX)$}}}%
     \put(0.84511799,-0.00382917){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$\layerC{3}$}}}%
-    \put(0,0){\includegraphics[width=\unitlength,page=12]{net_diagram.pdf}}%
-    \put(0.78729482,0.03807794){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{}}}%
-    \put(0.22566449,0.25069405){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$\layerC{1}$}}}%
-    \put(0,0){\includegraphics[width=\unitlength,page=13]{net_diagram.pdf}}%
+    \put(0,0){\includegraphics[width=\unitlength,page=11]{net_diagram.pdf}}%
+    \put(0.45920947,0.15455826){\color[rgb]{0,0,0}\makebox(0,0)[lb]{\smash{$\phi,*$}}}%
   \end{picture}%
 \endgroup%

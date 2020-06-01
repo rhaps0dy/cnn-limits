@@ -30,8 +30,13 @@
 % \usepackage{subcaption}
 \usepackage{xcolor}
 \usepackage{amsmath}
+\usepackage{amsfonts}
+% Theorem environments
 \usepackage{amsthm}
 \newtheorem{lemma}{Lemma}
+\newtheorem{definition}{Definition}
+\newtheorem{theorem}{Theorem}
+
 \usepackage{graphicx}
 \usepackage[colorinlistoftodos]{todonotes}
 \usepackage[colorlinks=true, allcolors=blue]{hyperref}
@@ -72,6 +77,8 @@
 \newcommand{\patchfun}[1]{{#1}\text{th patch}}
 \newcommand{\vecfun}{\text{vec}\bra}
 \newcommand{\simiid}{\overset{i.i.d.}{\sim}}
+
+\newcommand{\tp}{{\mathrm{\textsf{\tiny T}}}}
 
 
 
@@ -143,9 +150,18 @@ This success of GPs raised the question of whether a mathematically simple linea
 
 In this work we investigate a property that, similarly, is present in finite convolutional neural networks, but which disappears in the infinite limit: correlation from patches in different parts of the image \citep{garriga2018infiniteconv,novak2019infiniteconv}. Given that convolutions were developed to introduce these correlations, it seems undesirable that adding more capacity by increasing the number of filters removes them.
 
-Currently, changing the architecture by introducing mean-pooling is the only way that these correlations have been reintroduced \citep{novak2019infiniteconv}, and they have been shown to be important for improving performance \citep{arora2019exact}. We show that correlations between patches can also be maintained in the limit without pooling. Instead, we introduce correlations between the weights in the prior. The amount of correlation can be controlled, which allows us to interpolate between the existing approaches of full independence and mean-pooling. Our approach allows the discrete architectural choice of mean-pooling to be replaced with a more flexible continuous amount of correlation. Empirical evaluation on CIFAR-10 shows that this additional flexibility improves performance.
+Currently, changing the architecture by introducing mean-pooling is the only way
+that these correlations have been reintroduced \citep{novak2019infiniteconv},
+and they have been shown to be important for improving performance
+\citep{arora2019exact}. We show that correlations between patches can also be
+maintained in the limit without pooling. Instead, we introduce correlations
+between the weights in the prior. The amount of correlation can be controlled,
+which allows us to interpolate between the existing approaches of full
+independence and mean-pooling\adriacomment{mean-pooling (which is equivalent to complete
+  correlation in the weights)?}. Our approach allows the discrete architectural choice of mean-pooling to be replaced with a more flexible continuous amount of correlation. Empirical evaluation on CIFAR-10 shows that this additional flexibility improves performance.
 
-Our work illustrates that there are choices to be made when analysing infinite limits of neural networks, and that good choices can improve performance. The success of this approach in the infinite limit also raises questions about whether correlated weights should be used in finite networks.
+Our work illustrates that there are choices \adriacomment{about the weight
+  prior} to be made when analysing infinite limits of neural networks, and that good choices can improve performance. The success of this approach in the infinite limit also raises questions about whether correlated weights should be used in finite networks.
 
 
 
@@ -208,7 +224,9 @@ In the kernel and Gaussian process community, kernels with convolutional structu
 
 
 \section{Spatial Correlations in Single-Layer Networks}
-To begin, we will analyse the infinite limit of a single hidden layer convolutional neural network. We first show how spatial correlations disappear when using infinite weights \citet{garriga2018infiniteconv,novak2019infiniteconv}, and how mean pooling reintroduces them \citet{novak2019infiniteconv}. This leads to kernels with the same structure as \Citet{vdw2017convgp}. Next, we show how spatial correlations can be recovered by adding weight correlations instead of making the discrete architectural modification of adding mean pooling. This leads to the 
+To begin, we will analyse the infinite limit of a single hidden layer
+convolutional neural network. We first show how spatial correlations disappear
+when using infinite weights \citep{garriga2018infiniteconv,novak2019infiniteconv}, and how mean pooling reintroduces them \citep{novak2019infiniteconv}. This leads to kernels with the same structure as \Citet{vdw2017convgp}. Next, we show how spatial correlations can be recovered by adding weight correlations instead of making the discrete architectural modification of adding mean pooling. This leads to the 
 ``Translation Insensitive Convolutional Kernel'' (TICK) considered by \citet{dutordoir2020}. In the next section, we will generalise this to deep convolutional networks.
 
 \newcommand{\layerC}[1]{C^{(#1)}}
@@ -223,6 +241,11 @@ To begin, we will analyse the infinite limit of a single hidden layer convolutio
 \newcommand{\priorWcov}[1]{\boldsymbol{\Sigma}^{(#1)}}
 \newcommand{\layerAs}[1]{A^{(#1)}}
 \newcommand{\layerNLAs}[1]{Z^{(#1)}}
+% These 4 are used for the picture below
+\newcommand{\chan}{c}
+\newcommand{\prevchan}{\gamma}   % <- Possibly use these for c, p, gamma? I've
+\newcommand{\patch}{p}               % been using \nu,\mu
+\newcommand{\nextpatch}{\mu} 
 A single-layer Convolutional Neural Network (CNN) takes in an image input $\vX \in \Reals^{\layerC{0}\times \layersize{0}}$ with width $\layerw{0}$, height $\layerh{0}$, and $\layerC{0}$ channels (e.g.~one per colour). The image is divided up into $\layersize{0}$ patches of size $\layerC{0}\times\!\patchw{1}\times\!\patchh{1}$ with zero padding at the edges. Weights are applied by taking an inner product with all patches, which we do $\layerC{1}$ times to give multiple channels in the next layer. By collecting all weights in the matrix $\layerW{1}\in\Reals^{\layerC1\times \layerC0\times \patchw1\patchh1}$ we can denote the computation of the pre- and post-non-linearity activations as
 \begin{align}
     \layerAs1_{cp} = \sum_{\gamma p} X_{\gamma p} \layerWs1_{c\gamma p} \,, && \layerNLAs1_{cp} = \phi\big(\layerAs1_{cp}\big)\,.
@@ -239,7 +262,8 @@ As in \citet{garriga2018infiniteconv,novak2019infiniteconv}, our goal is to anal
 \end{align}
 Since $\layerAs1_{cp}$ and $\layerWs2_{cp}$ are both independent over $c$, $f(X)$ is a s
 
-Since $f(X)$ is a sum of 
+Since $f(X)$ is a sum of  \adriacomment{To write the kernel, we need to make
+  clear the dependence of $\layerAs{\cdot}$ and $\layerNLAs{\cdot}$ on $\vX$.}
 
 \subsection{Notes}
 
@@ -254,11 +278,9 @@ Give a high-level commentary on the infinite-width line of work. Summarise comme
     \item Can we construct an infinite limit of a CNN that has the correlations like the ConvGP, but also works for full deep networks?
 \end{itemize}
 
-\adriacomment{Mention the recent interest into improving the prior for Bayesian NNs, how independent weights don't seem to be so great?}
-
 There are various parallel lines of work that are relevant here. The first connection between neural networks and GPs is due to \citet{neal1996bayesian}, who noted that infinitely-wide single-layer random neural networks are equivalent to Gaussian processes. 
 
-\section{Infinite Limits for correlated weights}
+\section{Infinite limits for correlated weights}
 
 As a summary: $N$-dimensional convolutions in weight space correspond to $2N$-dimensional convolutions in kernel space.
 
@@ -267,13 +289,14 @@ As a summary: $N$-dimensional convolutions in weight space correspond to $2N$-di
   \centering
   % \def\svgwidth{\textwidth}
   \import{fig/}{net_diagram.pdf_tex}
-  \caption{A convolutional neural network. Indices $i,j,\mu,\nu$
+  \caption{A convolutional neural network. Indices $\prevchan,\chan,\patch,\nextpatch$
     are depicted as used in expressions that focus on layer 1.}
 \end{figure}
 
+Here we extend the analysis of the previous section to mulitple layers. 
+
 In this section we derive the kernel corresponding to an infinitely wide convolutional neural network (CNN) with correlated weights. Our analysis applies to all numbers of dimensions of convolutions, and more generally all settings where "groups" of weights would be applied to different inputs \adriacomment{make precise using Greg Yang's stuff}.
 
-The CNN takes an input image of width $P\ssup{0}$, height $Q\ssup{0}$, and $C\ssup{0}$ input channels, which we denote as $\vX \in \mathbb{R}^{C\ssup{0} \times P\ssup{0}Q\ssup{0}}$. Each layer $\ell$ has a convolution filter $\vW\ssup{\ell} \in \mathbb{R}^{C\ssup{\ell-1} \times C\ssup{\ell} \times p\ssup{\ell}}$, of width $p\ssup{\ell}$ and height $q\ssup{\ell}$. Usually the filter is square, $p\ssup{\ell}=q\ssup{\ell}$ and its size is 1 or 3.
 
 Given the activations $A$ of layer $\ell$, the preactivations $Z$ of layer $\ell+1$ are the result of the convolution 
 \begin{equation}
@@ -364,6 +387,8 @@ We could have taken another path to generalize TICK to multiple layers.
 What choice of covariance do we make ?
 This was inspired by TICK
 
+Representation as sum of diagonals
+
 \section{Experiments}
 Here we seek to answer the question:
  Can we improve the accuracy of Bayesian classifiers by adding more sophisticated correlation structures in the prior?
@@ -385,6 +410,8 @@ We show
 "Wev'e identified a new property that is helpful in the infinite limit. Would correlated weights be useful for finite neural netwokrs as well?"
 
 the argument about "if you increase the size of your images" 
+
+Mention Wenzel et al. SGLD
 
 \section*{Broader Impact}
 
