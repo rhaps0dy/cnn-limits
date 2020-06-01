@@ -225,10 +225,10 @@ def main_no_eig(kernel_matrix_path, multiply_var, _log, apply_relu, n_splits):
 
         for layer in reversed(data.index):
             Kxx = f['Kxx'][layer].astype(np.float64)
-            mask = np.triu(np.ones(Kxx.shape, dtype=np.bool), k=1)
+            mask = np.isnan(Kxx)
             Kxx[mask] = Kxx.T[mask]
-            assert np.array_equal(Kxx, Kxx.T)
-            assert np.all(np.isfinite(Kxx))
+            assert np.allclose(Kxx, Kxx.T)
+            Kxx = (Kxx + Kxx.T)/2
 
             Kxt = f['Kxt'][layer].astype(np.float64)
             try:

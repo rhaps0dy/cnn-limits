@@ -1,47 +1,64 @@
 \appendix
-\section{Proof that the weight-correlated CNN converges to a GP}
-\label{app:netsor}
+\section{Proof that a CNN with correlations in the weights converges to a GP\label{app:netsor}}
 {  % This bracket defines the scope for commands:
   \newcommand{\Gva}{\mathsf{G}}
   \newcommand{\Hva}{\mathsf{H}}
   \newcommand{\Ava}{\mathsf{A}}
-  \newcommand{\MatMul}{\texttt{MatMul}}
-  \newcommand{\LinComb}{\texttt{LinComb}}
-  \newcommand{\Nonlin}{\texttt{Nonlin}}
-  \newcommand{\NonLin}{\texttt{Nonlin}}
-  \newcommand{\Netsor}{\textsc{Netsor} }
+  \newcommand{\MatMul}{{\texttt{MatMul}}}
+  \newcommand{\LinComb}{{\texttt{LinComb }}}
+  \newcommand{\Nonlin}{{\texttt{Nonlin }}}
+  \newcommand{\Netsor}{{\textsc{Netsor }}}
 
 In this section, we formally prove that a CNN with correlated weights converges
 to a Gaussian process in the limit of infinite width. Using the \Netsor
-programming language due to \citet{yang2019wide}, the proof becomes really simple.
+programming language due to \citet{yang2019wide}, the proof can be completed in
+one step: describe a CNN with correlated weights in \Netsor.
+
+For the reader's convenience, we informally recall the \Netsor programming language
+\citep{yang2019wide} and the key property of its programs (Corollary~\ref{corollary:netsor-gp}). The outline of our presentation here also closely follows
+\citet{yang2019wide}. Readers familiar with \Netsor should skip to
+\cref{sec:netsor-program}, where we show the program that proves Lemma~\ref{lemma:correlated-weights-nn}.
+
+
+We write $[n]$ to mean the set $\{1,\dots,n\}$.
 
 \subsection{The \Netsor programming language}
-For the reader's convenience, we informally recall the \Netsor programming language
-\citep{yang2019wide}. The outline of our presentation here also closely follows \citet{yang2019wide}.
-
 There are three types of variables: $\Gva(n)$-vars, $\Ava(n_1,
 n_2)$-vars, and $\Hva(n)$-vars. Each of these have one or two
 parameters, which are the widths we will take to infinity. For a
-given index in $1,\dots,n$ (or $n_1,n_2$), each of these variables is a \emph{scalar}. To
+given index in $[n]$ (or $[n_1],[n_2]$), each of these variables is a \emph{scalar}. To
 represent vectors that do not grow to infinity, we need to use collections of variables.
 
-$\Gva$(aussian)-vars are $n$-wise approximately
-independent, identically distributed and Gaussian. They converge in
-distribution to i.i.d. Gaussian in the limit of all widths $n_i \to \infty$.
+\begin{itemize}
+\item[$\Gva$-vars] (Gaussian-vars) are $n$-wise \emph{approximately}
+i.i.d. and Gaussian. That is, there can be
+correlations between $\Gva$-vars, but only within a single index $i \in 1,\dots,n$.
+$\Gva$-vars will converge in
+distribution to an $n$-wise independent and identically distributed Gaussian in the limit of $n \to \infty$, if
+all widths are $n$.
 
-$\Ava$-vars represent matrices,
-like those used in a dense neural network, and their entries are always i.i.d.
-Gaussian, even for finite instantiations of the program.
+\item[$\Ava$-vars] represent matrices,
+like those used in a dense neural network. Their entries are always i.i.d.
+Gaussian with with zero mean, even for finite instantiations of the program.
+There are no correlations between different $\Ava$-vars, or elements of the same $\Ava$-var.
 
-$\Hva$-vars represent variables that become i.i.d. $n$-wise in the
+\item[$\Hva$-vars] represent variables that become $n$-wise i.i.d. (not necessarily
+Gaussian) in the
 infinite limit. $\Gva$ is a subtype of $\Hva$, so all $\Gva$-vars are also $\Hva$-vars.
+\end{itemize}
 
-A \textsc{Netsor} program consists of:
-\paragraph{Input} A set of $\Gva$-vars or $\Ava$-vars.
-
-\paragraph{Body} We indicate the type of a variable, or each variable in a
+We indicate the type of a variable, or each variable in a
 collection, using ``$\text{var} : \text{Type}$''.
-New variables defined using the following rules:
+
+
+\begin{definition}[Netsor program]
+A \textsc{Netsor} program consists of:
+\begin{itemize}
+  \item[\bf Input:]
+ A set of $\Gva$-vars or $\Ava$-vars.
+
+ \item[\bf Body:]
+New variables can be defined using the following rules:
 \begin{enumerate}
   \item[\MatMul] $\Ava(n_1, n_2) \times \Hva(n_2) \to \Gva(n_1)$. Multiply an
     an i.i.d. Gaussian matrix times an i.i.d. vector, which becomes a Gaussian
@@ -49,26 +66,133 @@ New variables defined using the following rules:
   \item[\LinComb] Given constants $\alpha_1,\dots,\alpha_K$, and $\Gva$-vars
     $x_1,\dots,x_K : \Gva(n_1)$, their linear combination $\sum_{k=1}^K \alpha_k
     x_k$ is a $\Gva$-var.
-  \item[\NonLin] applying an elementwise nonlinear function $\phi$, we map
-    $\Gva(n) \to \Hva(n)$.
+  \item[\Nonlin] applying an elementwise nonlinear function $\phi : \Reals^k \to
+    \Reals$, we map
+    several $\Gva$-vars to one $\Hva$-var. 
 \end{enumerate}
 
-\paragraph{Output} A tuple of scalars $(v_1^\tp y_1/\sqrt{n_1}, \;\dots, \; v_K^\tp
-y_K/\sqrt{n_K})$. Each each $v_k : \Gva(n_k)$ is an input $\Gva$-var \emph{not
-used outside of the output tuple}, and each $y_k : \Hva(n_k)$ is some
-$\Hva$-var.
-
-\subsection{The \Netsor master theorem}
-\begin{definition}
-
+\item[\bf Output:]
+A tuple of scalars $(v^\tp x_1/\sqrt{n_1}, \;\dots, \; v^\tp
+x_K/\sqrt{n_K})$. The variable $v : \Gva(n)$ is an input $\Gva$-var not used
+elsewhere in the program. Each $x_k : \Hva(n_k)$ is an $\Hva$-var.
+\end{itemize}
 \end{definition}
 
+\subsection{The output of a \Netsor program converges to a Gaussian process}
+\begin{definition}[Controlled function]
+  A function $\phi: \Reals^k \to \Reals$ is \emph{controlled} if
+  \[ \abs{\phi(\vx)} \le C\, \text{exp} \bra{\bracket{\|}{\|}{\vx}_2^\bra{2-\epsilon}}
+    + c \]
+  for 
+  $C,c,\epsilon > 0$, where $\|\cdot\|_2$ is the L2 norm.\end{definition}
+
+Intuitively, this means that the function $\phi$ grows
+more slowly than the rate at which the tail of a Gaussian decays. Recall that the tail of a
+mean zero, identity covariance Gaussian decays as 
+$\mathcal{N}\bra{\vx \vbar {\boldsymbol{0}}, \eye} \propto \exp\bra{-\bracket{\|}{\|}{\vx}_2^2}$.
+
+\begin{assumption}
+  All nonlinear functions $\phi(\cdot)$ in the \Netsor program are controlled.
+\end{assumption}
+
+\begin{assumption}[Distribution of $\Ava$-var inputs]
+  Each element $W_{\prevchan,\chan} \in A^i(n, n)$ in each input $\Ava$-var is
+  sampled from the zero-mean, i.i.d. Gaussian $\NormDist{0,
+    \sigma_\text{w}^2/n}.$
+  \label{ass:avar-inputs}
+\end{assumption}
+\begin{assumption}[Distribution of $\Gva$-var inputs]
+  For each channel $\chan \in [n]$ the vector $[x_c : x\text{ is input
+  }\Gva\text{-var}]$ is drawn from a Gaussian with mean $\mu^\text{in}$ and
+  covariance $\Sigma^\text{in}$. The covariance $\Sigma^\text{in}$ may be
+  singular. The $\Gva$-var that corresponds to the output is sampled
+  independently from all other $\Gva$-vars.
+  \label{ass:gvar-inputs}
+\end{assumption}
+
+\citet{yang2019wide} goes on to prove the \Netsor master theorem, from which
+the corollary of interest follows.
+
+\begin{corollary}[Corollary~5.5, abridged, \cite{yang2019wide}]
+  Fix a \Netsor program with controlled nonlinearities, and draw its inputs
+  according to assumptions \ref{ass:avar-inputs} and \ref{ass:gvar-inputs}. For simplicity, fix
+  the widths of all the variables to $n$. The program outputs are $(v^\tp x_1/\sqrt{n}, \;\dots, \; v^\tp
+  x_K/\sqrt{n})$, where
+  each $x_k$ is an $\Hva$-var, and
+    $v$ is a $\Gva$-var independent from all others with variance $\sigma^2_\text{v}$.
+  Then, as $n \to \infty$, the output tuple
+  converges in distribution to a Gaussian $\NormDist{{\boldsymbol{0}}, \vK}$.
+  \label{corollary:netsor-gp}
+\end{corollary}
+
+The covariance $\vK$ can be calculated recursively using the rules given by
+\citet{yang2019wide}. Informally, they consist of recursively calculating the covariances
+of the
+program's $\Gva$-vars, assuming at every step that the $\Gva$-vars are $n$-wise
+i.i.d. and Gaussian. This is the approach we employ in \cref{sec:correlated-weights}.
+
+\subsection{Description in \Netsor of a CNN with correlations in the weights\label{sec:netsor-program}}
+The canonical way to represent
+convolutional filters in \Netsor \citep[\Netsor program 4]{yang2019wide} is to
+use one $\Ava$-var for every spatial location
+of the weights. That is, if our convolutional patches have size $\patchw{\ell} \times \patchh{\ell}$,
+we define the input $\layerW{\ell}_\patchidx: \Ava(\layerC{\ell+1}, \layerC{\ell})$ for
+all $\patchidx \in [\patchsize{\ell}]$. But $\Ava$-vars have to be independent
+of each other, so how can we add correlation in the weights? We apply the
+correlation separately, using a \LinComb{} operation. For this, we will use the
+following well-known lemma.
+\begin{lemma}
+  Fix $\vSigma$, a positive semi-definite (PSD) covariance matrix. Let $u_1,\dots,u_K \sim
+  \NormDist{0, 1}$ be a collection of i.i.d. Gaussian random variables. Let
+  $\vL$ be a lower-triangular matrix such that $\vL\vL^\tp = \vSigma$, which
+  always exists if $\vSigma$ is PSD. Let $w_i \eqdef \sum_{k=1}^iL_{ik}u_k$ for
+  $i \in [K]$, equivalently
+  $\vw = \vL\vu$. Then $\vw \sim \Normal{{\boldsymbol{0}}, \vSigma}$.
+  \label{lemma:L}
+\end{lemma}
+\begin{proof}
+  $\{w_i\}$ are Gaussian because they are a linear transformation of $\{u_k\}$.
+  Calculate their moments to see they are distributed as stated.
+\end{proof}
 
 
 
-}  % End command scope
+{  % program commands scope
+  \newcommand{\Input}[1]{\State{\textbf{Input} #1}}
+  \newcommand{\Output}[1]{\State{\textbf{Output} #1}}
+  \newcommand{\CommentC}[1]{\State{\textit{// #1}}}
+  \newcommand{\layerBs}[1]{B^{(#1)}}
+\begin{algorithm}
+  \caption{\Netsor description of the CNN in \cref{fig:fancy-cnn} with
+    correlated weights}
+\begin{algorithmic}
+  \CommentC{Program for $M$ training + test points, $\vX_1,\dots,\vX_M$.}
+  \Input{$\layerAs{1}_{\patch}\bra{\vX_m} : \Gva(\layerC{1})$ for $\patch \in
+    \sqb{\layersize{1}}$ and $m \in [M]$. First layer activations for all inputs}
+  \Input{$\layerW{\ell}_{\patchidx} : \Ava\bra{\layerC{\ell}, \layerC{\ell+1}}$
+    for $\patchidx \in [patchsize]$ and $\ell \in \{1, 2, 3\}$}
+
+  \CommentC{Construct the second layer's independent activations}
+  \For{$m \in [M]$, $\mu \in \sqb{\layersize{1}}$, $\patchidx \in \sqb{\patchsize{1}}$}
+    \State{\MatMul: $\layerBs{2}_\patchidx(\vX_m) \eqdef
+      \layerW{1}_{\patchidx}\layerAs{1}_\mu(\vX_m) : \Gva(\layerC{2})$}
+  \EndFor
+
+  \CommentC{Correlate the activations according to $\priorWcov{2}$}
+  \For{$m \in [M]$, $\mu \in \sqb{\layersize{1}}$, $\patchidx \in \sqb{\patchsize{1}}$}
+  \State{\MatMul: $\layerBs{2}_\patchidx(\vX_m) \eqdef
+    \layerW{1}_{\patchidx}\layerAs{1}_\mu(\vX_m) : \Gva(\layerC{2})$}
+  \EndFor
+\end{algorithmic}
+\end{algorithm}
+} % End program scope
 
 
+\begin{lemma}[CNN with correlations in the weights converges to a GP]
+\label{lemma:correlated-weights-nn}
+\end{lemma}
+
+}% End command scope
 
 
 %%% Local Variables:
