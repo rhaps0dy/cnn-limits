@@ -47,6 +47,7 @@
 % }
 % \usepackage{booktabs}
 \usepackage{cancel}
+\usepackage{import}  % Inkscape figures
 
 \usepackage[colorinlistoftodos]{todonotes}
 \newcommand{\markcomment}[1]{\todo[color=green]{#1}\xspace}
@@ -71,11 +72,6 @@
 \newcommand{\patchfun}[1]{{#1}\text{th patch}}
 \newcommand{\vecfun}{\text{vec}\bra}
 \newcommand{\simiid}{\overset{i.i.d.}{\sim}}
-
-
-
-
-
 
 
 
@@ -266,7 +262,14 @@ There are various parallel lines of work that are relevant here. The first conne
 
 As a summary: $N$-dimensional convolutions in weight space correspond to $2N$-dimensional convolutions in kernel space.
 
-\adriacomment{Need to argue that the infinite limit still follows the CLT!}
+\begin{figure}
+  % Width: 397.9pt
+  \centering
+  % \def\svgwidth{\textwidth}
+  \import{fig/}{net_diagram.pdf_tex}
+  \caption{A convolutional neural network. Indices $i,j,\mu,\nu$
+    are depicted as used in expressions that focus on layer 1.}
+\end{figure}
 
 In this section we derive the kernel corresponding to an infinitely wide convolutional neural network (CNN) with correlated weights. Our analysis applies to all numbers of dimensions of convolutions, and more generally all settings where "groups" of weights would be applied to different inputs \adriacomment{make precise using Greg Yang's stuff}.
 
