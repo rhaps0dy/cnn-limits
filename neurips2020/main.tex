@@ -215,16 +215,35 @@ In the kernel and Gaussian process community, kernels with convolutional structu
 To begin, we will analyse the infinite limit of a single hidden layer convolutional neural network. We first show how spatial correlations disappear when using infinite weights \citet{garriga2018infiniteconv,novak2019infiniteconv}, and how mean pooling reintroduces them \citet{novak2019infiniteconv}. This leads to kernels with the same structure as \Citet{vdw2017convgp}. Next, we show how spatial correlations can be recovered by adding weight correlations instead of making the discrete architectural modification of adding mean pooling. This leads to the 
 ``Translation Insensitive Convolutional Kernel'' (TICK) considered by \citet{dutordoir2020}. In the next section, we will generalise this to deep convolutional networks.
 
-A single-layer Convolutional Neural Network (CNN) takes in an image input $\vX \in \Reals^{C^0\times P^0 \times Q^0}$ with width $P^0$, height $Q^0$, and $C^0$ channels (e.g.~one per colour). The image is divided up into patches of size $C^0\times\!p^1\times\!q^1$ with zero padding at the edges giving a total of $P^0Q^0$. Weights are applied by taking an inner product with all patches, which we do $C^1$ times to give multiple channels in the next layer. We collect all weights in the matrix $\vW^1\in\Reals^{C^1\times C^0\times p^1\times q^1}$. We obtain the activations after applying an element-wise non-linearity:
+\newcommand{\layerC}[1]{C^{(#1)}}
+\newcommand{\layerw}[1]{P^{(#1)}}
+\newcommand{\layerh}[1]{Q^{(#1)}}
+\newcommand{\layersize}[1]{\layerw{#1}\layerh{#1}}
+\newcommand{\patchw}[1]{p^{(#1)}}
+\newcommand{\patchh}[1]{q^{(#1)}}
+\newcommand{\W}[1]{\vW}
+\newcommand{\layerWs}[1]{W^{(#1)}}
+\newcommand{\layerW}[1]{\vW^{(#1)}}
+\newcommand{\priorWcov}[1]{\boldsymbol{\Sigma}^{(#1)}}
+\newcommand{\layerAs}[1]{A^{(#1)}}
+\newcommand{\layerNLAs}[1]{Z^{(#1)}}
+A single-layer Convolutional Neural Network (CNN) takes in an image input $\vX \in \Reals^{\layerC{0}\times \layersize{0}}$ with width $\layerw{0}$, height $\layerh{0}$, and $\layerC{0}$ channels (e.g.~one per colour). The image is divided up into $\layersize{0}$ patches of size $\layerC{0}\times\!\patchw{1}\times\!\patchh{1}$ with zero padding at the edges. Weights are applied by taking an inner product with all patches, which we do $\layerC{1}$ times to give multiple channels in the next layer. By collecting all weights in the matrix $\layerW{1}\in\Reals^{\layerC1\times \layerC0\times \patchw1\patchh1}$ we can denote the computation of the pre- and post-non-linearity activations as
 \begin{align}
-    A_{cpq} = \phi\Big(\sum_{\gamma pq} X_{cpq} W^1_{c\gamma pq}\Big) \,.
+    \layerAs1_{cp} = \sum_{\gamma p} X_{\gamma p} \layerWs1_{c\gamma p} \,, && \layerNLAs1_{cp} = \phi\big(\layerAs1_{cp}\big)\,.
 \end{align}
-In a single-layer CNN, these activations are directly followed by a fully-connected layer with weights $\vW^2 \in \Reals^{C^1\times P^0\times Q^0}$. Our final output is again given by a summation reduction over the activations:
+In a single-layer CNN, these activations are followed by a fully-connected layer with weights $\layerW{2} \in \Reals^{\layerC 1\times \layerw0\layerh0}$. Our final output is again given by a summation reduction over the activations:
 \begin{align}
-    f(\vX) = \sum_{cpq} A_{cpq} W^{(2)}_{cpq} \,.
+    f(\vX) = \sum_{cp} \phi\big(\layerAs1_{cp}\big) W^{(2)}_{cp} = \sum_{cp} \layerNLAs1_{cp}\layerWs2_{cp} \,.
 \end{align}
 
-As in \citet{garriga2018infiniteconv,novak2019infiniteconv}, our goal is to analyse the distribution on function outputs $f(\vX)$ for some prior on the weights $p(\vW)$, where $\vW$ is the collection of the weights at all layers.
+As in \citet{garriga2018infiniteconv,novak2019infiniteconv}, our goal is to analyse the distribution on function outputs $f(\vX)$ for some Gaussian prior on the weights $p(\vW)$, where $\vW$ is the collection of the weights at all layers. For all cases that we analyse, the prior is constrained to be independent over layers channels:
+\begin{align}
+    p(\layerW1) = \prod_{c'=0}^{\layerC0}\prod_{c=1}^{\layerC1}\NormDist{\layerW1_{[cc':]}; 0, \frac{1}{\layerC0}\priorWcov1} \,,
+    && p(\layerW2) = \prod_{c=1}^{\layerC1} \NormDist{\layerW2_{c:}; 0, \frac{1}{\layerC1}\priorWcov2} \,.
+\end{align}
+Since $\layerAs1_{cp}$ and $\layerWs2_{cp}$ are both independent over $c$, $f(X)$ is a s
+
+Since $f(X)$ is a sum of 
 
 \subsection{Notes}
 
