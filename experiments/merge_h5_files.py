@@ -9,6 +9,7 @@ if len(sys.argv) < 3:
     sys.exit(1)
 
 _, dest_file, *src_files = sys.argv
+print(f"copying {dest_file} <- {src_files}")
 
 with h5py.File(dest_file, "a") as dest_f:
     for path in tqdm(src_files):

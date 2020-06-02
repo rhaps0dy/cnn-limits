@@ -245,8 +245,9 @@ def class_balanced_train_idx(train_set, N_train, forbidden_indices=None):
 @ingredient.capture
 def load_sorted_dataset(sorted_dataset_path, N_train, N_test, ZCA_transform, test_is_validation, ZCA_bias, dataset_treatment, _run, train_idx_path):
     train_set, test_set = load_dataset()
-
-    if dataset_treatment == "unsorted":
+    if dataset_treatment == "no_treatment":
+        return train_set, test_set
+    elif dataset_treatment == "unsorted":
         return load_unsorted_dataset()
     elif dataset_treatment in ["sorted", "sorted_legacy"]:
         with _run.open_resource(os.path.join(sorted_dataset_path, "train.pkl"), "rb") as f:

@@ -103,7 +103,9 @@
 \newcommand{\floor}{\bracket{\lfloor}{\rfloor}}
 \DeclareMathOperator*{\ExpOperator}{\ExpSymb}
 
-\newcommand{\ssup}[1]{^{#1}}
+\newcommand{\ssup}[1]{^{\bra{#1}}}
+\usepackage{dsfont}
+\newcommand{\indicator}[1]{{\mathds{1}}\left[#1\right]}
 
 
 
@@ -418,12 +420,29 @@ This was inspired by TICK
 Representation as sum of diagonals
 
 \section{Experiments}
-Here we seek to answer the question:
- Can we improve the accuracy of Bayesian classifiers by adding more sophisticated correlation structures in the prior?
-\begin{itemize}
-    \item For the last layer, as almost everyone until now has done?
-    \item For intermediate layers?
-\end{itemize}
+We seek to test two hypotheses. 1) Can we eliminate architectural choices, and
+recover their effect using continuous hyperparameters instead? 
+2) In the additional search space we have uncovered, can we find a kernel that
+performs better than the existing ones, or is the optimum to be found at one of
+the existing points? \adriacomment{reword}
+
+\paragraph{Experiment setup} We evaluate these models on CIFAR-10. Following
+standard practice in the wide network literature, we reframe classification as
+regression to one-hot targets $t_{nk} = \indicator{y_n = k} - 0.1$. The test
+predictions are $\vK_{x*x}\bra{\sigma^2\eye + \vK_{xx}}^{-1}\vY$, where
+$\sigma^2$ is the variance of the observation noise of the Gaussian process
+regression. It is common practice in the GP community to invert
+$\bra{\sigma^2\eye + \vK_{xx}}$ using the Cholesky decomposition and a
+triangular solve. Contrary to this, we use the eigendecomposition of $\vK_{xx}$
+to quickly search over 1000 values of $\sigma^2$, from
+$\text{exp}\bra{\text{max}(-\lambda_1, -36)}$ in a log-scale $e^5$, using cross-validation.
+
+
+
+\paragraph{Correlated weights in the last layer.} The 
+
+
+We use plain convolutional networks in the 
 
 We investigate how the effect above varies with data set size.
 

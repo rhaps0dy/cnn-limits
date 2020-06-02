@@ -68,7 +68,6 @@ def patch_kernel_fn(kernel_fn, strides, W_cov):
     def _patch_kernel_fn(z1, start_idx1, mask1, z2, start_idx2, mask2, get='nngp'):
         var1 = _get_variance(z1, marginal, 0, -1)
         var2 = _get_variance(z2, marginal, 0, -1)
-        assert get=='nngp' or get=='ntk'
 
         cross_mask = (mask1[:, None, :, None] *
                       mask2[None, :, None, :])
@@ -101,34 +100,37 @@ def patch_kernel_fn(kernel_fn, strides, W_cov):
         nngp = np.einsum("bahwc,abhwc->abhw", z1_sliced, z2_sliced)
         nngp /= z1.shape[-1]
 
-        ntk = (0. if get=='ntk' else None)
+        ntk = (0. if 'ntk' in get else None)
 
         inputs = Kernel(
             var1, nngp, var2, ntk, is_gaussian, is_height_width, marginal,
             cross, z1.shape, z2.shape, x1_is_x2, is_input,
             (ij_1, ij_2), cross_mask)
-        outputs = kernel_fn(inputs, get=(get, 'is_height_width'))
-        nngp = getattr(outputs, get)
-
-        if W_cov_diagonals is None:
-            nngp *= outputs.var_mask
-            _, _, H, W = nngp.shape
-            nngp = nngp.sum((2, 3)) * (1/(H*H*W*W))
+        outputs = kernel_fn(inputs)
+        if outputs.ntk is not None:
+            nngp = np.stack([outputs.nngp, outputs.ntk], axis=0)
         else:
-            assert sz1 == sz2, "not implemented"
-            _out_ij_1, _out_ij_2 = outputs.var_start_idx
-            idx = np.transpose(_out_ij_1[:, :, 1:], (1, 0, 2)) - _out_ij_2[:, :, 1:] + (sz1-1)
+            nngp = np.expand_dims(outputs.nngp, 0)
 
-            W = np.squeeze(lax.gather(
-                W_cov_diagonals, idx, lax.GatherDimensionNumbers(
-                    offset_dims=(2, 3, 4, 5),
-                    collapsed_slice_dims=(),
-                    start_index_map=(0, 1)),
-                slice_sizes=(1, 1, *W_cov_diagonals.shape[2:])), axis=(2, 3))
 
-            W_idx = ('ji' if outputs.is_height_width else 'ij')
-            nngp = np.einsum(f"abij,ab{W_idx}->ab", nngp, W)
-        return nngp
+        meanpool_nngp = nngp * outputs.var_mask
+        _, _, _, H, W = nngp.shape
+        meanpool_nngp = meanpool_nngp.sum((-2, -1)) * (1/(H*H*W*W))
+
+        assert sz1 == sz2, "not implemented"
+        _out_ij_1, _out_ij_2 = outputs.var_start_idx
+        idx = np.transpose(_out_ij_1[:, :, 1:], (1, 0, 2)) - _out_ij_2[:, :, 1:] + (sz1-1)
+
+        W = np.squeeze(lax.gather(
+            W_cov_diagonals, idx, lax.GatherDimensionNumbers(
+                offset_dims=(2, 3, 4, 5),
+                collapsed_slice_dims=(),
+                start_index_map=(0, 1)),
+            slice_sizes=(1, 1, *W_cov_diagonals.shape[2:])), axis=(2, 3))
+
+        W_idx = ('ji' if outputs.is_height_width else 'ij')
+        W_nngp = np.einsum(f"cabij,ab{W_idx}->cab", nngp, W)
+        return np.concatenate([meanpool_nngp, W_nngp], 0)
     return _patch_kernel_fn, sum_of_covs
 
 

@@ -29,7 +29,7 @@ from experiments.predict_cv_acc import (dataset_targets, centered_one_hot,
                                         EigenOut, eigdecompose, accuracy_eig, fold_idx)
 from experiments.predict_cv_acc import experiment as predict_cv_acc_experiment
 from cnn_limits.sparse import patch_kernel_fn, patch_kernel_fn_torch
-from nigp.tbx import PrintTimings
+from cnn_limits.tbx import PrintTimings
 
 faulthandler.enable()
 

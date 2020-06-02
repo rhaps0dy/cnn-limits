@@ -4,6 +4,8 @@ import contextlib
 import faulthandler
 import itertools
 import math
+import sys
+import signal
 import os
 import pickle
 from pathlib import Path
@@ -31,7 +33,7 @@ from experiments.predict_cv_acc import experiment as predict_cv_acc_experiment
 import experiments.sparse_classify
 from cnn_limits.sparse import patch_kernel_fn, patch_kernel_fn_torch, InducingPatches, mask_and_start_idx
 import gpytorch
-from nigp.tbx import PrintTimings
+from cnn_limits.tbx import PrintTimings
 
 faulthandler.enable()
 
@@ -42,39 +44,42 @@ if __name__ == '__main__':
 @experiment.config
 def config():
     batch_size = 1000
-    print_interval = 2.
+    print_interval = 5.
     model = "CNTK_nopool"
     stride = 1
-    model_args = dict()
-    N_inducing = 4096
-    lengthscale = None
-    inducing_strat = "random"
+    model_args = dict(depth=14)
+    N_inducing = 15000
+    lengthscale = 10.
+    inducing_strat = "conditional_variance"
     sample_in_init = False
-    inducing_training_multiple = 3
-    ntk=False
+    inducing_training_multiple = 5
+    inducing_start=0
+    inducing_end=10000
+    do_only_inducing=True
+
 
 do_one_N_chol = experiments.sparse_classify.do_one_N_chol
 
 
 @experiment.capture
-def interdomain_kernel(img_w, model, model_args, stride, lengthscale, ntk):
+def interdomain_kernel(img_w, model, model_args, stride, lengthscale):
     no_pool = getattr(cnn_limits.models, model)(channels=1, **model_args)
 
     if lengthscale is None:
         pool_W_cov = None
-        pool = stax.GlobalAvgPool()
     else:
         gpytorch_kern = gpytorch.kernels.MaternKernel(nu=3/2)
         gpytorch_kern.lengthscale = lengthscale
 
         pool_W_cov = covariance_tensor(32//stride, 32//stride, gpytorch_kern)
-        pool = CorrelatedConv(1, (32//stride, 32//stride), (1, 1), padding='VALID',
-                              W_cov_tensor=pool_W_cov)
+        # pool = CorrelatedConv(1, (32//stride, 32//stride), (1, 1), padding='VALID',
+        #                       W_cov_tensor=pool_W_cov)
+    pool = stax.GlobalAvgPool()
 
     _, _, _pool_kernel_fn = stax.serial(no_pool, pool, stax.Flatten())
     _, _, _no_pool_kfn = no_pool
     _kern_zz_fn, sum_of_covs = patch_kernel_fn(_no_pool_kfn, (stride, stride), W_cov=pool_W_cov)
-    get = ('ntk' if ntk else 'nngp')
+    get = ('nngp', 'ntk')
     def kern_zz_fn(z1, start_idx1, mask1, z2, start_idx2, mask2):
         return _kern_zz_fn(z1, start_idx1, mask1, z2, start_idx2, mask2, get=get)
 
@@ -86,7 +91,8 @@ def interdomain_kernel(img_w, model, model_args, stride, lengthscale, ntk):
                 sum_of_covs[i, j] = (32//stride - abs(i-offset))*(32//stride - abs(j-offset))
 
     def kern_x_fn(x1, x2):
-        return _pool_kernel_fn(x1, x2=x2, get=get)
+        out = _pool_kernel_fn(x1, x2=x2, get=get)
+        return jnp.stack([out.nngp, out.ntk], 0)
 
     _, _, all_start_idx, all_mask = mask_and_start_idx(
         stride, img_w, range(-(img_w//stride)+1, (img_w//stride)), None, None)
@@ -124,16 +130,16 @@ def test_kernels(stride):
 
     Kzx = kern_zx_fn(Z, all_start_idx[rand_i1], all_mask[rand_i1], X2)
     print("zx")
-    print(jnp.sum(Kzx, 0))
+    print(jnp.sum(Kzx, -2))
 
     Z2 = jnp.tile(X2, (len(all_start_idx), 1, 1, 1))
     Kzz = kern_zz_fn(Z, all_start_idx[rand_i1], all_mask[rand_i1], Z2, all_start_idx[rand_i2], all_mask[rand_i2])
     print("zz")
-    print(jnp.sum(Kzz, (0, 1)))
+    print(jnp.sum(Kzz, (-2, -1)))
 
 
 @experiment.capture
-def _conditional_variance_initialisation(inducing, inducing_training_set, kern_zz_fn, N_inducing, sample_in_init, batch_size, inducing_training_multiple, _log):
+def _conditional_variance_initialisation(inducing, inducing_training_set, kern_zz_fn, N_inducing, sample_in_init, batch_size, inducing_training_multiple, _log, timings=None):
     """
     Reference: TODO add several references,
     TODO: IF M ==1 this throws errors, currently throws an assertion error, but should fix
@@ -153,10 +159,9 @@ def _conditional_variance_initialisation(inducing, inducing_training_set, kern_z
 
     perm = np.random.permutation(N)  # permute entries so tiebreaking is random
 
-    training_inputs = inducing_training_set.Z[perm]
-    start_idx = inducing_training_set.start_idx[perm]
-    mask = inducing_training_set.mask[perm]
-
+    training_inputs = jnp.asarray(inducing_training_set.Z[perm])
+    start_idx = jnp.asarray(inducing_training_set.start_idx[perm])
+    mask = jnp.asarray(inducing_training_set.mask[perm])
 
     # note this will throw an out of bounds exception if we do not update each entry
     indices = np.zeros(M, dtype=int) + N
@@ -187,6 +192,8 @@ def _conditional_variance_initialisation(inducing, inducing_training_set, kern_z
         for b_slice in batch_slices(N, 5*batch_size):
             L[b_slice] = np.squeeze(kern_zz_fn(
                 training_inputs[b_slice], start_idx[b_slice], mask[b_slice], new_Z, new_start_idx, new_mask), axis=1)
+            if timings is not None:
+                next(timings)
         ei = (L - np.dot(cj, ci[:m])) / dj
         ci[m, :] = ei
         di -= ei ** 2
@@ -238,6 +245,86 @@ def batch_slices(N, batch_size):
         range(0, N, batch_size),
         itertools.count(start=batch_size, step=batch_size)))
 
+@experiment.command
+def select_inducing_points(N_inducing, batch_size, print_interval, stride, _log, inducing_strat, inducing_training_multiple):
+    train_set, test_set = SU.load_sorted_dataset()
+    img_c, img_h, img_w = train_set[0][0].shape
+    (kern_zz_fn, kern_zx_fn, _), sum_of_covs = interdomain_kernel(img_w)
+
+    inducing_i = draw_patch_i(N_inducing, sum_of_covs)
+    inducing_Z = np.random.permutation(50000)[:N_inducing]
+    print(inducing_i, inducing_Z)
+    pd.to_pickle((inducing_i, inducing_Z), SU.base_dir()/"inducing_indices.pkl.gz")
+
+@experiment.command
+def save_inducing_points(N_inducing, batch_size, print_interval, stride, _log, inducing_strat, inducing_training_multiple, do_only_inducing, inducing_start, inducing_end):
+    train_set, test_set = SU.load_sorted_dataset()
+    img_c, img_h, img_w = train_set[0][0].shape
+    (kern_zz_fn, kern_zx_fn, _), sum_of_covs = interdomain_kernel(img_w)
+
+    train_x = np.concatenate([
+        _train_x.transpose(1, -1).to(torch.float32).numpy()
+        for (_train_x, _) in DataLoader(train_set, batch_size=batch_size, shuffle=False)], 0)
+
+    test_x = np.concatenate([
+        _test_x.transpose(1, -1).to(torch.float32).numpy()
+        for (_test_x, _) in DataLoader(test_set, batch_size=batch_size, shuffle=False)], 0)
+
+    inducing_i, inducing_Z = pd.read_pickle("/homes/ag919/Programacio/cnn-limits/for_all_inducing_indices.pkl.gz")
+
+    inducing = InducingPatches(
+        train_x[inducing_Z],
+        # np.zeros((N_inducing, img_h, img_w, img_c), np.float32), # 50 MB
+        list(map(int, inducing_i)),
+        *mask_and_start_idx(stride, img_h, inducing_i, None, None)[2:])
+    assert inducing.Z.shape == (N_inducing, img_h, img_w, img_c)
+
+    timings_obj = PrintTimings(
+        desc="sparse_classify",
+        print_interval=print_interval)
+
+    with h5py.File(SU.base_dir()/"kernels.h5", "w") as h5_file:
+        if do_only_inducing:
+            h5_file.create_dataset("Kuu", shape=(4, N_inducing, N_inducing), dtype=np.float64,
+                                fillvalue=np.nan, chunks=(1, 128, 128),
+                                maxshape=(None, N_inducing, N_inducing))
+            timings = timings_obj(
+                itertools.count(),
+                (N_inducing//batch_size)**2)
+            print("DOING ONLY INDUCING")
+            for b_slice_x in batch_slices(N_inducing, batch_size):
+                for b_slice_y in batch_slices(b_slice_x.stop, batch_size):
+                    h5_file["Kuu"][:, b_slice_x, b_slice_y] = kern_zz_fn(
+                    inducing.Z[b_slice_x], inducing.start_idx[b_slice_x],
+                    inducing.mask[b_slice_x],
+                    inducing.Z[b_slice_y], inducing.start_idx[b_slice_y],
+                    inducing.mask[b_slice_y])
+                    next(timings)
+        else:
+            h5_file.create_dataset("Kux", shape=(4, N_inducing, len(train_set)), dtype=np.float64,
+                                   fillvalue=np.nan, chunks=(1, 1, len(train_set)),
+                                   maxshape=(None, N_inducing, len(train_set)))
+            h5_file.create_dataset("Kut", shape=(4, N_inducing, len(test_set)), dtype=np.float64,
+                                   fillvalue=np.nan, chunks=(1, 1, len(test_set)),
+                                   maxshape=(None, N_inducing, len(test_set)))
+            timings = timings_obj(
+                itertools.count(),
+                ((inducing_end-inducing_start)*(len(train_set) + len(test_set))//batch_size))
+
+            for i in range(inducing_start, inducing_end):
+                current_Z = slice(i, i+1)
+
+                for b_slice in batch_slices(len(train_set), batch_size):
+                    h5_file["Kux"][:, current_Z, b_slice] = kern_zx_fn(
+                        inducing.Z[current_Z], inducing.start_idx[current_Z],
+                        inducing.mask[current_Z], train_x[b_slice])
+                    next(timings)
+                for b_slice in batch_slices(len(test_set), batch_size):
+                    h5_file["Kut"][:, current_Z, b_slice] = kern_zx_fn(
+                        inducing.Z[current_Z], inducing.start_idx[current_Z],
+                        inducing.mask[current_Z], test_x[b_slice])
+                    next(timings)
+
 
 @experiment.automain
 def main(N_inducing, batch_size, print_interval, stride, _log, inducing_strat, inducing_training_multiple):
@@ -272,6 +359,12 @@ def main(N_inducing, batch_size, print_interval, stride, _log, inducing_strat, i
 
     data_series = pd.Series()
     accuracy_series = pd.Series()
+
+    signalling = {'SIGHUP': False}
+    def sighup_signal_handler(sig, frame):
+        _log.info("Received SIGHUP")
+        signalling['SIGHUP'] = True
+    signal.signal(signal.SIGHUP, sighup_signal_handler)
 
     train_x = np.concatenate([
         _train_x.transpose(1, -1).to(torch.float32).numpy()
@@ -344,7 +437,8 @@ def main(N_inducing, batch_size, print_interval, stride, _log, inducing_strat, i
             h5_file["Kut"][0, step, :] = Kut[step, :]
 
 
-            if step+1 == milestone or step+1 == N_inducing:
+            if step+1 == milestone or step+1 == N_inducing or signalling['SIGHUP']:
+                signalling['SIGHUP'] = False
                 milestone = min(milestone*2, milestone+512)
                 _log.info(f"Performing classification (n. inducing #{step+1})")
                 _Kuu = Kuu[:len(inducing.i), :len(inducing.i)]
