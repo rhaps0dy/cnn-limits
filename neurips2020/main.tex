@@ -82,6 +82,7 @@
 \newcommand{\vZ}{\mathbf{Z}}
 \newcommand{\vA}{\mathbf{A}}
 \newcommand{\vK}{\mathbf{K}}
+\newcommand{\vY}{\mathbf{Y}}
 \newcommand{\vL}{\mathbf{L}}
 \newcommand{\vSigma}{\boldsymbol{\Sigma}}
 \newcommand{\eye}{\mathbf{I}}
@@ -436,6 +437,11 @@ $\bra{\sigma^2\eye + \vK_{xx}}$ using the Cholesky decomposition and a
 triangular solve. Contrary to this, we use the eigendecomposition of $\vK_{xx}$
 to quickly search over 1000 values of $\sigma^2$, from
 $\text{exp}\bra{\text{max}(-\lambda_1, -36)}$ in a log-scale $e^5$, using cross-validation.
+
+\begin{figure}
+    \scalebox{1.0}{\input{fig/cntk14.pgf}}
+  \caption{CNTK14}
+\end{figure}
 
 
 

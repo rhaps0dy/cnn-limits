@@ -306,6 +306,8 @@ def load_sorted_dataset(sorted_dataset_path, N_train, N_test, ZCA_transform, tes
     elif dataset_treatment == "load_train_idx":
         train_idx = np.load(Path(train_idx_path)/"train_idx.npy")
         train_set = Subset(train_set, torch.from_numpy(train_idx))
+        if N_test != len(test_set):
+            test_set = Subset(test_set, range(N_test))
     else:
         raise ValueError(dataset_treatment)
 

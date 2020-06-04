@@ -25,7 +25,7 @@ if __name__ == '__main__':
 
 @experiment.config
 def config():
-    batch_size = 10
+    batch_size = 5
 
     n_workers = 1
     worker_rank = 0
@@ -35,6 +35,8 @@ def config():
     use_ntk = False
     save_variance = True
     internal_lengthscale = None
+    skip_iterations = 0
+    Kxx_mask_path = None
 
 
 @experiment.capture
@@ -55,8 +57,10 @@ def kern_iterator(f, kern_name, X, X2, diag, batch_size, worker_rank, n_workers)
     return iter(it), out
 
 
-def kern_save(iterate, kernel_fn, out, diag):
+def kern_save(iterate, kernel_fn, out, diag, mask):
     same, (i, (x, _y)), (j, (x2, _y2)) = iterate
+    if mask is not None and not np.any(mask[i:i+x.shape[0], j:j+x2.shape[0]]):
+        return
     k = kernel_fn(x, x2, same, diag)
     s = k.shape
     try:
@@ -66,7 +70,7 @@ def kern_save(iterate, kernel_fn, out, diag):
             out[:s[0], i:i+s[1], j:j+s[2]] = k
     except TypeError:
         out.resize(k.shape[0], axis=0)
-        return kern_save(iterate, kernel_fn, out, diag)
+        return kern_save(iterate, kernel_fn, out, diag, mask)
 
 
 @experiment.command
@@ -122,10 +126,17 @@ def wrong_zca_dataset():
 
 
 @experiment.main
-def main(worker_rank, print_interval, n_workers, save_variance):
+def main(worker_rank, print_interval, n_workers, save_variance, skip_iterations, Kxx_mask_path):
     train_set, test_set = SU.load_sorted_dataset()
     _, _, kernel_fn = jax_model()
     kern = jitted_kernel_fn(kernel_fn)
+    print(f"len(train_set)={len(train_set)}")
+    print(f"len(test_set)={len(test_set)}")
+
+    if Kxx_mask_path is None:
+        Kxx_mask = None
+    else:
+        Kxx_mask = np.load(Kxx_mask_path)
 
     with h5py.File(SU.base_dir()/"kernels.h5", "w") as f:
         timings_obj = PrintTimings(
@@ -136,12 +147,12 @@ def main(worker_rank, print_interval, n_workers, save_variance):
             Kx_diag, Kx_diag_out = kern_iterator(
                 f, kern_name="Kx_diag", X=train_set, X2=None, diag=True)
             for it in timings_obj(Kx_diag):
-                kern_save(it, kern, Kx_diag_out, True)
+                kern_save(it, kern, Kx_diag_out, True, None)
 
             Kt_diag, Kt_diag_out = kern_iterator(
                 f, kern_name="Kt_diag", X=test_set, X2=None, diag=True)
             for it in timings_obj(Kt_diag):
-                kern_save(it, kern, Kt_diag_out, True)
+                kern_save(it, kern, Kt_diag_out, True, None)
 
         Kxx, Kxx_out = kern_iterator(
             f, kern_name="Kxx", X=train_set, X2=None,     diag=False)
@@ -150,16 +161,28 @@ def main(worker_rank, print_interval, n_workers, save_variance):
         timings = timings_obj(itertools.count(), len(Kxx) + len(Kxt))
 
         Kxx_ongoing = Kxt_ongoing = True
+        for _ in range(skip_iterations):
+            # Run iterations without doing any work
+            try:
+                next(Kxx); next(timings)
+            except StopIteration:
+                Kxx_ongoing = False
+            try:
+                next(Kxt); next(timings)
+                next(Kxt); next(timings)
+            except StopIteration:
+                Kxt_ongoing = False
+
         while Kxx_ongoing or Kxt_ongoing:
             if Kxx_ongoing:
                 try:
-                    kern_save(next(Kxx), kern, Kxx_out, False); next(timings)
+                    kern_save(next(Kxx), kern, Kxx_out, False, Kxx_mask); next(timings)
                 except StopIteration:
                     Kxx_ongoing = False
             if Kxt_ongoing:
                 try:
-                    kern_save(next(Kxt), kern, Kxt_out, False); next(timings)
-                    kern_save(next(Kxt), kern, Kxt_out, False); next(timings)
+                    kern_save(next(Kxt), kern, Kxt_out, False, None); next(timings)
+                    kern_save(next(Kxt), kern, Kxt_out, False, None); next(timings)
                 except StopIteration:
                     Kxt_ongoing = False
 

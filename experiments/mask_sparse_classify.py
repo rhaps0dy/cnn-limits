@@ -56,6 +56,7 @@ def config():
     inducing_start=0
     inducing_end=10000
     do_only_inducing=True
+    inducing_list_path="/homes/ag919/Programacio/cnn-limits/for_all_inducing_indices.pkl.gz"
 
 
 do_one_N_chol = experiments.sparse_classify.do_one_N_chol
@@ -257,7 +258,7 @@ def select_inducing_points(N_inducing, batch_size, print_interval, stride, _log,
     pd.to_pickle((inducing_i, inducing_Z), SU.base_dir()/"inducing_indices.pkl.gz")
 
 @experiment.command
-def save_inducing_points(N_inducing, batch_size, print_interval, stride, _log, inducing_strat, inducing_training_multiple, do_only_inducing, inducing_start, inducing_end):
+def save_inducing_points(N_inducing, batch_size, print_interval, stride, _log, inducing_strat, inducing_training_multiple, do_only_inducing, inducing_start, inducing_end, inducing_list_path):
     train_set, test_set = SU.load_sorted_dataset()
     img_c, img_h, img_w = train_set[0][0].shape
     (kern_zz_fn, kern_zx_fn, _), sum_of_covs = interdomain_kernel(img_w)
@@ -270,7 +271,7 @@ def save_inducing_points(N_inducing, batch_size, print_interval, stride, _log, i
         _test_x.transpose(1, -1).to(torch.float32).numpy()
         for (_test_x, _) in DataLoader(test_set, batch_size=batch_size, shuffle=False)], 0)
 
-    inducing_i, inducing_Z = pd.read_pickle("/homes/ag919/Programacio/cnn-limits/for_all_inducing_indices.pkl.gz")
+    inducing_i, inducing_Z = pd.read_pickle(inducing_list_path)
 
     inducing = InducingPatches(
         train_x[inducing_Z],
@@ -285,7 +286,7 @@ def save_inducing_points(N_inducing, batch_size, print_interval, stride, _log, i
 
     with h5py.File(SU.base_dir()/"kernels.h5", "w") as h5_file:
         if do_only_inducing:
-            h5_file.create_dataset("Kuu", shape=(4, N_inducing, N_inducing), dtype=np.float64,
+            h5_file.create_dataset("Kuu", shape=(4, N_inducing, N_inducing), dtype=np.float32,
                                 fillvalue=np.nan, chunks=(1, 128, 128),
                                 maxshape=(None, N_inducing, N_inducing))
             timings = timings_obj(
@@ -301,10 +302,10 @@ def save_inducing_points(N_inducing, batch_size, print_interval, stride, _log, i
                     inducing.mask[b_slice_y])
                     next(timings)
         else:
-            h5_file.create_dataset("Kux", shape=(4, N_inducing, len(train_set)), dtype=np.float64,
+            h5_file.create_dataset("Kux", shape=(4, N_inducing, len(train_set)), dtype=np.float32,
                                    fillvalue=np.nan, chunks=(1, 1, len(train_set)),
                                    maxshape=(None, N_inducing, len(train_set)))
-            h5_file.create_dataset("Kut", shape=(4, N_inducing, len(test_set)), dtype=np.float64,
+            h5_file.create_dataset("Kut", shape=(4, N_inducing, len(test_set)), dtype=np.float32,
                                    fillvalue=np.nan, chunks=(1, 1, len(test_set)),
                                    maxshape=(None, N_inducing, len(test_set)))
             timings = timings_obj(
@@ -324,6 +325,36 @@ def save_inducing_points(N_inducing, batch_size, print_interval, stride, _log, i
                         inducing.Z[current_Z], inducing.start_idx[current_Z],
                         inducing.mask[current_Z], test_x[b_slice])
                     next(timings)
+
+
+@experiment.command
+def classify(kernel_matrix_path, _log, i_SU):
+    assert i_SU["dataset_treatment"] == "no_treatment"
+    train_set, test_set = SU.load_sorted_dataset()
+    train_Y = dataset_targets(train_set)
+    oh_train_Y = centered_one_hot(train_Y).astype(np.float64)
+    test_Y = dataset_targets(test_set)
+
+    with h5py.File(kernel_matrix_path, 'r') as f:
+        mask_Kux = ~(np.isnan(f["Kux"][0, ...]).any(-1))
+        mask_Kut = ~(np.isnan(f["Kut"][0, ...]).any(-1))
+        mask = mask_Kux & mask_Kut
+
+        for i in range(f["Kuu"].shape[0]):
+            Kuu = f["Kuu"][i, mask, :][:, mask].astype(np.float64)
+            Kuu_mask = np.triu(np.ones(Kuu.shape, dtype=bool))
+            Kuu[Kuu_mask] = Kuu.T[Kuu_mask]
+            Kux = f["Kux"][i, mask, :].astype(np.float64)
+            Kut = f["Kut"][i, mask, :].astype(np.float64)
+            assert not np.any(np.isnan(Kuu))
+            assert not np.any(np.isnan(Kux))
+            assert not np.any(np.isnan(Kut))
+
+            data, accuracy = do_one_N_chol(Kuu, Kux, Kut, oh_train_Y, test_Y, n_splits=4)
+            (sigy, acc) = map(np.squeeze, accuracy)
+            _log.info(
+                f"For i={i}, N_inducing={Kuu.shape[0]}, sigy={sigy}; accuracy={acc}, cv_accuracy={np.max(data[1])}")
+
 
 
 @experiment.automain
