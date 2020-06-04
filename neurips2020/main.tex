@@ -165,19 +165,13 @@ Infinite width limits of deep neural networks often have tractable forms. They h
 % - Infinite limits are often more tractable
 % - Infinite limits have given understanding, and new methods
 % - However, we lose certain properties
-Neural networks have been enormously successful at learning relationships through minimising some loss on a training set, starting from a random initialisation. While a theoretical explanation of the success of neural networks is still lacking, analysis of the random initialisation has proven to be useful for providing both insight %\citep[e.g.][]{neal1996bayesian,schoenholz2017deepinformationpropagation}
-and practically useful methods.
-%\citep{gpml}.
-% \markcomment{Are there any more papers that we can mention here that analyse random inits?}
-%\citet{neal1996bayesian} analysed the functions implied by randomly initialised neural networks, and noted the correspondence to Gaussian processes in the infinite limit, which led to their widespread adoption \citep{williams1996gpr,gpml}. More recently, similar analyses have shed light on successful initialisations \citep{schoenholz2017deepinformationpropagation}, and training dynamics \citep{jacot2018ntk}.
+Neural networks have been enormously successful at learning relationships through minimising some loss on a training set, starting from a random initialisation. While a full theoretical explanation of the success of neural networks is still lacking, analysis of the random initialisation has proven to be useful for providing both insight and practically useful methods.
 In particular, limits where the width of layers is taken to infinity have been particularly crucial, as these correspond to linear basis function models, which are well-understood mathematically.
-Such a relationship was first noted by \citet{neal1996bayesian} between infinitely wide Bayesian neural networks and Gaussian processes (GPs). The GP representation greatly simplified Bayesian learning, leading to its widespread adoption \citep{williams1996gpr,gpml}.
+\citet{neal1996bayesian} first noted such a relationship, through the correspondence between infinitely wide Bayesian neural networks and Gaussian processes (GPs). The GP representation greatly simplified Bayesian learning, leading to its widespread adoption \citep{williams1996gpr,gpml}.
 
-This success of GPs raised the question of whether a mathematically simple linear model could replace a complex neural network. \citet{mackay1998introgp} noted that in taking the infinite limit, the feature representation had become fixed. Given that learnable features are a key desirable property of neural networks which is lost due to the infinite limit, MacKay inquired: ``have we thrown the baby out with the bath water?'' Recent renewed interest in correspondences for deep networks \citep{matthews2018dnnlimit,lee2018dnnlimit} show that this still is not completely clear.
-% question still has not been fully answered. \adriacomment{edit to make sure "this question" is understood to be "whether NNs correspond to a linear model"}
+The success of GPs raised the question of whether a mathematically simple linear model could replace a complex neural network. \citet{mackay1998introgp} noted that in taking the infinite limit, the feature representation had become fixed. Given that learnable features are a key desirable property of neural networks which is lost due to the infinite limit, MacKay inquired: ``have we thrown the baby out with the bath water?'' Recent renewed interest in GP correspondences for deep networks \citep{matthews2018dnnlimit,lee2018dnnlimit} show that it is still unclear to what degree neural networks exhibit GP behaviour.
 
-In this work we investigate a property that, similarly, is present in finite convolutional neural networks, but which disappears in the infinite limit: correlation from patches in different parts of the image \citep{garriga2018infiniteconv,novak2019infiniteconv}. Given that convolutions were developed to introduce these correlations, it seems undesirable that adding more capacity by increasing the number of filters removes them.
-
+In this work we investigate a property that, similarly to feature learning, is present in finite convolutional neural networks, but which disappears in the infinite limit: correlation from patches in different parts of the image \citep{garriga2018infiniteconv,novak2019infiniteconv}. Given that convolutions were developed to introduce these correlations, it seems undesirable that they are lost when more filters are added.
 Currently, changing the architecture by introducing mean-pooling is the only way
 that these correlations have been reintroduced \citep{novak2019infiniteconv},
 and they have been shown to be important for improving performance
@@ -185,11 +179,9 @@ and they have been shown to be important for improving performance
 maintained in the limit without pooling. Instead, we introduce correlations
 between the weights in the prior. The amount of correlation can be controlled,
 which allows us to interpolate between the existing approaches of full
-independence and mean-pooling\adriacomment{mean-pooling (which is equivalent to complete
-  correlation in the weights)?}. Our approach allows the discrete architectural choice of mean-pooling to be replaced with a more flexible continuous amount of correlation. Empirical evaluation on CIFAR-10 shows that this additional flexibility improves performance.
+independence and mean-pooling. Our approach allows the discrete architectural choice of mean-pooling to be replaced with a more flexible continuous amount of correlation. Empirical evaluation on CIFAR-10 shows that this additional flexibility improves performance.
 
-Our work illustrates that there are choices \adriacomment{about the weight
-  prior} to be made when analysing infinite limits of neural networks, and that good choices can improve performance. The success of this approach in the infinite limit also raises questions about whether correlated weights should be used in finite networks.
+Our work illustrates how choices that are made in the prior affect properties of the limit, and that good choices can improve performance. The success of this approach in the infinite limit also raises questions about whether correlated weights should be used in finite networks.
 
 
 
@@ -222,9 +214,9 @@ Our work illustrates that there are choices \adriacomment{about the weight
 \section{Related work}
 Infinitely wide limits of neural networks are currently an important tool for creating approximations and analyses. Here we provide a background on the different infinite limits that have been developed, together with a brief overview of where they have been applied.
 
-Interest in infinite limits first started with research into properties of Bayesian priors on the weights of neural networks. \citet{neal1996bayesian} noted that prior function draws from neural networks with a single hidden layer and appropriate Gaussian priors on the weights tended towards a Gaussian process as the width tended towards infinity. The simplicity of performing Bayesian inference in Gaussian process models led to their widespread adoption soon after \citep{williams1996gpr,gpml}. Over the years, various choices for weight priors and activation functions have led to different kernels which specify the properties of the GP prior \citep{williams1997inf,cho2009mkm}.
+Interest in infinite limits first started with research into properties of Bayesian priors on the weights of neural networks. \citet{neal1996bayesian} noted that prior function draws from a single hidden layer neural network with appropriate Gaussian priors on the weights tended to a Gaussian process as the width grew to infinity. The simplicity of performing Bayesian inference in Gaussian process models led to their widespread adoption soon after \citep{williams1996gpr,gpml}. Over the years, the wide limits of networks with different weight priors and activation functions have been analysed, leading to various \emph{kernels} which specify the properties of the limiting Gaussian processes \citep{williams1997inf,cho2009mkm}.
 
-With increasing prominence of deep learning, recursive kernels were introduced in an attempt to obtain similar properties. \citet{cho2009mkm,mairal2014ckn} investigated such methods for fully-connected and convolutional architectures respectively. Despite similarities between recursive kernels and neural networks, the derivation did not provide clear relationships, or any equivalence in a limit. \citet{hazan2015} took initial steps to showing the wide limit equivalence of a neural network beyond the single layer case. Recently, \citet{matthews2018dnnlimit,lee2018dnnlimit} simultaneously provided general results for the convergence of the prior of deep fully-connected networks to a GP.\footnote{The derivation of the limiting kernel differs between the two papers, with the results being consistent. \citet{matthews2018dnnlimit} carefully take limits of realisable networks, while \citet{lee2018dnnlimit} take the infinite limit of each layer sequentially.%Follow-on work \citep{matthews2018dnnlimit2,novak2019infiniteconv} further relax technical restrictions.
+With the increasing prominence of deep learning, recursive kernels were introduced in an attempt to obtain similar properties. \citet{cho2009mkm,mairal2014ckn} investigated such methods for fully-connected and convolutional architectures respectively. Despite similarities between recursive kernels and neural networks, the derivation did not provide clear relationships, or any equivalence in a limit. \citet{hazan2015} took initial steps to showing the wide limit equivalence of a neural network beyond the single layer case. Recently, \citet{matthews2018dnnlimit,lee2018dnnlimit} simultaneously provided general results for the convergence of the prior of deep fully-connected networks to a GP.\footnote{The derivation of the limiting kernel differs between the two papers, with the results being consistent. \citet{matthews2018dnnlimit} carefully take limits of realisable networks, while \citet{lee2018dnnlimit} take the infinite limit of each layer sequentially.%Follow-on work \citep{matthews2018dnnlimit2,novak2019infiniteconv} further relax technical restrictions.
 } 
 A different class of limiting kernels, the Neural Tangent Kernel (NTK), originated from analysis of the function implied by a neural network during optimisation \citep{jacot2018ntk}, rather than the prior implied by the weight initialisation. Just like the Bayesian prior limit, this kernel sheds light on certain properties of neural networks, as well as providing a method with predictive capabilities of its own. 
 The two approaches end up with subtly different kernels, which both can be computed as a recursive kernel.
@@ -252,6 +244,7 @@ In the kernel and Gaussian process community, kernels with convolutional structu
 
 
 \section{Spatial Correlations in Single-Layer Networks}
+\subsection{Notation}
 To begin, we will analyse the infinite limit of a single hidden layer
 convolutional neural network. We first show how spatial correlations disappear
 when using infinite weights \citep{garriga2018infiniteconv,novak2019infiniteconv}, and how mean pooling reintroduces them \citep{novak2019infiniteconv}. This leads to kernels with the same structure as \Citet{vdw2017convgp}. Next, we show how spatial correlations can be recovered by adding weight correlations instead of making the discrete architectural modification of adding mean pooling. This leads to the 
@@ -269,31 +262,66 @@ when using infinite weights \citep{garriga2018infiniteconv,novak2019infiniteconv
 \newcommand{\layerWs}[1]{W^{(#1)}}
 \newcommand{\layerW}[1]{\vW^{(#1)}}
 \newcommand{\priorWcov}[1]{\boldsymbol{\Sigma}^{(#1)}}
-\newcommand{\layerAs}[1]{A^{(#1)}}
-\newcommand{\layerNLAs}[1]{Z^{(#1)}}
+\newcommand{\priorWcovs}[1]{\Sigma^{(#1)}}
+\newcommand{\layerAs}[2]{A^{\!(#1)}_{#2}\!(\vX)}
+\newcommand{\layerAsd}[2]{A^{\!(#1)}_{#2}\!(\vX')}
+\newcommand{\layerNLAs}[2]{Z^{(#1)}_{#2}\!(\vX)}
+\newcommand{\layerNLAsd}[2]{Z^{(#1)}_{#2}\!(\vX')}
+\newcommand{\layerA}[1]{\vA^{\!(#1)}\!(\vX)}
+\newcommand{\layerAd}[1]{\vA^{\!(#1)}\!(\vX')}
 % These 4 are used for the picture below
 \newcommand{\chan}{c}
 \newcommand{\prevchan}{\gamma}   % <- Possibly use these for c, p, gamma? I've
 \newcommand{\patch}{p}               % been using \nu,\mu
 \newcommand{\nextpatch}{\mu} 
-A single-layer Convolutional Neural Network (CNN) takes in an image input $\vX \in \Reals^{\layerC{0}\times \layersize{0}}$ with width $\layerw{0}$, height $\layerh{0}$, and $\layerC{0}$ channels (e.g.~one per colour). The image is divided up into $\layersize{0}$ patches of size $\layerC{0}\times\!\patchw{1}\times\!\patchh{1}$ with zero padding at the edges. Weights are applied by taking an inner product with all patches, which we do $\layerC{1}$ times to give multiple channels in the next layer. By collecting all weights in the matrix $\layerW{1}\in\Reals^{\layerC1\times \layerC0\times \patchw1\patchh1}$ we can denote the computation of the pre- and post-non-linearity activations as
+A single-layer Convolutional Neural Network (CNN) takes in an image input $\vX \in \Reals^{\layerC{0}\times \layersize{0}}$ with width $\layerw{0}$, height $\layerh{0}$, and $\layerC{0}$ channels (e.g.~one per colour). The image is divided up into patches of size $\layerC{0}\times\!\patchw{1}\times\!\patchh{1}$, giving a total of $\layersize{0}$ zero-padded patches. Weights are applied by taking an inner product with all patches, which we do $\layerC{1}$ times to give multiple channels in the next layer. By collecting all weights in the matrix $\layerW{1}\in\Reals^{\layerC1\times \layerC0\times \patchw1\patchh1}$ we can denote the computation of the pre- and post-non-linearity activations as
 \begin{align}
-    \layerAs1_{cp} = \sum_{\gamma p} X_{\gamma p} \layerWs1_{c\gamma p} \,, && \layerNLAs1_{cp} = \phi\big(\layerAs1_{cp}\big)\,.
+    \layerAs{1}{cp} = \sum_{\gamma=1}^{\layerC0}\sum_{p} X_{\gamma p} \layerWs1_{c\gamma p} \,, && \layerNLAs{1}{cp} = \phi\big(\layerAs{1}{cp}\big)\,.
 \end{align}
 In a single-layer CNN, these activations are followed by a fully-connected layer with weights $\layerW{2} \in \Reals^{\layerC 1\times \layerw0\layerh0}$. Our final output is again given by a summation reduction over the activations:
 \begin{align}
-    f(\vX) = \sum_{cp} \phi\big(\layerAs1_{cp}\big) W^{(2)}_{cp} = \sum_{cp} \layerNLAs1_{cp}\layerWs2_{cp} \,.
+    f(\vX) = \sum_{c=1}^{\layerC1}\sum_{p} \phi\big(\layerAs{1}{cp}\big) W^{(2)}_{cp} = \sum_{cp} \layerNLAs{1}{cp}\layerWs{2}_{cp} = \sum_p \layerAs{f}{p} \label{eq:single-layer-f} \,,
 \end{align}
+where $\layerAs{f}{p}$ denotes the result before the summation over the patch locations $p$. 
 
-As in \citet{garriga2018infiniteconv,novak2019infiniteconv}, our goal is to analyse the distribution on function outputs $f(\vX)$ for some Gaussian prior on the weights $p(\vW)$, where $\vW$ is the collection of the weights at all layers. For all cases that we analyse, the prior is constrained to be independent over layers channels:
+We analyse the distribution on function outputs $f(\vX)$ for some Gaussian prior on the weights $p(\vW)$, where $\vW$ is the collection of the weights at all layers. In all the cases we consider, we take the prior to be independent over layers and channels. Here we extend on earlier work by allowing spatial correlation in the final layer's weights (we will consider all layers later) through the covariance matrix $\priorWcov1 \in \Reals^{\layersize0\times\layersize0}$. This gives the prior
 \begin{align}
-    p(\layerW1) = \prod_{c'=0}^{\layerC0}\prod_{c=1}^{\layerC1}\NormDist{\layerW1_{[cc':]}; 0, \frac{1}{\layerC0}\priorWcov1} \,,
+    p(\layerW1) = \prod_{c'=0}^{\layerC0}\prod_{c=1}^{\layerC1}\NormDist{\layerW1_{[cc':]}; 0, \eye} \,,
     && p(\layerW2) = \prod_{c=1}^{\layerC1} \NormDist{\layerW2_{c:}; 0, \frac{1}{\layerC1}\priorWcov2} \,.
 \end{align}
-Since $\layerAs1_{cp}$ and $\layerWs2_{cp}$ are both independent over $c$, $f(X)$ is a s
+Independence between channels makes $\layerA{f}$ a sum of i.i.d.~multivariate random variables, which allows us to apply the central limit theorem (CLT) as $\layerC1\to\infty$ \citep{neal1996bayesian}.
+\begin{align}
+    \mathbb{C}_{\vW}\left[\layerAs{f}{p},\layerAsd{f}{p'}\right] &= \Exp{\vW}{\sum_{c=1}^{\layerC1}\sum_{c'=1}^{\layerC1} \layerNLAs{1}{cp}\layerWs{2}_{cp}\layerNLAsd{1}{c'p'}\layerWs{2}_{c'p'}} \nonumber \\
+    &= \sum_{c=1}^{\layerC1}\sum_{c'=1}^{\layerC1} \Exp{\layerW1}{\layerNLAs{1}{cp}\layerNLAsd{1}{c'p'}}\Exp{\layerW2}{\layerWs{2}_{cp} \layerWs{2}_{c'p'}} \nonumber \\
+    &= \sum_{c=1}^{\layerC1}\sum_{c'=1}^{\layerC1} \Exp{\layerW1}{\layerNLAs{1}{cp}\layerNLAsd{1}{c'p'}}\delta_{cc'}\priorWcovs{2}_{pp'} \nonumber \\
+    &= \sum_{c=1}^{\layerC1} \Exp{\layerW1}{\layerNLAs{1}{cp}\layerNLAsd{1}{cp'}}\priorWcovs{2}_{pp'} = k^{(1)}_{p}(\vX^{[p]}, \vX^{[p]}) \priorWcovs{2}_{pp'}
+\end{align}
+We find the kernel for the GP by taking the covariance between function values $f(\vX)$ and $f(\vX')$ and performing the final sum in \cref{eq:single-layer-f}:
+\begin{align}
+    k(\vX, \vX') = \mathbb{C}\left[f(\vX), f(\vX')\right] = \sum_{pp'} k^{(1)}_{p}(\vX^{[p]}, \vX^{[p]}) \priorWcovs{2}_{pp'} \,.
+\end{align}
+We can now see how different choices for $\priorWcov2$ give different forms of spatial correlation.
 
-Since $f(X)$ is a sum of  \adriacomment{To write the kernel, we need to make
-  clear the dependence of $\layerAs{\cdot}$ and $\layerNLAs{\cdot}$ on $\vX$.}
+\paragraph{Independent} \citet{garriga2018infiniteconv,novak2019infiniteconv} consider $\priorWcovs{2}_{pp'} = \delta_{pp'}$, i.e.~the case where all weights are independent. The kernel resulting kernel simply sums components over patches, which implies an \emph{additive model} \citep{stone1985}, where different functions that each operate on subsets of the input are summed together: $f(\vX) = \sum_p f_p(\vX^{[p]})$. This structure has commonly applied to improve GP performance in high-dimensional settings \citep[e.g.][]{duvenaud2011additive,durrande2012additive}. \citet{novak2019infiniteconv} point out that the same kernel can be obtained by taking an infinite limit of a \emph{locally connected network} (LCN) \citep{lecun1989generalization} where connectivity is the same as in a CNN, but without weight sharing.
+
+\paragraph{Mean-pooling} By taking $\priorWcovs2_{pp'} = 1$ we make the weights fully correlated over all locations, leading to identical weights for all $p$, i.e.~$\layerWs{2}_{cp} = \layerWs{2}_{c}$. This is equivalent to taking the mean response over all spatial locations (\cref{eq:single-layer-f}), or mean-pooling. As \citet{novak2019infiniteconv} discuss, this reintroduces the spatial correlation that is the intended result of weight sharing. This case is identical to the ``translation invariant'' construction in \Citet{vdw2017convgp}. Their experiments show that mean-pooling is too restrictive in this single-layer case. To remedy this, they perform a pooling with a learned weight ${\alpha_p}$ for each patch, which can be recovered by taking $\priorWcovs{2}_{pp'} = \alpha_p \alpha_{p'}$. These weights need to be learned, which departs slightly from the strict Bayesian framework.
+
+\paragraph{Spatially correlated weights} We can also choose to vary the strength of correlation between weights based on their distance in the image, through e.g.~an exponential decay depending on the distance between two patches: $\priorWcovs{2}_{pp'} = \exp(-d(p, p')/\ell)$. This construction exactly gives the ``translation insensitive convolutional kernel'' discussed in \citet{dutordoir2020}. In contrast to weighted pooling, this construction only requires tuning the lengthscale $\ell$ as the single hyperparameter.
+
+
+
+
+% Following \citet{neal1996bayesian} we note that $\layerAs{f}_p$ is a sum of $\layerC1$ i.i.d.~multivariate random variables, which converges to a multivariate Gaussian as $\layerC1\to\infty$ by the central limit theorem. 
+
+% We introduce $\layerAs{f}$ to denote the result before the summation over the patch locations $p$:
+
+% We analyse the distribution on function outputs $f(\vX)$ for some Gaussian prior on the weights $p(\vW)$, where $\vW$ is the collection of the weights at all layers. In all cases that we analyse, the prior is constrained to be independent over layers and channels. In this 
+
+
+% Since $\layerAs1_{cp}$ and $\layerWs2_{cp}$ are both independent over $c$, $f(X)$ is a s
+
+% Since $f(X)$ is a sum of  \adriacomment{To write the kernel, we need to make
+%   clear the dependence of $\layerAs{\cdot}$ and $\layerNLAs{\cdot}$ on $\vX$.}
 
 \subsection{Notes}
 
@@ -308,7 +336,7 @@ Give a high-level commentary on the infinite-width line of work. Summarise comme
     \item Can we construct an infinite limit of a CNN that has the correlations like the ConvGP, but also works for full deep networks?
 \end{itemize}
 
-There are various parallel lines of work that are relevant here. The first connection between neural networks and GPs is due to \citet{neal1996bayesian}, who noted that infinitely-wide single-layer random neural networks are equivalent to Gaussian processes. 
+
 
 \section{Infinite limits for correlated weights\label{sec:correlated-weights}}
 
@@ -427,16 +455,16 @@ recover their effect using continuous hyperparameters instead?
 performs better than the existing ones, or is the optimum to be found at one of
 the existing points? \adriacomment{reword}
 
-\paragraph{Experiment setup} We evaluate these models on CIFAR-10. Following
-standard practice in the wide network literature, we reframe classification as
-regression to one-hot targets $t_{nk} = \indicator{y_n = k} - 0.1$. The test
-predictions are $\vK_{x*x}\bra{\sigma^2\eye + \vK_{xx}}^{-1}\vY$, where
-$\sigma^2$ is the variance of the observation noise of the Gaussian process
-regression. It is common practice in the GP community to invert
-$\bra{\sigma^2\eye + \vK_{xx}}$ using the Cholesky decomposition and a
-triangular solve. Contrary to this, we use the eigendecomposition of $\vK_{xx}$
-to quickly search over 1000 values of $\sigma^2$, from
-$\text{exp}\bra{\text{max}(-\lambda_1, -36)}$ in a log-scale $e^5$, using cross-validation.
+% \paragraph{Experiment setup} We evaluate these models on CIFAR-10. Following
+% standard practice in the wide network literature, we reframe classification as
+% regression to one-hot targets $t_{nk} = \indicator{y_n = k} - 0.1$. The test
+% predictions are $\vK_{x*x}\bra{\sigma^2\eye + \vK_{xx}}^{-1}\vY$, where
+% $\sigma^2$ is the variance of the observation noise of the Gaussian process
+% regression. It is common practice in the GP community to invert
+% $\bra{\sigma^2\eye + \vK_{xx}}$ using the Cholesky decomposition and a
+% triangular solve. Contrary to this, we use the eigendecomposition of $\vK_{xx}$
+% to quickly search over 1000 values of $\sigma^2$, from
+% $\text{exp}\bra{\text{max}(-\lambda_1, -36)}$ in a log-scale $e^5$, using cross-validation.
 
 \begin{figure}
     \scalebox{1.0}{\input{fig/cntk14.pgf}}

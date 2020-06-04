@@ -7,6 +7,12 @@
 \newcommand\ccancel[2][red]{\renewcommand\CancelColor{\color{#1}}\cancel{#2}}
 \newcommand\ccancelto[2][red]{\renewcommand\CancelColor{\color{#1}}\cancelto{#2}}
 
+% General typesetting
+\let\originalleft\left
+\let\originalright\right
+\renewcommand{\left}{\mathopen{}\mathclose\bgroup\originalleft}
+\renewcommand{\right}{\aftergroup\egroup\originalright}
+
 % Linear algebra
 \newcommand{\transpose}{^\mathrm{\textsf{\tiny T}}}
 \newcommand{\norm}[1]{\lvert #1\rvert}
@@ -106,12 +112,5 @@
 
 % Computer science
 \newcommand{\BigO}{\mathcal{O}}
-
-% General typesetting
-\let\originalleft\left
-\let\originalright\right
-\renewcommand{\left}{\mathopen{}\mathclose\bgroup\originalleft}
-\renewcommand{\right}{\aftergroup\egroup\originalright}
-
 
 \endinput

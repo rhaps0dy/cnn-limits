@@ -132,60 +132,60 @@ program's $\Gva$-vars, assuming at every step that the $\Gva$-vars are $n$-wise
 i.i.d. and Gaussian. This is the approach we employ in \cref{sec:correlated-weights}.
 
 \subsection{Description in \Netsor of a CNN with correlations in the weights\label{sec:netsor-program}}
-The canonical way to represent
-convolutional filters in \Netsor \citep[\Netsor program 4]{yang2019wide} is to
-use one $\Ava$-var for every spatial location
-of the weights. That is, if our convolutional patches have size $\patchw{\ell} \times \patchh{\ell}$,
-we define the input $\layerW{\ell}_\patchidx: \Ava(\layerC{\ell+1}, \layerC{\ell})$ for
-all $\patchidx \in [\patchsize{\ell}]$. But $\Ava$-vars have to be independent
-of each other, so how can we add correlation in the weights? We apply the
-correlation separately, using a \LinComb{} operation. For this, we will use the
-following well-known lemma.
-\begin{lemma}
-  Fix $\vSigma$, a positive semi-definite (PSD) covariance matrix. Let $u_1,\dots,u_K \sim
-  \NormDist{0, 1}$ be a collection of i.i.d. Gaussian random variables. Let
-  $\vL$ be a lower-triangular matrix such that $\vL\vL^\tp = \vSigma$, which
-  always exists if $\vSigma$ is PSD. Let $w_i \eqdef \sum_{k=1}^iL_{ik}u_k$ for
-  $i \in [K]$, equivalently
-  $\vw = \vL\vu$. Then $\vw \sim \NormDist{{\boldsymbol{0}}, \vSigma}$.
-  \label{lemma:L}
-\end{lemma}
-\begin{proof}
-  $\{w_i\}$ are Gaussian because they are a linear transformation of $\{u_k\}$.
-  Calculate their moments to see they are distributed as stated.
-\end{proof}
+% The canonical way to represent
+% convolutional filters in \Netsor \citep[\Netsor program 4]{yang2019wide} is to
+% use one $\Ava$-var for every spatial location
+% of the weights. That is, if our convolutional patches have size $\patchw{\ell} \times \patchh{\ell}$,
+% we define the input $\layerW{\ell}_\patchidx: \Ava(\layerC{\ell+1}, \layerC{\ell})$ for
+% all $\patchidx \in [\patchsize{\ell}]$. But $\Ava$-vars have to be independent
+% of each other, so how can we add correlation in the weights? We apply the
+% correlation separately, using a \LinComb{} operation. For this, we will use the
+% following well-known lemma.
+% \begin{lemma}
+%   Fix $\vSigma$, a positive semi-definite (PSD) covariance matrix. Let $u_1,\dots,u_K \sim
+%   \NormDist{0, 1}$ be a collection of i.i.d. Gaussian random variables. Let
+%   $\vL$ be a lower-triangular matrix such that $\vL\vL^\tp = \vSigma$, which
+%   always exists if $\vSigma$ is PSD. Let $w_i \eqdef \sum_{k=1}^iL_{ik}u_k$ for
+%   $i \in [K]$, equivalently
+%   $\vw = \vL\vu$. Then $\vw \sim \NormDist{{\boldsymbol{0}}, \vSigma}$.
+%   \label{lemma:L}
+% \end{lemma}
+% \begin{proof}
+%   $\{w_i\}$ are Gaussian because they are a linear transformation of $\{u_k\}$.
+%   Calculate their moments to see they are distributed as stated.
+% \end{proof}
 
 
 
-{  % program commands scope
-  \newcommand{\Input}[1]{\State{\textbf{Input} #1}}
-  \newcommand{\Output}[1]{\State{\textbf{Output} #1}}
-  \newcommand{\CommentC}[1]{\State{\textit{// #1}}}
-  \newcommand{\layerBs}[1]{B^{(#1)}}
-\begin{algorithm}
-  \caption{\Netsor description of the CNN in \cref{fig:fancy-cnn} with
-    correlated weights}
-\begin{algorithmic}
-  \CommentC{Program for $M$ training + test points, $\vX_1,\dots,\vX_M$.}
-  \Input{$\layerAs{1}_{\patch}\bra{\vX_m} : \Gva(\layerC{1})$ for $\patch \in
-    \sqb{\layersize{1}}$ and $m \in [M]$. First layer activations for all inputs}
-  \Input{$\layerW{\ell}_{\patchidx} : \Ava\bra{\layerC{\ell}, \layerC{\ell+1}}$
-    for $\patchidx \in [patchsize]$ and $\ell \in \{1, 2, 3\}$}
+% {  % program commands scope
+%   \newcommand{\Input}[1]{\State{\textbf{Input} #1}}
+%   \newcommand{\Output}[1]{\State{\textbf{Output} #1}}
+%   \newcommand{\CommentC}[1]{\State{\textit{// #1}}}
+%   \newcommand{\layerBs}[1]{B^{(#1)}}
+% \begin{algorithm}
+%   \caption{\Netsor description of the CNN in \cref{fig:fancy-cnn} with
+%     correlated weights}
+% \begin{algorithmic}
+%   \CommentC{Program for $M$ training + test points, $\vX_1,\dots,\vX_M$.}
+%   \Input{$\layerAs{1}_{\patch}\bra{\vX_m} : \Gva(\layerC{1})$ for $\patch \in
+%     \sqb{\layersize{1}}$ and $m \in [M]$. First layer activations for all inputs}
+%   \Input{$\layerW{\ell}_{\patchidx} : \Ava\bra{\layerC{\ell}, \layerC{\ell+1}}$
+%     for $\patchidx \in [patchsize]$ and $\ell \in \{1, 2, 3\}$}
 
-  \CommentC{Construct the second layer's independent activations}
-  \For{$m \in [M]$, $\mu \in \sqb{\layersize{1}}$, $\patchidx \in \sqb{\patchsize{1}}$}
-    \State{\MatMul: $\layerBs{2}_\patchidx(\vX_m) \eqdef
-      \layerW{1}_{\patchidx}\layerAs{1}_\mu(\vX_m) : \Gva(\layerC{2})$}
-  \EndFor
+%   \CommentC{Construct the second layer's independent activations}
+%   \For{$m \in [M]$, $\mu \in \sqb{\layersize{1}}$, $\patchidx \in \sqb{\patchsize{1}}$}
+%     \State{\MatMul: $\layerBs{2}_\patchidx(\vX_m) \eqdef
+%       \layerW{1}_{\patchidx}\layerAs{1}_\mu(\vX_m) : \Gva(\layerC{2})$}
+%   \EndFor
 
-  \CommentC{Correlate the activations according to $\priorWcov{2}$}
-  \For{$m \in [M]$, $\mu \in \sqb{\layersize{1}}$, $\patchidx \in \sqb{\patchsize{1}}$}
-  \State{\MatMul: $\layerBs{2}_\patchidx(\vX_m) \eqdef
-    \layerW{1}_{\patchidx}\layerAs{1}_\mu(\vX_m) : \Gva(\layerC{2})$}
-  \EndFor
-\end{algorithmic}
-\end{algorithm}
-} % End program scope
+%   \CommentC{Correlate the activations according to $\priorWcov{2}$}
+%   \For{$m \in [M]$, $\mu \in \sqb{\layersize{1}}$, $\patchidx \in \sqb{\patchsize{1}}$}
+%   \State{\MatMul: $\layerBs{2}_\patchidx(\vX_m) \eqdef
+%     \layerW{1}_{\patchidx}\layerAs{1}_\mu(\vX_m) : \Gva(\layerC{2})$}
+%   \EndFor
+% \end{algorithmic}
+% \end{algorithm}
+% } % End program scope
 
 
 \begin{lemma}[CNN with correlations in the weights converges to a GP]
