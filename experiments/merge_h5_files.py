@@ -19,6 +19,9 @@ with h5py.File(dest_file, "a") as dest_f:
                           for k in dest_f.keys()
                           if k in src_f.keys()]
             for k in tqdm(src_f.keys()):
+                # if k == "Kxt":
+                #     print("skiping kxt")
+                #     continue
                 print(f"Doing data set {k}")
                 try:
                     dest_data = dest_f[k]

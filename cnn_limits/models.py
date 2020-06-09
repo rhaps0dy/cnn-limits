@@ -333,14 +333,15 @@ def Myrtle5_sweep(channels=16):
                      Wcovs)
 
 
-def Myrtle10_sweep(channels=16):
+def Myrtle10_sweep_new(channels=16):
     kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
     log_lengthscales = np.linspace(-1.5, 4.5, 100)
 
-    Wcovs = []
+    Wcovs = [np.eye(8**2, 8**2).reshape((8, 8, 8, 8))]
     for lsc in 10**log_lengthscales:
         kern.lengthscale = lsc
         Wcovs.append(covariance_tensor(8, 8, kern))
+    Wcovs.append(np.ones((8, 8, 8, 8)))
 
     pool = AvgPool(window_shape=(2, 2), strides=(2, 2))
     relu = Relu()
@@ -423,9 +424,43 @@ def CNTK14_sweep(channels=16):
     return TickSweep(stax.serial(
         *([conv, relu] * 14)), Wcovs)
 
+def CNTK14_sweep_v2(channels=16):
+    kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
+    log_lengthscales = np.linspace(-1.5, 4.5, 25)
+
+    Wcovs = [np.eye(32**2, 32**2).reshape((32, 32, 32, 32))]
+    for lsc in 10**log_lengthscales:
+        kern.lengthscale = lsc
+        Wcovs.append(covariance_tensor(32, 32, kern))
+    Wcovs.append(np.ones((32, 32, 32, 32)))
+    print("Len of wcovs:", len(Wcovs))
+
+    relu = Relu()
+    conv = Conv(channels, filter_shape=(3, 3), strides=(1, 1), padding='SAME')
+
+    return TickSweep(stax.serial(
+        *([conv, relu] * 14)), Wcovs)
+
+
+def CNTK14_sweep_mid_lengthscales(channels=16):
+    kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
+    log_lengthscales = np.linspace(-1.5, 4.5, 25)[[5, 9,10,11,12,13, 15]]
+
+    Wcovs = [np.eye(32**32, 32**32).reshape((32, 32, 32, 32))]
+    for lsc in 10**log_lengthscales:
+        kern.lengthscale = lsc
+        Wcovs.append(covariance_tensor(32, 32, kern))
+    Wcovs.append(np.ones((32, 32, 32, 32)))
+
+    relu = Relu()
+    conv = Conv(channels, filter_shape=(3, 3), strides=(1, 1), padding='SAME')
+
+    return TickSweep(stax.serial(
+        *([conv, relu] * 14)), Wcovs)
+
 def CNTK14_sweep_fewer_lengthscales(channels=16):
     kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
-    log_lengthscales = np.linspace(-1.5, 4.5, 25)[[9,10,11,12]]
+    log_lengthscales = np.linspace(-1.5, 4.5, 25)[[9,10,11,12,13]]
 
     Wcovs = []
     for lsc in 10**log_lengthscales:

@@ -137,10 +137,20 @@ def accuracy_eig(Kxx, Kxt, oh_train_Y, test_Y, sigy_grid, _log, FY=None,
     return sigy_grid, accuracies.t()
 
 
+# @experiment.capture
+# def fold_idx(n_samples, n_splits, device):
+#     for start in range(n_splits):
+#         test_idx = slice(start, n_samples, n_splits)
+#         idx = np.arange(n_samples)
+#         train_idx = np.delete(idx, idx[test_idx])
+#         yield torch.from_numpy(train_idx).to(device=device), test_idx
+
 @experiment.capture
 def fold_idx(n_samples, n_splits, device):
-    for start in range(n_splits):
-        test_idx = slice(start, n_samples, n_splits)
+    assert n_samples % n_splits == 0
+    split_size = n_samples//n_splits
+    for i in range(n_splits):
+        test_idx = slice(i*split_size, (i+1)*split_size)
         idx = np.arange(n_samples)
         train_idx = np.delete(idx, idx[test_idx])
         yield torch.from_numpy(train_idx).to(device=device), test_idx
@@ -151,6 +161,12 @@ def do_one_N(Kxx, Kxt, oh_train_Y, test_Y, n_grid_opt_points, n_splits, device,
              FY=None, lower=True):
     assert n_splits > 1
     torch.cuda.empty_cache()
+    for train_idx, test_idx in fold_idx(Kxx.shape[1], n_splits):
+        print(collections.Counter(oh_train_Y[0, train_idx.cpu()].argmax(-1)))
+        print(collections.Counter(oh_train_Y[0, train_idx.cpu()].argmax(-1)))
+    print(collections.Counter(test_Y[0]))
+
+
     Kxx = torch.from_numpy(Kxx).to(device=device)
     Kxt = torch.from_numpy(Kxt).to(device=device)
     oh_train_Y = torch.from_numpy(oh_train_Y).to(device=device)
@@ -201,7 +217,7 @@ def do_one_N(Kxx, Kxt, oh_train_Y, test_Y, n_grid_opt_points, n_splits, device,
     # sigy[...] = 5.442873064068619e-06
     # print("Went from {all_sigy_grid[0][grid_acc[0].argmax()].item()} to {sigy[0].item()}")
 
-    return (all_sigy_grid, grid_acc), accuracy_eig(
+    return (all_sigy_grid, grid_acc), accuracy_chol(
         Kxx,
         Kxt, oh_train_Y, test_Y, sigy.to(device=device), FY=FY,
         lower=lower)
@@ -236,47 +252,72 @@ def main_no_eig(kernel_matrix_path, _log, n_splits, i_SU):
         new_base_dir = SU.base_dir()/f"n_splits_{n_splits}"
         os.makedirs(new_base_dir, exist_ok=True)
 
-        for layer in reversed(data.index): #[12]:  #[0, 10, 11, 12, 13, 26]:   #reversed(data.index):
+        if N_layers == 102:  # Too many
+            layer_iter = [0, 1, 6, 11, 16, 21, 26, 31, 36, 38, 41, 42, 43, 46,
+                          51, 56, 61, 66, 71, 76, 81, 86, 91, 96]
+        else:
+            layer_iter = reversed(data.index)
+
+        for layer in layer_iter:
             Kxx = f['Kxx'][layer].astype(dtype)
-            mask = np.isnan(Kxx)
+            # if layer in (10, 11, 12, 13, 14):
+            mask = np.tril(np.ones(Kxx.shape, dtype=bool))
+            # else:
+            # mask = np.isnan(Kxx)
             Kxx[mask] = Kxx.T[mask]
-            assert np.allclose(Kxx, Kxx.T)
-            Kxx = (Kxx + Kxx.T)/2
+            if not np.allclose(Kxx, Kxx.T):
+                print("Skiping layer {layer} for nans")
+                continue
+            # Kxx = (Kxx + Kxx.T)/2
 
             Kxt = f['Kxt'][layer].astype(dtype)
             # Fix my mistake of changing the kernel code in between the validation and test set calculation
-            if layer in (10, 11, 12, 13):
-                import gpytorch
-                from cnn_limits.layers import covariance_tensor
-                filter_numel = 32**2
-                kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
-                kern.lengthscale = 10**np.linspace(-1.5, 4.5, 25)[layer-1]
-                norm = covariance_tensor(32, 32, kern).sum()
-                Kxx *= filter_numel / norm
-                # Kxt *= norm / filter_numel
-                # import pdb; pdb.set_trace()
+            # if layer in (10, 11, 12, 13):
+            #     import gpytorch
+            #     from cnn_limits.layers import covariance_tensor
+            #     filter_numel = 32**2
+            #     kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
+            #     kern.lengthscale = 10**np.linspace(-1.5, 4.5, 25)[layer-1]
+            #     norm = covariance_tensor(32, 32, kern).sum()
+            #     Kxx *= filter_numel / norm
+            #     # Kxt *= norm / filter_numel
+            #     # import pdb; pdb.set_trace()
 
-            for N in reversed(data.columns):
+            for N in (r for r in reversed(data.columns) if r%4 == 0):
                 # Permute within classes
-                this_N_permutation = np.concatenate([
-                    np.random.permutation(N_total//10) + i*N_total//10
-                    for i in range(10)])
+                this_N_permutation = []
+                for i in range(10):
+                    if N_layers == 102:  # Myrtle
+                        perm = np.random.permutation(N_total//10)
+                        this_N_permutation.append(perm+(i*N_total//10))
+                    else:
+                        perm = np.random.permutation(N_total//20)
+                        this_N_permutation.append(perm+(i*N_total//10))
+                        perm = np.random.permutation(N_total//20)
+                        this_N_permutation.append(perm+(i*N_total//10 + N_total//20))
+                this_N_permutation = np.stack(this_N_permutation, 0).T.copy().reshape(-1)
                 assert np.all(sorted(this_N_permutation) == np.arange(N_total))
+                for i in range(N_total//10):
+                    assert np.array_equal(train_Y[this_N_permutation[i*10:(i+1)*10]], np.arange(10))
 
                 data.loc[layer, N], accuracy.loc[layer, N] = [], []
                 # For this many data sets
-                Kxx_ = np.zeros((N_total//N, N, N), dtype=dtype)
-                Kxt_ = np.zeros((N_total//N, N, Kxt.shape[-1]), dtype=dtype)
-                Y_ = np.zeros((N_total//N, N, oh_train_Y.shape[-1]), dtype=dtype)
+                Kxx_ = np.zeros((N_total//N, N*3//4, N*3//4), dtype=dtype)
+                Kxt_ = np.zeros((N_total//N, N*3//4, N//4), dtype=dtype)
+                Y_ = np.zeros((N_total//N, N*3//4, oh_train_Y.shape[-1]), dtype=dtype)
+                test_Y_ = np.zeros((N_total//N, N//4), dtype=test_Y.dtype)
 
                 for i in range(N_total//N):
-                    train_idx = this_N_permutation[i::N_total//N]
+                    train_idx = this_N_permutation[i*N:(i+1)*N]
                     assert len(train_idx) == N
-                    Kxx_[i] = Kxx[train_idx, :][:, train_idx]
-                    Kxt_[i] = Kxt[train_idx]
-                    Y_[i] = oh_train_Y[train_idx]
+                    Kxx_[i] = Kxx[train_idx, :][:, train_idx][:N*3//4, :N*3//4]
+                    # Kxt_[i] = Kxt[train_idx, :]
+                    Kxt_[i] = Kxx[train_idx, :][:, train_idx][:N*3//4, N*3//4:]
+                    Y_[i] = oh_train_Y[train_idx][:N*3//4]
+                    test_Y_[i] = oh_train_Y[train_idx][N*3//4:, :].argmax(-1)
 
-                _d, _a = do_one_N(Kxx_, Kxt_, Y_, test_Y[:Kxt.shape[-1]], n_splits=(5 if N==10 else n_splits), FY=None, lower=True)
+                # test_Y_ = test_Y[:Kxt.shape[-1]]
+                _d, _a = do_one_N(Kxx_, Kxt_, Y_, test_Y_, n_splits=3, FY=None, lower=True)
                 _d = (_d[0].cpu().numpy(), _d[1].cpu().numpy())
                 _a = (_a[0].cpu().numpy().squeeze(-1), _a[1].cpu().numpy().squeeze(-1))
                 _d_max = (None, _d[1].max(-1))
@@ -285,7 +326,7 @@ def main_no_eig(kernel_matrix_path, _log, n_splits, i_SU):
                 data_max.loc[layer, N] = _d_max
                 for i in range(N_total//N):
                     _log.info(
-                        f"For layer={layer}, N={N}, i={i}, sigy={_a[0][i]}; accuracy={_a[1][i]}, cv_accuracy={_d_max[1][i]}")
+                        f"For layer={layer}, N={N} ({N*3//4}), i={i}, sigy={_a[0][i]}; accuracy={_a[1][i]}, cv_accuracy={_d_max[1][i]}")
 
                 pd.to_pickle(data, new_base_dir/"grid_acc.pkl.gz")
                 pd.to_pickle(data_max, new_base_dir/"cv_accuracy.pkl.gz")

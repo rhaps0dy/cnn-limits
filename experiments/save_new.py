@@ -9,6 +9,7 @@ import h5py
 import jax
 import jax.numpy as np
 import sacred
+import numpy as onp
 from torch.utils.data import DataLoader, Subset
 
 import cnn_limits.models
@@ -33,20 +34,22 @@ def config():
     model = "google_NNGP"
 
     use_ntk = False
-    save_variance = True
+    save_variance = False
     internal_lengthscale = None
     skip_iterations = 0
     Kxx_mask_path = None
+    do_Kxt = True
+    do_Kxx = True
 
 
 @experiment.capture
-def kern_iterator(f, kern_name, X, X2, diag, batch_size, worker_rank, n_workers):
+def kern_iterator(f, kern_name, X, X2, diag, batch_size, worker_rank, n_workers, i_SU):
     if kern_name in f.keys():
         print("Skipping {} (group exists)".format(kern_name))
         return
     N = len(X)
     N2 = N if X2 is None else len(X2)
-    out = create_h5py_dataset(f, batch_size, kern_name, diag, N, N2)
+    out = create_h5py_dataset(f, batch_size, kern_name, diag, N, N2, dtype=getattr(onp, i_SU["default_dtype"]))
 
     if diag:
         # Don't split the load for diagonals, they are cheap
@@ -56,13 +59,21 @@ def kern_iterator(f, kern_name, X, X2, diag, batch_size, worker_rank, n_workers)
                              n_workers=n_workers)
     return iter(it), out
 
+def schedule_kernel(kernel_fn, iterate, diag, mask):
+    same, (i, (x, _y)), (j, (x2, _y2)) = iterate
+    if mask is not None and not np.any(mask[i:i+x.shape[0], j:j+x2.shape[0]]):
+        return iterate, None
+    return iterate, kernel_fn(x, x2, same, diag)
 
-def kern_save(iterate, kernel_fn, out, diag, mask):
+
+def kern_save(iterate, k_in, W_covs, out, diag, mask):
     same, (i, (x, _y)), (j, (x2, _y2)) = iterate
     if mask is not None and not np.any(mask[i:i+x.shape[0], j:j+x2.shape[0]]):
         return
-    k = kernel_fn(x, x2, same, diag)
+    k = W_covs @ onp.asarray(k_in, dtype=np.float64).reshape((-1, W_covs.shape[1])).T
+    k = k.reshape((W_covs.shape[0], len(x), len(x2)))
     s = k.shape
+    assert k.dtype == np.float64
     try:
         if len(s) == 2:
             out[:s[0], i:i+s[1]] = k
@@ -70,7 +81,7 @@ def kern_save(iterate, kernel_fn, out, diag, mask):
             out[:s[0], i:i+s[1], j:j+s[2]] = k
     except TypeError:
         out.resize(k.shape[0], axis=0)
-        return kern_save(iterate, kernel_fn, out, diag, mask)
+        return kern_save(iterate, k_in, W_covs, out, diag, mask)
 
 
 @experiment.command
@@ -88,6 +99,7 @@ def generate_sorted_dataset_idx(sorted_dataset_path):
 ## JAX Model
 @experiment.capture
 def jax_model(model, internal_lengthscale):
+    print("loading model", model)
     if model in cnn_limits.models.need_internal_lengthscale:
         return getattr(cnn_limits.models, model)(internal_lengthscale, channels=1)
     return getattr(cnn_limits.models, model)(channels=1)
@@ -110,8 +122,8 @@ def jitted_kernel_fn(kernel_fn, use_ntk):
         return np.expand_dims(y, 0)
     kern_ = jax.jit(kern_, static_argnums=(2, 3))
     def kern(x1, x2, same, diag):
-        x1 = np.asarray(x1.numpy())
-        x2 = (None if same else np.asarray(x2.numpy()))
+        x1 = np.asarray(x1.numpy()).astype(np.float32)
+        x2 = (None if same else np.asarray(x2.numpy()).astype(np.float32))
         return kern_(x1, x2, same, diag)
     return kern
 
@@ -126,9 +138,11 @@ def wrong_zca_dataset():
 
 
 @experiment.main
-def main(worker_rank, print_interval, n_workers, save_variance, skip_iterations, Kxx_mask_path):
+def main(worker_rank, print_interval, n_workers, save_variance, skip_iterations, Kxx_mask_path, do_Kxt, do_Kxx):
     train_set, test_set = SU.load_sorted_dataset()
-    _, _, kernel_fn = jax_model()
+    _, _, kernel_fn, W_covs = jax_model()
+    W_covs = onp.stack(list(onp.asarray(W).astype(onp.float64) for W in W_covs))
+    assert len(W_covs.shape) == 2
     kern = jitted_kernel_fn(kernel_fn)
     print(f"len(train_set)={len(train_set)}")
     print(f"len(test_set)={len(test_set)}")
@@ -160,31 +174,47 @@ def main(worker_rank, print_interval, n_workers, save_variance, skip_iterations,
             f, kern_name="Kxt", X=train_set, X2=test_set, diag=False)
         timings = timings_obj(itertools.count(), len(Kxx) + len(Kxt))
 
-        Kxx_ongoing = Kxt_ongoing = True
-        for _ in range(skip_iterations):
+        assert f["Kxx"].dtype == onp.float64
+
+        Kxx_ongoing = do_Kxx
+        Kxt_ongoing = do_Kxt
+        _t = 0
+        while _t < skip_iterations:
             # Run iterations without doing any work
             try:
-                next(Kxx); next(timings)
+                next(Kxx); _t = next(timings)
             except StopIteration:
                 Kxx_ongoing = False
             try:
-                next(Kxt); next(timings)
-                next(Kxt); next(timings)
+                next(Kxt); _t = next(timings)
             except StopIteration:
                 Kxt_ongoing = False
 
+        if Kxx_ongoing:
+            prev_Kxx = schedule_kernel(kern, next(Kxx), False, Kxx_mask); next(timings)
+        if Kxt_ongoing:
+            prev_Kxt = schedule_kernel(kern, next(Kxt), False, None); next(timings)
         while Kxx_ongoing or Kxt_ongoing:
             if Kxx_ongoing:
                 try:
-                    kern_save(next(Kxx), kern, Kxx_out, False, Kxx_mask); next(timings)
+                    next_Kxx = schedule_kernel(kern, next(Kxx), False, Kxx_mask); next(timings)
+                    kern_save(prev_Kxx[0], prev_Kxx[1], W_covs, Kxx_out, False, Kxx_mask)
+                    prev_Kxx = next_Kxx
                 except StopIteration:
                     Kxx_ongoing = False
+                    kern_save(prev_Kxx[0], prev_Kxx[1], W_covs, Kxx_out, False, Kxx_mask)
+                    del prev_Kxx
+                    del next_Kxx
             if Kxt_ongoing:
                 try:
-                    kern_save(next(Kxt), kern, Kxt_out, False, None); next(timings)
-                    kern_save(next(Kxt), kern, Kxt_out, False, None); next(timings)
+                    next_Kxt = schedule_kernel(kern, next(Kxt), False, None); next(timings)
+                    kern_save(prev_Kxt[0], prev_Kxt[1], W_covs, Kxt_out, False, None)
+                    prev_Kxt = next_Kxt
                 except StopIteration:
                     Kxt_ongoing = False
+                    kern_save(prev_Kxt[0], prev_Kxt[1], W_covs, Kxt_out, False, None)
+                    del prev_Kxt
+                    del next_Kxt
 
 
 if __name__ == '__main__':
