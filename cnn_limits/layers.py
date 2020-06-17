@@ -5,9 +5,8 @@ from jax import lax, ops, random
 import warnings
 
 import neural_tangents.stax as stax
-from neural_tangents.stax import (_INPUT_REQ, Padding, _layer,
-                                  _set_input_req_attr)
-from neural_tangents.utils.kernel import Marginalisation as M
+from neural_tangents.stax import (_INPUT_REQ, Padding, layer,
+                                  _get_input_req_attr, _requires)
 
 
 def W_init_scalar(std, key, kernel_shape):
@@ -23,7 +22,7 @@ def tensor_cholesky(W_cov_tensor):
     a = np.linalg.cholesky(a)
     return a.reshape((height, width, height, width)).transpose((0, 2, 1, 3))
 
-@stax._layer
+@layer
 def CorrelatedConv(out_chan,
                    filter_shape,
                    strides=None,
@@ -85,36 +84,30 @@ def CorrelatedConv(out_chan,
         return lax.conv_general_dilated(inputs, W, strides, padding.name,
                                         dimension_numbers=dimension_numbers)
 
+    @_requires(batch_axis=0, channel_axis=3, diagonal_spatial=False)
     def kernel_fn(kernels):
-        var1, nngp, var2, ntk, is_height_width, marginal, cross = (
-            kernels.var1, kernels.nngp, kernels.var2, kernels.ntk,
-            kernels.is_height_width, kernels.marginal, kernels.cross)
-        if cross not in [M.OVER_POINTS, M.NO]:
-            raise ValueError("Only possible for `M.OVER_POINTS` and `M.NO`. "
-                             f"Supplied {cross}")
-        if is_height_width:
-            strides_ = strides
-            W_cov_tensor_ = W_cov_tensor
-        else:
+        cov1, nngp, cov2, ntk, is_reversed = (
+            kernels.cov1, kernels.nngp, kernels.cov2, kernels.ntk,
+            kernels.is_reversed)
+
+        if is_reversed:
             strides_ = strides[::-1]
             W_cov_tensor_ = np.transpose(W_cov_tensor, (2, 3, 0, 1))
+        else:
+            strides_ = strides
+            W_cov_tensor_ = W_cov_tensor
 
-        var1 = conv4d_for_5or6d(var1, W_cov_tensor_, strides_, padding)
-        if var2 is not None:
-            var2 = conv4d_for_5or6d(var2, W_cov_tensor_, strides_, padding)
+        cov1 = conv4d_for_5or6d(cov1, W_cov_tensor_, strides_, padding)
+        if cov2 is not None:
+            cov2 = conv4d_for_5or6d(cov2, W_cov_tensor_, strides_, padding)
         nngp = conv4d_for_5or6d(nngp, W_cov_tensor_, strides_, padding)
         if parameterization == 'ntk':
             if ntk is not None:
                 ntk = conv4d_for_5or6d(ntk, W_cov_tensor_, strides_, padding) + nngp
         else:
             raise NotImplementedError("Don't know how to do NTK in standard")
-        return kernels._replace(var1=var1, nngp=nngp, var2=var2, ntk=ntk,
-                                is_height_width=is_height_width,
+        return kernels._replace(cov1=cov1, nngp=nngp, cov2=cov2, ntk=ntk,
                                 is_gaussian=True, is_input=False)
-
-    setattr(kernel_fn, _INPUT_REQ, {'marginal': M.OVER_POINTS,
-                                    'cross': M.NO,
-                                    'spec': "NHWC"})
     return init_fn, apply_fn, kernel_fn
 
 
@@ -244,7 +237,7 @@ def _serial_apply_fn(apply_fns, readout_apply_fns, params, inputs, **kwargs):
     return outputs
 
 
-@_layer
+@layer
 def TickSerialCheckpoint(*layers, intermediate_outputs=True):
     init_fns, apply_fns, kernel_fns, W_covs_list = zip(*layers)
     dense_init, dense_apply, dense_kernel = stax.serial(stax.Flatten(), stax.Dense(1))
@@ -314,7 +307,7 @@ def TickSerialCheckpoint(*layers, intermediate_outputs=True):
                                     'spec': "NHWC"})
     return init_fn, apply_fn, kernel_fn
 
-@_layer
+@layer
 def DenseSerialCheckpoint(*layers, intermediate_outputs=True):
     init_fns, apply_fns, kernel_fns = zip(*layers)
 
@@ -339,7 +332,7 @@ def DenseSerialCheckpoint(*layers, intermediate_outputs=True):
     return init_fn, apply_fn, kernel_fn
 
 
-def covariance_tensor(height, width, kern):
+def covariance_tensor_np(height, width, kern):
     """
     Returns HxHxWxW tensor, whose elements are the kernel between the positions
     of the elements of two HxW and HxW arrays. Useful for making TICK kernels.
@@ -350,7 +343,11 @@ def covariance_tensor(height, width, kern):
     HW = HW.reshape((height*width, 2)).to(next(kern.parameters()))
     with torch.no_grad():
         mat = kern(HW, HW).evaluate().reshape((height, width, height, width))
-    return np.asarray(mat.transpose(1, 2).cpu().numpy())
+    return mat.transpose(1, 2).cpu().numpy()
+
+
+def covariance_tensor(height, width, kern):
+    return np.asarray(covariance_tensor_np(height, width, kern))
 
 
 def elementwise_init_fn(rng, input_shape):
@@ -367,7 +364,7 @@ def _gaussian_kernel(ker_mat, prod, do_backprop):
     return sqrt_prod * np.exp(cosines - 1)
 
 
-@_layer
+@layer
 def GaussianLayer(do_backprop=False):
     "similar to relu but less acute"
     def kernel_fn(kernels):
@@ -397,7 +394,7 @@ def proj_relu_kernel(ker_mat, prod, do_backprop):
     return ker_mat
 
 
-@_layer
+@layer
 def CorrelationRelu(do_backprop=False):
     "Returns the correlation, not the covariance, from a ReLU"
     def kernel_fn(kernels):
@@ -413,7 +410,7 @@ def CorrelationRelu(do_backprop=False):
     return elementwise_init_fn, elementwise_apply_fn, kernel_fn
 
 
-@_layer
+@layer
 def TickSweep(model, W_covs_list):
     orig_init_fn, orig_apply_fn, orig_kernel_fn = model
     dense_init, dense_apply, dense_kernel = stax.serial(stax.Flatten(), stax.Dense(1))
@@ -428,40 +425,63 @@ def TickSweep(model, W_covs_list):
         raise NotImplementedError
 
     def f(W_cov):
-        a = W_cov.ravel()
-        return a * (1/a.sum())
-    W_covs_T = [f(W_cov.transpose((2, 3, 0, 1)))
-                for W_cov in W_covs_list]
+        return W_cov.ravel().astype(np.float64)
     W_covs = [f(W_cov) for W_cov in W_covs_list]
 
+    @_requires(batch_axis=0, channel_axis=3, diagonal_spatial=False)
     def kernel_fn(kernel):
         kernel = orig_kernel_fn(kernel)
         d1, d2, h, _, w, _ = kernel.nngp.shape
 
-        nngp = kernel.nngp.reshape((d1, d2, -1))
-        var1 = kernel.var1.reshape((d1, -1))
-        var2 = (None if kernel.var2 is None else kernel.var2.reshape((d2, -1)))
+        nngp = kernel.nngp.reshape((d1, d2, -1)).astype(np.float64)
+        cov1 = kernel.cov1.reshape((d1, -1)).astype(np.float64)
+        cov2 = (None if kernel.cov2 is None else kernel.cov2.reshape((d2, -1)).astype(np.float64))
 
         meanpool_nngp = nngp.mean(-1)
-        meanpool_var1 = var1.mean(-1)
-        meanpool_var2 = (None if var2 is None else var2.mean(-1))
-        if kernel.is_height_width:
-            tick_nngp = [nngp @ W_cov_T for W_cov_T in W_covs_T]
-            tick_var1 = [var1 @ W_cov_T for W_cov_T in W_covs_T]
-            tick_var2 = [(None if var2 is None else var2 @ W_cov_T)
-                         for W_cov_T in W_covs_T]
-        else:
-            tick_nngp = [nngp @ W_cov for W_cov in W_covs]
-            tick_var1 = [var1 @ W_cov for W_cov in W_covs]
-            tick_var2 = [(None if var2 is None else var2 @ W_cov)
-                         for W_cov in W_covs]
+        meanpool_cov1 = cov1.mean(-1)
+        meanpool_cov2 = (None if cov2 is None else cov2.mean(-1))
+
+        tick_nngp = [nngp @ W_cov for W_cov in W_covs]
+        tick_cov1 = [cov1 @ W_cov for W_cov in W_covs]
+        tick_cov2 = [(None if cov2 is None else cov2 @ W_cov)
+                     for W_cov in W_covs]
+        print("len should be", len(tick_nngp)+2)
         return [
             dense_kernel(kernel),
-            *[kernel._replace(nngp=n, var1=v1, var2=v2, ntk=None)
-              for (n, v1, v2) in zip(tick_nngp, tick_var1, tick_var2)],
-            kernel._replace(nngp=meanpool_nngp, var1=meanpool_var1, var2=meanpool_var2, ntk=None),
+            *[kernel.replace(nngp=n, cov1=v1, cov2=v2, ntk=None)
+              for (n, v1, v2) in zip(tick_nngp, tick_cov1, tick_cov2)],
+            kernel.replace(nngp=meanpool_nngp, cov1=meanpool_cov1, cov2=meanpool_cov2, ntk=None),
         ]
-    setattr(kernel_fn, _INPUT_REQ, {'marginal': M.OVER_POINTS,
-                                    'cross': M.NO,
-                                    'spec': "NHWC"})
+    return init_fn, apply_fn, kernel_fn
+
+
+@layer
+def Checkpoint(*layers):
+    init_fns, apply_fns, kernel_fns = zip(*layers)
+
+    def init_fn(rng, input_shape):
+        rngs = jax.random.split(rng, len(init_fns))
+        shape = input_shape
+
+        output_shapes = []
+        all_params = []
+        for fn, rng in zip(init_fns, rngs):
+            shape, params = fn(rng, shape)
+            output_shapes.append(shape)
+            all_params.append(params)
+        return output_shapes, params
+
+    def apply_fn(params, inputs):
+        for fn, param in zip(apply_fns, params):
+            inputs = fn(param, inputs)
+        return inputs
+
+    @_requires(**_get_input_req_attr(kernel_fns))
+    def kernel_fn(kernels):
+        all_kernels = []
+        for fn in kernel_fns:
+            kernels = fn(kernels)
+            all_kernels.append(kernels)
+        return all_kernels
+
     return init_fn, apply_fn, kernel_fn

@@ -47,7 +47,8 @@ def eigdecompose(Kxx, lower=True):
     return torch.symeig(Kxx, eigenvectors=True, upper=not lower)
 
 
-def accuracy_chol(Kxx, Kxt, oh_train_Y, test_Y, sigy, FY=None, lower=True):
+@experiment.capture
+def accuracy_chol(Kxx, Kxt, oh_train_Y, test_Y, sigy, _log, FY=None, lower=True):
     assert FY is None
     B, N, D = oh_train_Y.shape
     T = Kxt.shape[-1]
@@ -58,7 +59,16 @@ def accuracy_chol(Kxx, Kxt, oh_train_Y, test_Y, sigy, FY=None, lower=True):
         sigy_ = sigy.item()
     else:
         sigy_ = sigy.view((-1, 1, 1))
-    L = torch.cholesky(Kxx + sigy_*torch.eye(N, dtype=Kxx.dtype, device=Kxx.device), upper=False)
+    for i in range(10):
+        if i > 0:
+            _log.warning(f"Adding 2^{i}*sigy_ to Kxx, sigy_={sigy_}")
+        try:
+            L = torch.cholesky(
+                Kxx + (2**i * sigy_)*torch.eye(N, dtype=Kxx.dtype, device=Kxx.device), upper=False)
+            break
+        except RuntimeError:
+            pass
+
     if B == 1:
         L = L.unsqueeze(0)
     assert L.shape == (B, N, N)
@@ -240,7 +250,7 @@ def main_no_eig(kernel_matrix_path, _log, n_splits, i_SU):
         dst.write(src.read())
 
     with h5py.File(kernel_matrix_path/"kernels.h5", "r") as f:
-        N_layers, N_total, _ = f['Kxx'].shape
+        N_layers, N_total, N_test_total = f['Kxt'].shape
 
         all_N = list(itertools.takewhile(
             lambda a: a <= N_total,
@@ -259,6 +269,7 @@ def main_no_eig(kernel_matrix_path, _log, n_splits, i_SU):
             layer_iter = reversed(data.index)
 
         for layer in layer_iter:
+            _log.info("Reading Kxx...")
             Kxx = f['Kxx'][layer].astype(dtype)
             # if layer in (10, 11, 12, 13, 14):
             mask = np.tril(np.ones(Kxx.shape, dtype=bool))
@@ -270,31 +281,14 @@ def main_no_eig(kernel_matrix_path, _log, n_splits, i_SU):
                 continue
             # Kxx = (Kxx + Kxx.T)/2
 
+            _log.info("Reading Kxt...")
             Kxt = f['Kxt'][layer].astype(dtype)
-            # Fix my mistake of changing the kernel code in between the validation and test set calculation
-            # if layer in (10, 11, 12, 13):
-            #     import gpytorch
-            #     from cnn_limits.layers import covariance_tensor
-            #     filter_numel = 32**2
-            #     kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
-            #     kern.lengthscale = 10**np.linspace(-1.5, 4.5, 25)[layer-1]
-            #     norm = covariance_tensor(32, 32, kern).sum()
-            #     Kxx *= filter_numel / norm
-            #     # Kxt *= norm / filter_numel
-            #     # import pdb; pdb.set_trace()
-
             for N in (r for r in reversed(data.columns) if r%4 == 0):
                 # Permute within classes
                 this_N_permutation = []
                 for i in range(10):
-                    if N_layers == 102:  # Myrtle
-                        perm = np.random.permutation(N_total//10)
-                        this_N_permutation.append(perm+(i*N_total//10))
-                    else:
-                        perm = np.random.permutation(N_total//20)
-                        this_N_permutation.append(perm+(i*N_total//10))
-                        perm = np.random.permutation(N_total//20)
-                        this_N_permutation.append(perm+(i*N_total//10 + N_total//20))
+                    perm = np.random.permutation(N_total//10)
+                    this_N_permutation.append(perm+(i*N_total//10))
                 this_N_permutation = np.stack(this_N_permutation, 0).T.copy().reshape(-1)
                 assert np.all(sorted(this_N_permutation) == np.arange(N_total))
                 for i in range(N_total//10):
@@ -302,22 +296,23 @@ def main_no_eig(kernel_matrix_path, _log, n_splits, i_SU):
 
                 data.loc[layer, N], accuracy.loc[layer, N] = [], []
                 # For this many data sets
-                Kxx_ = np.zeros((N_total//N, N*3//4, N*3//4), dtype=dtype)
-                Kxt_ = np.zeros((N_total//N, N*3//4, N//4), dtype=dtype)
-                Y_ = np.zeros((N_total//N, N*3//4, oh_train_Y.shape[-1]), dtype=dtype)
-                test_Y_ = np.zeros((N_total//N, N//4), dtype=test_Y.dtype)
+                Kxx_ = np.zeros((N_total//N, N, N), dtype=dtype)
+                Kxt_ = np.zeros((N_total//N, N, len(test_Y)), dtype=dtype)
+                Y_ = np.zeros((N_total//N, N, oh_train_Y.shape[-1]), dtype=dtype)
+                test_Y_ = np.zeros((1, len(test_Y)), dtype=test_Y.dtype)
 
                 for i in range(N_total//N):
                     train_idx = this_N_permutation[i*N:(i+1)*N]
                     assert len(train_idx) == N
-                    Kxx_[i] = Kxx[train_idx, :][:, train_idx][:N*3//4, :N*3//4]
-                    # Kxt_[i] = Kxt[train_idx, :]
-                    Kxt_[i] = Kxx[train_idx, :][:, train_idx][:N*3//4, N*3//4:]
-                    Y_[i] = oh_train_Y[train_idx][:N*3//4]
-                    test_Y_[i] = oh_train_Y[train_idx][N*3//4:, :].argmax(-1)
+                    Kxx_[i] = Kxx[train_idx, :][:, train_idx]
+                    Kxt_[i] = Kxt[train_idx, :]
+                    # Kxt_[i] = Kxx[train_idx, :][:, train_idx]
+                    Y_[i] = oh_train_Y[train_idx]
+                    # test_Y_[i] = oh_train_Y[train_idx][N*3//4:, :].argmax(-1)
+                test_Y_[0] = test_Y
 
-                # test_Y_ = test_Y[:Kxt.shape[-1]]
-                _d, _a = do_one_N(Kxx_, Kxt_, Y_, test_Y_, n_splits=3, FY=None, lower=True)
+                #test_Y_ = test_Y
+                _d, _a = do_one_N(Kxx_, Kxt_, Y_, test_Y_, n_splits=4, FY=None, lower=True)
                 _d = (_d[0].cpu().numpy(), _d[1].cpu().numpy())
                 _a = (_a[0].cpu().numpy().squeeze(-1), _a[1].cpu().numpy().squeeze(-1))
                 _d_max = (None, _d[1].max(-1))

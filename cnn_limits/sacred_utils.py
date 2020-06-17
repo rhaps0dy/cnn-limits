@@ -22,6 +22,7 @@ ingredient = sacred.Ingredient("i_SU")
 def config():
     # GPytorch
     num_likelihood_samples = 20
+    # Pytorch
     default_dtype = "float64"
 
     # Dataset loading

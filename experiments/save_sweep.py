@@ -17,7 +17,7 @@ import cnn_limits.sacred_utils as SU
 from cnn_gp import DiagIterator, ProductIterator, create_h5py_dataset
 from cnn_limits.tbx import PrintTimings
 
-experiment = sacred.Experiment("save_new", [SU.ingredient])
+experiment = sacred.Experiment("save_sweep", [SU.ingredient])
 if __name__ == '__main__':
     SU.add_file_observer(experiment)
 
@@ -29,9 +29,8 @@ def config():
     n_workers = 1
     worker_rank = 0
     print_interval = 2.
-    model = "google_NNGP"
+    model = "CNTK14_split_cpu"
 
-    use_ntk = False
     save_variance = False
     internal_lengthscale = None
     skip_iterations = 0
@@ -68,11 +67,14 @@ def kern_save(iterate, k_in, W_covs, out, diag, mask):
     same, (i, (x, _y)), (j, (x2, _y2)) = iterate
     if mask is not None and not np.any(mask[i:i+x.shape[0], j:j+x2.shape[0]]):
         return
-    # k = W_covs @ onp.asarray(k_in, dtype=np.float64).reshape((-1, W_covs.shape[1])).T
-    # k = k.reshape((W_covs.shape[0], len(x), len(x2)))
+    # W_covs: A x 1 x WWHH
+    # k_in: B x len(x) x len(x2) x W x W x H x H
+    # arr = onp.asarray(k_in, dtype=np.float64).reshape((-1, W_covs.shape[-1], 1))
+    # k = onp.dot(W_covs, arr)
+    # k = k.reshape((W_covs.shape[0] * k_in.shape[0], len(x), len(x2)))
     k = k_in
     s = k.shape
-    assert k.dtype == np.float64
+    # assert k.dtype == np.float64
     try:
         if len(s) == 2:
             out[:s[0], i:i+s[1]] = k
@@ -105,20 +107,27 @@ def jax_model(model, internal_lengthscale):
 
 
 @experiment.capture
-def jitted_kernel_fn(kernel_fn, use_ntk):
+def jitted_kernel_fn(kernel_fn, W_covs, i_SU, batch_size):
+    W_covs = np.asarray(W_covs, dtype=np.float64)
     def kern_(x1, x2, same, diag):
-        if diag:
-            get = "var1"
-        elif use_ntk:
-            get = "ntk"
-        else:
-            get = "nngp"
+        assert not diag
         x1 = np.moveaxis(x1, 1, -1)
         x2 = (None if same else np.moveaxis(x2, 1, -1))
-        y = kernel_fn(x1, x2, get=get)
-        if isinstance(y, list):
-            return np.stack(y)
-        return np.expand_dims(y, 0)
+        y = kernel_fn(x1, x2, get=('nngp', 'ntk'))
+        if not isinstance(y, list):
+            y = [y]
+        outs = []
+        for _y in y:
+            outs = outs + [_y.nngp, _y.ntk]
+        outs = np.stack(outs, axis=0)
+        assert outs.dtype == np.float32
+
+        outs = outs.astype(np.float64)
+        assert outs.shape[1:] == (batch_size, batch_size, 32, 32, 32, 32)
+        arr = outs.reshape((-1, W_covs.shape[-1], 1))
+        k = np.dot(W_covs, arr)
+        k = k.reshape((W_covs.shape[0] * outs.shape[0], *outs.shape[1:3]))
+        return k
     kern_ = jax.jit(kern_, static_argnums=(2, 3))
     # dtype = getattr(onp, i_SU["default_dtype"])
     dtype = onp.float32
@@ -141,9 +150,9 @@ def wrong_zca_dataset():
 @experiment.main
 def main(worker_rank, print_interval, n_workers, save_variance, skip_iterations, Kxx_mask_path, do_Kxt, do_Kxx):
     train_set, test_set = SU.load_sorted_dataset()
-    _, _, kernel_fn = jax_model()
-    kern = jitted_kernel_fn(kernel_fn)
-    W_covs = None
+    (_, _, kernel_fn), W_covs = jax_model()
+    W_covs = onp.stack(W.ravel() for W in W_covs)
+    kern = jitted_kernel_fn(kernel_fn, W_covs)
     print(f"len(train_set)={len(train_set)}")
     print(f"len(test_set)={len(test_set)}")
 
@@ -156,17 +165,6 @@ def main(worker_rank, print_interval, n_workers, save_variance, skip_iterations,
         timings_obj = PrintTimings(
             desc=f"Kxx&Kxt (worker {worker_rank}/{n_workers})",
             print_interval=print_interval)
-
-        if save_variance and worker_rank == 0:
-            Kx_diag, Kx_diag_out = kern_iterator(
-                f, kern_name="Kx_diag", X=train_set, X2=None, diag=True)
-            for it in timings_obj(Kx_diag):
-                kern_save(it, kern, Kx_diag_out, True, None)
-
-            Kt_diag, Kt_diag_out = kern_iterator(
-                f, kern_name="Kt_diag", X=test_set, X2=None, diag=True)
-            for it in timings_obj(Kt_diag):
-                kern_save(it, kern, Kt_diag_out, True, None)
 
         Kxx, Kxx_out = kern_iterator(
             f, kern_name="Kxx", X=train_set, X2=None,     diag=False)
@@ -196,6 +194,7 @@ def main(worker_rank, print_interval, n_workers, save_variance, skip_iterations,
             prev_Kxt = schedule_kernel(kern, next(Kxt), False, None); next(timings)
         while Kxx_ongoing or Kxt_ongoing:
             if Kxx_ongoing:
+                print("Kxx")
                 try:
                     next_Kxx = schedule_kernel(kern, next(Kxx), False, Kxx_mask); next(timings)
                     kern_save(prev_Kxx[0], prev_Kxx[1], W_covs, Kxx_out, False, Kxx_mask)
@@ -206,6 +205,7 @@ def main(worker_rank, print_interval, n_workers, save_variance, skip_iterations,
                     del prev_Kxx
                     del next_Kxx
             if Kxt_ongoing:
+                print("Kxt")
                 try:
                     next_Kxt = schedule_kernel(kern, next(Kxt), False, None); next(timings)
                     kern_save(prev_Kxt[0], prev_Kxt[1], W_covs, Kxt_out, False, None)

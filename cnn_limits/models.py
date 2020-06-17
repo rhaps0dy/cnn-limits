@@ -1,5 +1,6 @@
 import jax.experimental.stax as ostax
 import jax.numpy as np
+import numpy as onp
 
 import gpytorch
 from neural_tangents import stax
@@ -8,7 +9,7 @@ from neural_tangents.stax import (AvgPool, Conv, Dense, FanInSum, FanOut,
 
 from .layers import (CorrelatedConv, CorrelationRelu, DenseSerialCheckpoint,
                      GaussianLayer, TickSerialCheckpoint, TickSweep,
-                     covariance_tensor)
+                     covariance_tensor, covariance_tensor_np, Checkpoint)
 
 need_internal_lengthscale = []
 def reg_internal_lengthscale(f):
@@ -440,6 +441,76 @@ def CNTK14_sweep_v2(channels=16):
 
     return TickSweep(stax.serial(
         *([conv, relu] * 14)), Wcovs)
+
+
+def CNTK14_split_cpu(channels=16):
+    kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
+    log_lengthscales = onp.linspace(0.5, 1.75, 11)
+
+    Wcovs = [np.eye(32**2, 32**2).reshape((32, 32, 32, 32)).transpose((0, 2, 1, 3)) / 32**2]
+    for lsc in 10**log_lengthscales:
+        kern.lengthscale = lsc
+        W = covariance_tensor_np(32, 32, kern)
+        assert W.dtype == onp.float64
+        W_sum = W.sum()
+        # Divide by nearest smaller power of 2
+        fac = 1
+        while fac < W_sum:
+            fac *= 2
+        Wcovs.append(W / fac)
+    Wcovs.append(np.ones((32, 32, 32, 32)) / 32**4)
+
+    relu = Relu()
+    conv = Conv(channels, filter_shape=(3, 3), strides=(1, 1), padding='SAME')
+
+    return (Checkpoint(
+        stax.serial(*([conv, relu] * 5)),  # 5
+        stax.serial(*([conv, relu] * 3)),  # 8
+        stax.serial(*([conv, relu] * 6)),  # 14
+    ), Wcovs)
+
+
+def Myrtle10_split_cpu(channels=16):
+    kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
+    log_lengthscales = onp.array([-0.5, 0., 0.25, *onp.linspace(0.5, 1.75, 11), 2., 2.5])
+
+    sz = 8
+    Wcovs = [np.eye(sz**2, sz**2).reshape((sz, sz, sz, sz)).transpose((0, 2, 1, 3)) / sz**2]
+    for lsc in 10**log_lengthscales:
+        kern.lengthscale = lsc
+        W = covariance_tensor_np(sz, sz, kern)
+        assert W.dtype == onp.float64
+        W_sum = W.sum()
+        # Divide by nearest smaller power of 2
+        fac = 1
+        while fac < W_sum:
+            fac *= 2
+        Wcovs.append(W / fac)
+    Wcovs.append(np.ones((sz, sz, sz, sz)) / sz**4)
+
+    pool = AvgPool(window_shape=(2, 2), strides=(2, 2))
+    relu = Relu()
+    conv = Conv(channels, filter_shape=(3, 3), strides=(1, 1), padding='SAME')
+
+    return (stax.serial(
+        conv, relu,
+        conv, relu,
+        conv, relu,
+        pool,
+        conv, relu,
+        conv, relu,
+        conv, relu,
+        pool,
+        conv, relu,
+        conv, relu,
+        conv, relu,
+    ), Wcovs)
+
+
+def CNTK14(channels=16):
+    relu = Relu()
+    conv = Conv(channels, filter_shape=(3, 3), strides=(1, 1), padding='SAME')
+    return stax.serial(*([conv, relu] * 14), stax.Flatten(), stax.Dense(1))
 
 
 def CNTK14_sweep_mid_lengthscales(channels=16):
