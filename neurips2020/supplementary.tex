@@ -1,0 +1,409 @@
+\appendix
+\section{Proof that a CNN with correlations in the weights converges to a GP\label{app:netsor}}
+{  % This bracket defines the scope for commands:
+  \newcommand{\Gva}{\mathsf{G}}
+  \newcommand{\Hva}{\mathsf{H}}
+  \newcommand{\Ava}{\mathsf{A}}
+  \newcommand{\MatMul}{{\texttt{MatMul} }}
+  \newcommand{\LinComb}{{\texttt{LinComb} }}
+  \newcommand{\Nonlin}{{\texttt{Nonlin} }}
+  \newcommand{\Netsor}{{\textsc{Netsor} }}
+
+
+In this section, we formally prove that a CNN with correlated weights converges
+to a Gaussian process in the limit of infinite width. Using the \Netsor
+programming language due to \citet{yang2019wide}, most of the work in the proof
+is done by
+one step: describe a CNN with correlated weights in \Netsor.
+
+For the reader's convenience, we informally recall the \Netsor programming language
+\citep{yang2019wide} and the key property of its programs (Corollary~\ref{corollary:netsor-gp}). The outline of our presentation here also closely follows
+\citet{yang2019wide}. Readers familiar with \Netsor should skip to
+\cref{sec:netsor-program}, where we show the program that proves Theorem~\ref{theorem:correlated-weights-nn}.
+
+
+We write $[n]$ to mean the set $\{1,\dots,n\}$.
+
+\subsection{The \Netsor programming language}
+There are three types of variables: $\Gva(n)$-vars, $\Ava(n_1,
+n_2)$-vars, and $\Hva(n)$-vars. Each of these have one or two
+parameters, which are the widths we will take to infinity. For a
+given index in $[n]$ (or $[n_1],[n_2]$), each of these variables is a \emph{scalar}. To
+represent vectors that do not grow to infinity, we need to use collections of variables.
+
+\begin{itemize}
+\item[$\Gva$-vars] (Gaussian-vars) are $n$-wise \emph{approximately}
+i.i.d. and Gaussian. By ``$n$-wise (approximately) independent'' we mean that there can be
+correlations between $\Gva$-vars, but only within a single index $i \in 1,\dots,n$.
+$\Gva$-vars will converge in
+distribution to an $n$-wise independent, identically distributed Gaussian in the limit of $n \to \infty$, if
+all widths are $n$.
+
+\item[$\Ava$-vars] represent matrices,
+like the weight matrices of a dense neural network. Their entries are always i.i.d.
+Gaussian with with zero mean, even for finite instantiations of the program
+(finite $n$).
+There are no correlations between different $\Ava$-vars, or elements of the same $\Ava$-var.
+
+\item[$\Hva$-vars] represent variables that become $n$-wise i.i.d. (not necessarily
+Gaussian) in the
+infinite limit. $\Gva$ is a subtype of $\Hva$, so all $\Gva$-vars are also $\Hva$-vars.
+\end{itemize}
+
+We indicate the type of a variable, or each variable in a
+collection, using ``$\text{var} : \text{Type}$''.
+
+
+\begin{definition}[Netsor program]
+A \textsc{Netsor} program consists of:
+\begin{itemize}
+  \item[\bf Input:]
+ A set of $\Gva$-vars or $\Ava$-vars.
+
+ \item[\bf Body:]
+New variables can be defined using the following rules:
+\begin{enumerate}
+  \item[\texttt{MatMul:}] $\Ava(n_1, n_2) \times \Hva(n_2) \to \Gva(n_1)$. Multiply an
+    an i.i.d. Gaussian matrix times an i.i.d. vector, which becomes a Gaussian
+    vector in the limit $n_2 \to \infty$.
+  \item[\texttt{LinComb:}] Given constants $\alpha_1,\dots,\alpha_K$, and $\Gva$-vars
+    $x_1,\dots,x_K$ of type $\Gva(n_1)$, their linear combination $\sum_{k=1}^K \alpha_k
+    x_k$ is a $\Gva$-var.
+  \item[\texttt{Nonlin:}] applying an elementwise nonlinear function $\phi : \Reals^k \to
+    \Reals$, we map
+    several $\Gva$-vars $x_1,\dots,x_K$ to one $\Hva$-var. 
+\end{enumerate}
+
+\item[\bf Output:]
+A tuple of scalars $(v_1^\tp x_1/\sqrt{n_1}, \;\dots, \; v_K^\tp
+x_K/\sqrt{n_K})$. The variables $v_k : \Gva(n)$ are input $\Gva$-vars used only
+in the output tuple of the program. It may be the case that $v_i = v_j$ for
+different $i, j$. Each $x_k : \Hva(n_k)$ is an $\Hva$-var.
+\end{itemize}
+\end{definition}
+
+\subsection{The output of a \Netsor program converges to a Gaussian process}
+\begin{definition}[Controlled function]
+  A function $\phi: \Reals^k \to \Reals$ is \emph{controlled} if
+  \[ \abs{\phi(\vx)} \le C\, \text{exp} \bra{\bracket{\|}{\|}{\vx}_2^\bra{2-\epsilon}}
+    + c \]
+  for 
+  $C,c,\epsilon > 0$, where $\|\cdot\|_2$ is the L2 norm.\end{definition}
+
+Intuitively, this means that the function $\phi$ grows
+more slowly than the rate at which the tail of a Gaussian decays. Recall that the tail of a
+mean zero, identity covariance Gaussian decays as 
+$\mathcal{N}\bra{\vx \vbar {\boldsymbol{0}}, \eye} \propto \exp\bra{-\bracket{\|}{\|}{\vx}_2^2}$.
+
+\begin{assumption}
+  All nonlinear functions $\phi(\cdot)$ in the \Netsor program are controlled.
+  \label{ass:controlled}
+\end{assumption}
+
+\begin{assumption}[Distribution of $\Ava$-var inputs]
+  Each element $W_{\chan,\prevchan} \in A^i(n, n)$ in each input $\Ava$-var is
+  sampled from the zero-mean, i.i.d. Gaussian, $W_{\chan,\prevchan} \sim \NormDist{0,
+    \sigma_\text{w}^2/n}.$
+  \label{ass:avar-inputs}
+\end{assumption}
+\begin{assumption}[Distribution of $\Gva$-var inputs]
+  Consider the input vector of all $\Gva$-vars for each channel $\chan \in [n]$,
+  that is the vector $\vz_\chan \eqdef [x_\chan : x\text{ is input
+  }\Gva\text{-var}]$. It is drawn from a Gaussian, $\vz_\chan \sim
+  \NormDist{\vmu^\text{in}, \vSigma^\text{in}}$.
+  The covariance $\vSigma^\text{in}$ may be
+  singular. The $\Gva$-vars $v$ that correspond to the output are sampled
+  independently from all other $\Gva$-vars, so they are excluded from each $\vz_\chan$
+  \label{ass:gvar-inputs}
+\end{assumption}
+
+\citet{yang2019wide} goes on to prove the \Netsor master theorem, from which
+the corollary of interest follows.
+
+\begin{corollary}[Corollary~5.5, abridged, \cite{yang2019wide}]
+  Fix a \Netsor program with controlled nonlinearities, and draw its inputs
+  according to assumptions \ref{ass:avar-inputs} and \ref{ass:gvar-inputs}. For simplicity, fix
+  the widths of all the variables to $n$. The program outputs are $(v_{1}^\tp x_1/\sqrt{n}, \;\dots, \; v_K^\tp
+  x_K/\sqrt{n})$, where
+  each $x_k$ is an $\Hva$-var, and each
+    $v_k$ is a $\Gva$-var independent from all others with variance
+    $\sigma^2_{\text{v}_k}$ (there can be some repeated indices, $v_i = v_j$).
+  Then, as $n \to \infty$, the output tuple
+  converges in distribution to a Gaussian $\NormDist{{\boldsymbol{0}}, \vK}$.
+  The value of $\vK$ is given by the recursive rules in equation~2 of \citet{yang2019wide}.
+  \label{corollary:netsor-gp}
+\end{corollary}
+
+ Informally, the rules consist of recursively calculating the covariances
+of the
+program's $\Gva$-vars and output, assuming at every step that the $\Gva$-vars are $n$-wise
+i.i.d. and Gaussian. This is the approach we employ in Section~4 %\cref{sec:correlated-weights}.
+of the main paper.
+
+\subsection{Description in \Netsor of a CNN with correlations in the weights\label{sec:netsor-program}}
+The canonical way to represent
+convolutional filters in \Netsor \citep[\Netsor program 4]{yang2019wide} is to
+use one $\Ava$-var for every spatial location
+of the weights. That is, if our convolutional patches have size $\patchw{\ell} \times \patchh{\ell}$,
+we define the input $\layerW{\ell}_\patchidx: \Ava(\layerC{\ell+1}, \layerC{\ell})$ for
+all $\patchidx \in [\patchsize{\ell}]$. But $\Ava$-vars have to be independent
+of each other, so how can we add correlation in the weights? We apply the
+correlation separately, using a \LinComb operation. For this, we will use the
+following well-known lemma, which is the $\vL\epsilon + \vmu$ expression of a
+Gaussian random variable.
+
+\begin{lemma}
+  Let $\vmu$, $\vSigma$ be an arbitrary mean vector and covariance matrix, respectively.
+  Let $u_1,\dots,u_K \sim \NormDist{0, 1}$ be a collection of i.i.d. Gaussian
+  random variables. Then, there exists a lower-triangular square matrix 
+  $\vL$ such that $\vL\vL^\tp = \vSigma$.
+  Furthermore, the random vector $\vw \in \mathbb{R}^K$, $\vw \eqdef \vL\vu + \vmu$ (equivalently, $w_k
+  = \sum_{j=1}^kL_{kj}u_j + \mu_k$ ) has a Gaussian distribution, $\vw \sim \NormDist{\vmu, \vSigma}$.
+  \label{lemma:L}
+\end{lemma}
+\begin{proof}
+  $\vSigma$ is a covariance matrix so it is positive semi-definite, thus
+  a lower-triangular square matrix $\vL$ s.t. $\vL\vL^\tp = \vSigma$ always exists. (If
+  $\vSigma$ is singular, $\vL$
+  might have zeros in the diagonal.) The vector $\vw$ is Gaussian because it is
+  a linear transformation of $\vu$. Calculating its moments finishes the proof.
+\end{proof}
+Thus, to express convolution in \Netsor with correlated weights $\vw$, we can use the
+following strategy. First, express several convolutions with uncorrelated
+weights $\vu$. Then, combine the output of the convolutions using \LinComb and coefficients of
+the matrix $\vL$.
+
+If the correlated weights have a non-zero mean, we can add an input $\Gva$-var
+with mean $\mu$ and variance 0, and use it in the \LinComb as well. Because we
+only use $\mu=0$ in the main text, we omit this step here.
+
+
+{  % program commands scope
+  \newcommand{\Input}[1]{\State{\textbf{Input} #1}}
+  \newcommand{\Output}[1]{\State{\textbf{Output} #1}}
+  \newcommand{\CommentC}[1]{\vspace{1ex}\State{\textit{// #1}}}
+  \newcommand{\SMatMul}[1]{\State{\texttt{MatMul}: #1}}
+  \newcommand{\SLinComb}[1]{\State{\texttt{LinComb}: #1}}
+  \newcommand{\SNonlin}[1]{\State{\texttt{Nonlin}: #1}}
+
+  \newcommand{\layerBs}[2]{B^{(#1)}_{#2}}
+  \newcommand{\layerBsp}[2]{B^{#1}_{#2}}
+  \newcommand{\layerB}[1]{\vB^{(#1)}}
+  \newcommand{\layerUs}[1]{U^{(#1)}}
+  \newcommand{\layerU}[1]{\vU^{(#1)}}
+  \newcommand{\layerAsm}[3]{Z^{\!(#1)}_{#2}\!\bra{#3}}
+  \newcommand{\layerNLAsm}[3]{A^{\!(#1)}_{#2}\!\bra{#3}}
+  \newcommand{\layerNLAsmp}[3]{A^{\!#1}_{#2}\!\bra{#3}}
+
+  \renewcommand{\layerw}[1]{P^{(#1)}}
+  \renewcommand{\layerh}[1]{Q^{(#1)}}
+  \renewcommand{\layersize}[1]{\layerw{#1}\layerh{#1}}
+  \newcommand{\priorLcov}[1]{\vL^{(#1)}}
+  \newcommand{\priorLscov}[1]{L^{(#1)}}
+
+\begin{algorithm}
+  \caption{\Netsor description of the CNN in Figure~1, with
+    correlated weights\label{alg:correlated}}
+\begin{algorithmic}
+  \CommentC{Program for $M$ training + test points, $\vX_1,\dots,\vX_M$. The
+    activation nonlinearity is $\phi$.}
+  \CommentC{$\Gva$-vars for the 1st layer pre-activations, for all spatial locations
+    $\patch$ and input points $\vX_m$.}
+  \Input{$\layerAsm{1}{\patch}{\vX_m} : \Gva(\layerC{1})$ for $\patch \in
+    \sqb{\layersize{1}}$ and $m \in [M]$.}
+  \CommentC{$\Ava$-vars for the independent convolutional patches $\vU$, for
+    every location $i$ in a patch and layer $\ell$.}
+  \Input{$\layerU{\ell}_{i} : \Ava\bra{\layerC{\ell}, \layerC{\ell-1}}$
+    for $i \in [\patchsize{\ell}]$ and $\ell \in \{2\}$.}
+  \CommentC{$\Gva$-vars for the output, for every location $i$}
+  \Input{$\layerU{3}_{i} : \Gva\bra{\layerC{2}}$ for $i \in [\layersize{2}]$}
+  \CommentC{Construct the second layer's independent activations $\layerBsp{(2)[\patch]}{\patchidx}$,
+    for each spatial location $\patch$, location $\patchidx$  in a patch and
+    location $i$ in a patch.}
+  \For{$m \in [M]$, $\patch \in \sqb{\layersize{1}}$, $\patchidx \in
+    \sqb{\patchsize{1}}$, $i \in \sqb{\patchsize{1}}$}
+    \SNonlin{$\layerNLAsm{1}{\patch}{\vX_m} \eqdef
+      \phi(\layerAsm{1}{\patch}{\vX_m}) : \Hva(\layerC{1})$}
+    \SMatMul{$\layerBsp{(2)[\patch]}{\patchidx i}(\vX_m) \eqdef
+      \layerU{2}_{i}\layerNLAsmp{(1)[\patch]}{\patchidx}{\vX_m} : \Gva(\layerC{2})$}
+  \EndFor
+
+  \CommentC{Correlate the activations according to $\priorWcov{2} = \priorLcov{2}\bra{\priorLcov{2}}^\tp $}
+  \For{$m \in [M]$, $\patch \in \sqb{\layersize{2}}$}
+  \CommentC{Convolution (sum in a patch, index $q$) with weights made dependent
+    with index $i$ (c.f. Lemma~\ref{lemma:L})}
+  \SLinComb{$\layerAsm{2}{\patch}{\vX_m} \eqdef
+    \sum_{\patchidx=1}^{\patchsize{1}} \sum_{i=1}^{\patchidx}
+    \priorLscov{2}_{\patchidx i} \layerBsp{(2)[\patch]}{\patchidx i}(\vX_m) : \Gva(\layerC{2})$}
+  \EndFor
+
+  \CommentC{Repeat the last two for-loops as needed to create more layers}
+  \vspace{1ex}
+  \For{$m \in [M]$, $\patch \in \sqb{\layersize{2}}$}
+  \SNonlin{$\layerNLAsm{2}{\patch}{\vX_m} \eqdef
+    \phi(\layerAsm{2}{\patch}{\vX_m}) : \Hva(\layerC{2})$}
+  \EndFor
+  \CommentC{One output for every spatial location $\patch$, spatial location $i$ and data point $m$}
+  \Output{$\cb{\bra{\layerUs{3}_i}^\tp \layerNLAsm{2}{\patch}{\vX_m}/\sqrt{\layerC{2}} : \text{for
+      }\patch \in \sqb{\layersize{2}}, i \in \sqb{\layersize{2}}\text{ and }m \in [M]}$}
+  \State{{\bf Output postprocessing: } correlate the outputs (not strictly part
+    of \Netsor, c.f. Lemma~\ref{lemma:L})}
+  \State{$\cb{\layerAsm{3}{}{\vX_m} \eqdef
+    \sum_{\patch=1}^{\layersize{2}}\sum_{i=1}^\patch \bra{\layerUs{3}_i}^\tp
+    \layerNLAsm{2}{\patch}{\vX_m} : \text{ for }m \in [M]}$}
+\end{algorithmic}
+\end{algorithm}
+
+\begin{lemma}[The convolution with $\vL$-trick is correct]
+  Consider the definitions in \cref{alg:correlated}. Define the correlated convolution
+  \[Y_{cp}^{(2)}(\vX_m) \eqdef \sum_{\gamma=1}^{\layerC{2}}
+    \sum_{q=1}^{\patchsize{2}} \layerNLAsmp{(1)[p]}{\gamma q}{\vX_m} W^{(2)}_{c\gamma q}\]
+  where $\vW^{(2)}_{c\gamma} \sim \NormDist{{\boldsymbol 0},
+    \frac{1}{\layerC{1}}\priorWcov{2}}$, for $\gamma \in [\layerC{1}]$ and $c \in [\layerC{2}]$, mirroring eqs.~(6)~and~(7) in the main text.
+  Then, conditioning on the value of
+  $\layerNLAsm{1}{\gamma\patch}{\vX_m}$ for all $\gamma \in \layerC{1}$, $\patch \in [\layersize{1}]$ and $m
+  \in [M]$, and for any widths $\layerC{1}, \layerC{2}$, the random variables $Y_{cp}^{(2)}(\vX_m)$ and $Z_{cp}^{(2)}(\vX_m)$
+  have the same distribution for all $c \in [\layerC{2}]$, $p \in
+  [\layersize{2}]$ and $m \in [M]$. 
+  \label{lemma:correlated-weights-nn}
+\end{lemma}
+(Note, we abused notation and used $c$ to index into the $\Gva$-var
+$Z_p^{(2)}(\vX_m)$, and $\gamma$ for $A_q^{(2)}(\vX_m)$.)
+\begin{proof}
+  Conditioned on $\vA^{(1)}(\vX)$, both $\vZ^{(2)}(\vX)$ and $\vY^{(2)}(\vX)$
+  are Gaussian, because they are linear combinations of Gaussians. Thus, we just
+  have to show their first two moments are equal. First, the mean.
+  $\ExpSymb\sqb{Z_{cp}^{(2)}(\vX_m)} = 0$ because each
+  $\ExpSymb\sqb{\layerU{2}_{c\gamma}} = {\boldsymbol 0}$, and
+  $\ExpSymb\sqb{Y_{cp}^{(2)}(\vX_m)} = 0$ because $\ExpSymb\sqb{\layerW{1}_{c\gamma}} = {\boldsymbol 0}$.
+
+  The covariance is more involved. First we rewrite $Z_{cp}^{(2)}(\vX_m)$ as a
+  function of $\vA^{(1)}(\vX_m)$, by substituting the definition of
+  $\layerBsp{(2)[\patch]}{\patchidx i}(\vX_m)$ into it and making the indices of
+  the \MatMul explicit
+  \begin{equation}
+    Z_{cp}^{(2)}(\vX_m) = \sum_{\patchidx=1}^{\patchsize{1}} \sum_{i=1}^{\patchidx}
+    \priorLscov{2}_{\patchidx i}  \sum_{\gamma=1}^{\layerC{1}} \layerUs{2}_{c\gamma i}
+    \layerNLAsmp{(1)[\patch]}{\gamma\patchidx}{\vX_m}
+  \end{equation}
+  Then we can write out the second moment:
+  \begin{equation}
+    \begin{aligned}
+    &\ExpSymb\sqb{Z_{cp}^{(2)}(\vX_m) Z_{c'p'}^{(2)}(\vX_{m'})} =  \\
+    &\hspace{1em} \sum_{\patchidx=1}^{\patchsize{1}} \sum_{\patchidx'=1}^{\patchsize{1}}
+                  \sum_{i=1}^{\patchidx}\sum_{i'=1}^{\patchidx'}
+                  \sum_{\gamma=1}^{\layerC{1}} \sum_{\gamma'=1}^{\layerC{1}} 
+                  \priorLscov{2}_{\patchidx i} \priorLscov{2}_{\patchidx' i'}
+                  \ExpSymb\sqb{\layerUs{2}_{c\gamma i}
+                  \layerUs{2}_{c'\gamma' i'}}
+                  \layerNLAsmp{(1)[\patch]}{\gamma\patchidx}{\vX_m}
+                  \layerNLAsmp{(1)[\patch']}{\gamma'\patchidx'}{\vX_{m'}}
+  \end{aligned}
+  \end{equation}
+  Because the $\layerU{2}_{i}$ are independent, that is
+  $ \ExpSymb\sqb{\layerUs{2}_{c\gamma i}
+    \layerUs{2}_{c'\gamma' i'}} = \delta_{cc'} \delta_{\gamma\gamma'}
+  \delta_{ii'} 1/\layerC{1}$ (assumption~\ref{ass:avar-inputs}),
+  the covariance across output channels $c, c'$ is zero if $c\neq c'$.
+  Furthermore, we can reduce some double sums to single sums:
+  \begin{align}
+    \ExpSymb\sqb{Z_{cp}^{(2)}(\vX_m) Z_{c'p'}^{(2)}(\vX_{m'})} &= \delta_{cc'}
+    \sum_{\patchidx=1}^{\patchsize{1}}
+    \sum_{\patchidx'=1}^{\patchsize{1}}
+    \frac{1}{\layerC{1}}\sum_{\gamma=1}^{\layerC{1}}
+    \sum_{i=1}^{\text{min}(\patchidx, \patchidx')}
+    \priorLscov{2}_{\patchidx i} \priorLscov{2}_{\patchidx' i'}
+    \layerNLAsmp{(1)[\patch]}{\gamma\patchidx}{\vX_m}
+    \layerNLAsmp{(1)[\patch']}{\gamma\patchidx}{\vX_{m'}} \\
+                                                               &= \delta_{cc'}\sum_{\patchidx=1}^{\patchsize{1}}
+    \sum_{\patchidx'=1}^{\patchsize{1}}
+    \frac{1}{\layerC{1}}\sum_{\gamma=1}^{\layerC{1}}
+    \priorWcovs{2}_{\patchidx \patchidx'}
+    \layerNLAsmp{(1)[\patch]}{\gamma\patchidx}{\vX_m}
+    \layerNLAsmp{(1)[\patch']}{\gamma\patchidx}{\vX_{m'}},
+  \end{align}
+  where we recognized $ \sum_{i=1}^{\text{min}(\patchidx, \patchidx')}
+  \priorLscov{2}_{\patchidx i} \priorLscov{2}_{\patchidx' i'}$ as lower-triangular matrix multiplication,
+  and recall that $\priorWcov{2} = \priorLcov{2}\bra{\priorLcov{2}}^\tp$.
+
+  The covariance $\ExpSymb\sqb{Y_{cp}^{(2)}(\vX_m)Y_{c' p'}^{(2)}(\vX_{m'})}$
+  (conditioned on $\vA^{(1)}(\vX_m)$)
+  has exactly the same expression. This can be derived in the same way as
+  equation~(8) in the main text.
+\end{proof}
+
+
+\begin{theorem}[Correlated CNN converges in distribution
+  to a GP, with covariance given in Section~4.]
+  Given a set of $M$ input points $\vX_1,\dots,\vX_M$,
+  the postprocessed output of the \Netsor program in algorithm~\ref{alg:correlated} correctly implements a
+  convolutional neural network (CNN) with correlated weights and 3 layers, as described in
+  equations~(6)~and~(7) and figure~1 of the main text. Fix the widths of all channels
+  $\layerC{\ell} = n$.
+  Under assumptions~(\ref{ass:avar-inputs},\ref{ass:gvar-inputs},\ref{ass:controlled}),
+  as $n \to \infty$, the output of the correlated CNN
+  applied to the training set $\{\vX_m\}_{m=1}^M$ converges in distribution to a
+  Gaussian process with mean 0, and covariance $K^{(3)}(\vX_{m}, \vX_{m'})$
+  given by equation~(10) in the main text.
+\label{theorem:correlated-weights-nn}
+\end{theorem}
+\begin{proof}
+We proceed in order of the claims.
+\begin{itemize}
+  \item\textbf{The program in algorithm~\ref{alg:correlated} is correct:}
+  the novel part of this program, compared to the CNNs with mean pooling of
+  \citet[appendix~B.2]{yang2019wide}, is the application of Lemma~\ref{lemma:L}
+  to correlate the convolution weights and the postprocessed output. Applying
+  Lemma~\ref{lemma:correlated-weights-nn} to both, we can see that
+  Algorithm~\ref{alg:correlated} implements a 3-layer CNN with correlated weights.
+
+  \item\textbf{The postprocessed output of the program converges to a GP} with
+      covariance in equation~(10) of the main text. Using
+      Corollary~\ref{corollary:netsor-gp}, we show the output tuple of the
+      \Netsor program in algorithm~\ref{alg:correlated} converges in
+      distribution to a GP, with mean zero and a covariance that is independent across the
+      index $i$ of the output $\Gva$-vars $U_i^{(3)}$. Using the same technique
+      as Lemma~\ref{lemma:correlated-weights-nn}, we can show that the
+      covariance of the postprocessed output $Z^{(3)}(\vX_m)$ is the correct one.
+
+      Now we need only show that the postprocessed outputs $\cb{Z^{(3)}(\vX_m)}_{m=1}^M$
+      converge to a GP in distribution. Convergence in distribution is
+      convergence of the expectation of all bounded functions. Since the
+      covariance $\priorWcov{3}$ of the last layer weights is fixed, the set of
+      bounded functions of $\cb{Z^{(3)}(\vX_m)}_{m=1}^M$ is the same as the set
+      of bounded functions of $\cb{\bra{\layerUs{3}_i}^\tp \layerNLAsm{2}{\patch}{\vX_m}/\sqrt{\layerC{2}}}_{i,m}$.
+\end{itemize}
+
+\end{proof}
+
+} % End program scope
+}% End command scope
+
+\section{Details of the expectation of the nonlinearities.}
+For details on the computation of the expectation for the second moment of 
+tanhs, see the appendix of \citep{lee2018dnnlimit}.
+
+For the balanced ReLU nonlinearity ($\phi(x) = \sqrt{2}\max(0, x)$), which we
+use in all the experiments in this paper, we can use the expression by \citet{cho2009mkm}:
+{
+\begin{equation}
+  %s_g\ssup{\ell}(\vX, \vX') = \frac{\sqrt{\diagcov_{\vX\vX}\diagcov_{\vX'\vX'}}}{\pi} \left(\sin \theta + (\pi - \theta) \cos \theta\right)
+  V_{pp'}\ssup{\ell}(\vX, \vX') = \frac{\sqrt{K_{pp}\ssup{\ell}(\vX,\vX)K_{p'p'}\ssup{\ell}(\vX',\vX')}}{\pi} \bra{\sin \theta_{pp'}\ssup{\ell} + (\pi - \theta_{pp'}\ssup{\ell}) \cos \theta_{pp'}\ssup{\ell}}
+  \label{eq:nlin-relu}
+\end{equation}
+where $\theta_{pp'}\ssup{\ell} = \cos^{-1}\left( K_{pp'}\ssup{\ell}(\vX,\vX') /
+  \sqrt{K_{pp}\ssup{\ell}(\vX,\vX)K_{p'p'}\ssup{\ell}(\vX',\vX')}\right)$.
+
+It also turns out that $V_{pp}\ssup{\ell}(\vX, \vX) = K_{pp}\ssup{\ell}(\vX,
+\vX)$ and $V_{p'p'}\ssup{\ell}(\vX', \vX') = K_{p'p'}\ssup{\ell}(\vX', \vX')$.
+}
+
+This was adopted from the start of the GP-NN literature by
+\citet{lee2018dnnlimit,matthews2018dnnlimit}. The 
+\texttt{neural-tangents} library \citep{neuraltangents2020} implements a
+numerically stable version of it.
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "supplementary_standalone"
+%%% End:

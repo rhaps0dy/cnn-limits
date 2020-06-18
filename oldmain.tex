@@ -4,6 +4,7 @@
 \usepackage[T1]{fontenc}
 \usepackage{amssymb,amsthm}
 \usepackage{adria-fancyref}
+\usepackage{textcomp}
 
 % Remove for final rendering
 \usepackage{geometry}
@@ -141,7 +142,7 @@ Our core contribution to modelling is the idea of \emph{weight correlations} in 
     \item We get a more general infinite-limit kernel than than previously considered. The closest papers are \citet{arora2019exact,li2019enhanced,shankar2020} who consider average pooling. We can interpolate between average pooling and no correlation.
     \item Previous work argues that taking the infinite limit destroys patch correlations. \citet{arora2019exact,li2019enhanced,shankar2020} need to change the architecture to regain the correlations. We show that the correlations can be regained by correlations in the weights, even while taking the infinite limit. Can this argue for different priors in the finite case?
     \item We show theoretical relations to other convolutional GP constructions \citep{markvdw2017convolutional,dutordoir2019tick}.
-    \item We can look at correlations in intermediate layers. Mean pooling can conceptually be done in intermediate layers and \adrianote{has been done by \citet{shankar2020} in the infinite-width setting.}\footnote{There is some old-ish work in computer vision showing that max-pooling in intermediate layers (not mean-) can be substituted for strided convolutions \citep{springenberg14allconv}. Additionally, the current state of the art in ImageNet and CIFAR100  (without extra training data, using established data augmentation schemes) is obtained by EfficientNet \citep{tan19efficientnet}, a variant of ResNet, which only has mean-pooling at the end.} We provide a better justification too \adrianote{are you talking about the convolutional filters being smooth a posteriori here?}.
+    \item We can look at correlations in intermediate layers. Mean pooling can conceptually be done in intermediate layers and has been done by \citet{shankar2020} in the infinite-width setting.\footnote{There is some old-ish work in computer vision showing that max-pooling in intermediate layers (not mean-) can be substituted for strided convolutions \citep{springenberg14allconv}. Additionally, the current state of the art in ImageNet and CIFAR100  (without extra training data, using established data augmentation schemes) is obtained by EfficientNet \citep{tan19efficientnet}, a variant of ResNet, which only has mean-pooling at the end.} We provide a different justifiation, through a different weight prior, rather than an architectural assumption. This is arguably better, since nobody in practice does mean-pooling in intermediate layers.
 \end{itemize}
 The interestingness of weight correlations depends on how much they improve the overall performance of the kernel.
 
@@ -153,7 +154,81 @@ Another possible strand of enquiry is to improve the \emph{computational} aspect
 This will likely give performance a significant improvement.
 
 \section{Possible experiments}
+\subsection{Full correlated classification }
+Classify CIFAR10 with a wide network with a GP corresponding to a CNN with
+correlated filters at every layer. The wide network's architecture is a 20-layer
+2016 ResNet \citep{he2016deep}, the state-of-the-art EfficientNet
+\citep{tan19efficientnet} is similar in size for a similar depth (but the SoTA
+is obtained with >100 layers I think).
 
+\paragraph{Goals:}
+\begin{itemize}
+    \item Show that correlated weights improves performance (accuracy + uncertainty). 
+\end{itemize}
+
+
+\paragraph{Problems:}
+\begin{itemize}
+  \item Using existing neural-tangents code, this takes upward of 3000 GPU
+    hours. We need to calculate the double sum in \fref{eq:full-cov} for every
+    layer, and all the summands are non-zero.
+  \item Under very optimistic assumptions (16 GB GPU, $32\times 32$ image size,
+    keeping 2 buffers for computations) we can process $\sim$40 images at a time
+    (much better memory efficiency than neural-tangents, probably not
+    computation efficiency.)
+  \item We only know how to do an inducing ``patches'' approximation for the last
+    layer, and we still need to propagate correlations forward.
+\end{itemize}
+
+\paragraph{Other considerations:}
+\begin{itemize}
+  \item The random feature (random NN) approximation to this kernel is as costly
+    as a forward pass through a wide-ish NN. Thus, generating more 
+    features than data points to get over variance starvation / the first peak
+    of double descent \citep{belkin18reconciling} might be possible
+  \item Doing inference in the finite Bayesian NN of this, using SGLD, should be
+    no harder than inference in an uncorrelated-weights model using SGLD.
+    
+    \item We can also just run the same with a small subset (1000, 5000 points) of the data set
+    \item GPU grants? Can we get resources from Google (Adrià's suggestion)
+    \item CuPy code from Arora for more efficiency
+\end{itemize}
+
+\subsection{Last-layer-correlated classification}
+Classify CIFAR10 with a wide 20-layer network, with correlated weights only at
+the last layer
+
+\begin{itemize}
+    \item Show that correlated weights improves performance vs. naive last-layer mean pooling.
+    \item Show that we can do data augmentation with these kernels while preserving efficient inference and we get a performance boost out of that as well.
+\end{itemize}
+
+
+\paragraph{Problems:}
+\begin{itemize}
+\item Optimistic assumptions say it takes ~600 GPU hours to do this experiment
+  exactly (using fancy translation data augmentation).
+\end{itemize}
+
+\paragraph{Other considerations:}
+\begin{itemize}
+  \item We can apply an inducing patch approximation in each layer. Using
+    existing neural-tangents code, we can process (in a 16 GB GPU):
+    \begin{itemize}
+      \item 190k inducing patches + training examples per iteration (when not
+        optimizing inducing patches)
+      \item 57.6k inducing patches + training examples, when optimizing inducing
+        patches.
+    \end{itemize}
+\end{itemize}
+
+\paragraph{Opportunities:}
+Possibly compare the result with just translation data augmentation, using a
+model with uncorrelated weights.
+
+\subsection{Qualitatively examine the prior of various NNs}
+Using at least the covariance matrix test and the ``number of class assignments
+in the prior'' test.
 
 \section{Convolutional GPs}
 
@@ -259,6 +334,7 @@ In the expression above the tensors $\tW$ are the convolutional filters $\tU$ la
 \sum_{\lambda=1}^{F^{L-1}} \sum_{\lambda'=1}^{F^{L-1}}
 \E\sqb{\etU\ssup{L}_{\cdot,\cdot,\lambda}\etU\ssup{L}_{\cdot,\cdot,\lambda'}}
 V_\phi\bra{\emA\ssup{L-1}_{\cdot,p_{\mu}^{L-1}(\lambda)}(\mX), \emA\ssup{L-1}_{\cdot,p_{\mu'}^{L-1}(\lambda')}(\mX')}.
+\label{eq:full-cov}
 \end{align}
 
 From here it can be seen that, if the elements of $\tU$ are independent, the double sum above can be reduced to a single sum over subsets of the ``diagonals'' of the covariance matrix.
