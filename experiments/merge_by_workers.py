@@ -51,13 +51,34 @@ def write_to_dest(dest_data, dest_info, dataset_name, src_path, data1, data2):
                 dest_data[:, sl1, sl2] = chunk
 
 
-dest_info = _src_wr, _src_nw, _src_bs = workers_from(dest_path)
-print(f"Opening dest {dest_path}, worker_rank={_src_wr}, n_workers={_src_nw}, batch_size={_src_bs}")
-with h5py.File(dest_path/"kernels.h5", "r+") as dest_f:
-    depth, len_X, len_X2 = dest_f["Kxt"].shape
-    train_set = TensorDataset(torch.arange(len_X))
-    test_set = TensorDataset(torch.arange(len_X2))
+try:
+    dest_info = _src_wr, _src_nw, _src_bs = workers_from(dest_path)
+    print(f"Dest worker_rank={_src_wr}, n_workers={_src_nw}, batch_size={_src_bs}")
+    with h5py.File(dest_path/"kernels.h5", "r") as dest_f:
+        depth, len_X, len_X2 = dest_f["Kxt"].shape
 
+except FileNotFoundError:
+    with open(src_paths[0]/"config.json", "r") as f:
+        c = json.load(f)
+    dest_info = (c['worker_rank'], c['n_workers'], c['batch_size'])
+    with h5py.File(src_paths[0]/"kernels.h5", "r") as src_f:
+        depth, len_X, len_X2 = src_f["Kxt"].shape
+    print(f"Creating data sets using {depth}, {len_X}, {len_X2}")
+
+    assert not os.path.exists(dest_path/"kernels.h5")
+    with h5py.File(dest_path/"kernels.h5", "w") as dest_f:
+        _s = (len_X, len_X2)
+        dest_f.create_dataset("Kxt", shape=(depth, *_s), dtype=np.float64,
+                              chunks=(1, *_s), maxshape=(None, *_s))
+        _s = (len_X, len_X)
+        dest_f.create_dataset("Kxx", shape=(depth, *_s), dtype=np.float64,
+                              chunks=(1, *_s), maxshape=(None, *_s))
+
+train_set = TensorDataset(torch.arange(len_X))
+test_set = TensorDataset(torch.arange(len_X2))
+
+print(f"Opening dest {dest_path}")
+with h5py.File(dest_path/"kernels.h5", "r+") as dest_f:
     print("Kxx")
     dest_data = dest_f["Kxx"][...]
     for _file_i, src_path in enumerate(src_paths):

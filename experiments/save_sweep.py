@@ -108,6 +108,10 @@ def jax_model(model, internal_lengthscale):
 
 @experiment.capture
 def jitted_kernel_fn(kernel_fn, W_covs, i_SU, batch_size):
+    if W_covs is None:
+        W_covs = onp.ones(1)
+    else:
+        W_covs = onp.stack(W.ravel() for W in W_covs)
     W_covs = np.asarray(W_covs, dtype=np.float64)
     def kern_(x1, x2, same, diag):
         assert not diag
@@ -123,7 +127,7 @@ def jitted_kernel_fn(kernel_fn, W_covs, i_SU, batch_size):
         assert outs.dtype == np.float32
 
         outs = outs.astype(np.float64)
-        assert outs.shape[1:] == (batch_size, batch_size, 32, 32, 32, 32)
+        # assert outs.shape[1:] == (batch_size, batch_size, 8, 8, 8, 8)
         arr = outs.reshape((-1, W_covs.shape[-1], 1))
         k = np.dot(W_covs, arr)
         k = k.reshape((W_covs.shape[0] * outs.shape[0], *outs.shape[1:3]))
@@ -137,21 +141,32 @@ def jitted_kernel_fn(kernel_fn, W_covs, i_SU, batch_size):
         return kern_(x1, x2, same, diag)
     return kern
 
-
 @experiment.command
-def wrong_zca_dataset():
-    train_set, test_set = SU.load_dataset()
-    train_set, test_set, W = SU.do_transforms(train_set, test_set)
-    X, y = SU.whole_dset(train_set)
-    Xt, yt = SU.whole_dset(test_set)
-    np.savez("/scratch/ag919/datasets/CIFAR10_ZCA_wrong.npz", X=X, y=y, Xt=Xt, yt=yt, W=W)
+def test_kernels():
+    train_set, test_set = SU.load_sorted_dataset()
+    (_, _, kernel_fn), W_covs = jax_model()
+    all_kern = jitted_kernel_fn(kernel_fn, W_covs)
+    import torch
+    X = torch.stack([train_set[0][0], train_set[1][0]], 0)
+    k1 = all_kern(X, None, True, False)
+
+    (_, _, kernel_fn) = cnn_limits.models.Myrtle10_base(pooling=False)
+    dense_kern = jitted_kernel_fn(kernel_fn, None)
+    k2 = dense_kern(X, None, True, False)
+    assert np.allclose(k1[0, :, :], k2[0])
+    assert np.allclose(k1[0, :, :] + k1[1, :, :], k2[1])
+
+    (_, _, kernel_fn) = cnn_limits.models.Myrtle10_base(pooling=True)
+    meanpool_kern = jitted_kernel_fn(kernel_fn, None)
+    k3 = meanpool_kern(X, None, True, False)
+    assert np.allclose(k1[-2, :, :], k3[-2])
+    assert np.allclose(k1[-2, :, :] + k1[-1, :, :], k3[-1])
 
 
 @experiment.main
 def main(worker_rank, print_interval, n_workers, save_variance, skip_iterations, Kxx_mask_path, do_Kxt, do_Kxx):
     train_set, test_set = SU.load_sorted_dataset()
     (_, _, kernel_fn), W_covs = jax_model()
-    W_covs = onp.stack(W.ravel() for W in W_covs)
     kern = jitted_kernel_fn(kernel_fn, W_covs)
     print(f"len(train_set)={len(train_set)}")
     print(f"len(test_set)={len(test_set)}")
@@ -194,7 +209,6 @@ def main(worker_rank, print_interval, n_workers, save_variance, skip_iterations,
             prev_Kxt = schedule_kernel(kern, next(Kxt), False, None); next(timings)
         while Kxx_ongoing or Kxt_ongoing:
             if Kxx_ongoing:
-                print("Kxx")
                 try:
                     next_Kxx = schedule_kernel(kern, next(Kxx), False, Kxx_mask); next(timings)
                     kern_save(prev_Kxx[0], prev_Kxx[1], W_covs, Kxx_out, False, Kxx_mask)
@@ -205,7 +219,6 @@ def main(worker_rank, print_interval, n_workers, save_variance, skip_iterations,
                     del prev_Kxx
                     del next_Kxx
             if Kxt_ongoing:
-                print("Kxt")
                 try:
                     next_Kxt = schedule_kernel(kern, next(Kxt), False, None); next(timings)
                     kern_save(prev_Kxt[0], prev_Kxt[1], W_covs, Kxt_out, False, None)

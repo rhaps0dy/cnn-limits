@@ -41,19 +41,52 @@ def config():
     n_grid_opt_points = 1000
     n_splits = 4
     device = 'cuda'
+    magma_cutoff = 6000
 
+
+TorchEigenOut = collections.namedtuple("TorchEigenOut", ("eigenvalues", "eigenvectors"))
 
 def eigdecompose(Kxx, lower=True):
+    if need_magma(Kxx):
+        from cnn_limits import magma
+        Kxx = Kxx.numpy().copy()
+        all_vals = []
+        for i in range(len(Kxx)):
+            res = magma.syevd(Kxx[i].T, vectors=True, lower=lower)
+            all_vals.append(res.vals)
+        return TorchEigenOut(*map(torch.from_numpy, (np.stack(all_vals, axis=0), Kxx.transpose((0, 2, 1)))))
+
     return torch.symeig(Kxx, eigenvectors=True, upper=not lower)
 
 
 @experiment.capture
-def accuracy_chol(Kxx, Kxt, oh_train_Y, test_Y, sigy, _log, FY=None, lower=True):
-    assert FY is None
-    B, N, D = oh_train_Y.shape
-    T = Kxt.shape[-1]
-    assert sigy.shape == (B, 1)
+def need_magma(Kxx, magma_cutoff):
+    return (Kxx.shape[1] >= magma_cutoff)
 
+
+def _magma_chol(Kxx, sigy, _log, lower=True):
+    B, N, _ = Kxx.shape
+    from cnn_limits import magma
+
+    Kxx = Kxx.to(device='cpu', copy=False).numpy()
+    Lxx = np.zeros_like(Kxx)
+    for j in range(B):
+        sigy_ = sigy[j].item()
+        for i in range(10):
+            if i > 0:
+                _log.warning(f"Adding 2^{i}*sigy_ to Kxx, sigy_={sigy_}")
+            try:
+                Lxx[j] = Kxx[j]
+                Lxx[j] += (2**i * sigy_)*np.eye(N)
+                magma.potrf(Lxx[j].T, lower=not lower)
+                break
+            except np.linalg.LinAlgError:
+                pass
+    return Lxx
+
+
+def _torch_chol(Kxx, sigy, _log, lower=True):
+    B, N, _ = Kxx.shape
     if B == 1:
         Kxx = Kxx.squeeze(0)
         sigy_ = sigy.item()
@@ -68,9 +101,24 @@ def accuracy_chol(Kxx, Kxt, oh_train_Y, test_Y, sigy, _log, FY=None, lower=True)
             break
         except RuntimeError:
             pass
-
     if B == 1:
         L = L.unsqueeze(0)
+    return L
+
+
+@experiment.capture
+def accuracy_chol(Kxx, Kxt, oh_train_Y, test_Y, sigy, _log, FY=None, lower=True):
+    assert FY is None
+    B, N, D = oh_train_Y.shape
+    T = Kxt.shape[-1]
+    assert sigy.shape == (B, 1)
+
+    if need_magma(Kxx):
+        L = _magma_chol(Kxx, sigy, _log, lower=lower)
+        L = torch.from_numpy(L)
+    else:
+        L = _torch_chol(Kxx, sigy, _log, lower=lower)
+
     assert L.shape == (B, N, N)
 
     LY = torch.triangular_solve(oh_train_Y, L, upper=False).solution
@@ -176,6 +224,8 @@ def do_one_N(Kxx, Kxt, oh_train_Y, test_Y, n_grid_opt_points, n_splits, device,
         print(collections.Counter(oh_train_Y[0, train_idx.cpu()].argmax(-1)))
     print(collections.Counter(test_Y[0]))
 
+    if need_magma(Kxx):
+        device = 'cpu'
 
     Kxx = torch.from_numpy(Kxx).to(device=device)
     Kxt = torch.from_numpy(Kxt).to(device=device)

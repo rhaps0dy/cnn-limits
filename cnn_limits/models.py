@@ -286,6 +286,27 @@ def Myrtle5_correlated(channels=16):
         (*pool_conv_relu, Wcg[4]),
         (*pool_conv_relu, Wcg[2]))
 
+def Myrtle10_base(channels=16, pooling=True):
+    pool = AvgPool(window_shape=(2, 2), strides=(2, 2))
+    relu = Relu()
+    conv = Conv(channels, filter_shape=(3, 3), strides=(1, 1), padding='SAME')
+
+    base = stax.serial(
+        conv, relu,
+        conv, relu,
+        conv, relu, pool,
+        conv, relu,
+        conv, relu,
+        conv, relu, pool,
+        conv, relu,
+        conv, relu,
+        conv, relu)
+    if pooling:
+        return stax.serial(base, GlobalAvgPool())
+    else:
+        return stax.serial(base, stax.Flatten(), stax.Dense(1))
+
+
 
 def Myrtle10_sweep(channels=16):
     kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
