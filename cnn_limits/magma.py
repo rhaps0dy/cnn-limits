@@ -12,8 +12,8 @@ from numpy.ctypeslib import as_array, as_ctypes, ndpointer
 __all__ = ['posv', 'potrf', 'potri', 'make_symm', 'syevd', 'EigenOut']
 
 # Load the library
-# libmagma_path = "/usr/local/magma/lib/libmagma.so"
-libmagma_path = os.path.join(os.environ['HOME'], 'magma/lib/libmagma.so')
+libmagma_path = "/scratches/huygens/ag919/magma/lib/libmagma.so"
+# libmagma_path = os.path.join(os.environ['HOME'], 'magma/lib/libmagma.so')
 try:
     libmagma = CDLL(libmagma_path)
 except OSError as e:
