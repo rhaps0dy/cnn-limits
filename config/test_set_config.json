@@ -1,0 +1,28 @@
+{
+  "Kxx_mask_path": null,
+  "batch_size": 4,
+  "do_Kxt": true,
+  "do_Kxx": true,
+  "i_SU": {
+    "N_test": 10000,
+    "N_train": 10240,
+    "ZCA_bias": 1e-05,
+    "ZCA_transform": false,
+    "dataset_base_path": "/scratch/ag919/datasets/",
+    "dataset_name": "CIFAR10",
+    "dataset_treatment": "train_random_balanced",
+    "default_dtype": "float64",
+    "num_likelihood_samples": 20,
+    "sorted_dataset_path": "/scratch/ag919/datasets/interlaced_argsort",
+    "test_is_validation": true,
+    "train_idx_path": null
+  },
+  "internal_lengthscale": null,
+  "model": "CNTK14_split_cpu",
+  "n_workers": 28,
+  "print_interval": 5.0,
+  "save_variance": false,
+  "seed": 71731641,
+  "skip_iterations": 0,
+  "worker_rank": 27
+}

@@ -1,0 +1,25 @@
+{
+  "batch_size": 10,
+  "i_SU": {
+    "N_test": 10000,
+    "N_train": 10240,
+    "ZCA_bias": 1e-05,
+    "ZCA_transform": false,
+    "dataset_base_path": "/scratch/ag919/datasets/",
+    "dataset_name": "CIFAR10",
+    "dataset_treatment": "load_train_idx",
+    "default_dtype": "float64",
+    "num_likelihood_samples": 10,
+    "sorted_dataset_path": "/scratch/ag919/datasets/interlaced_argsort",
+    "test_is_validation": false,
+    "train_idx_path": "/homes/ag919/Programacio/cnn-limits/train_idxes/final_10240/"
+  },
+  "internal_lengthscale": null,
+  "model": "CNTK14_sweep_fewer_lengthscales",
+  "n_workers": 1,
+  "print_interval": 5,
+  "save_variance": false,
+  "seed": 102509692,
+  "use_ntk": false,
+  "worker_rank": 0
+}

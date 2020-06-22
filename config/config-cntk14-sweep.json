@@ -1,0 +1,41 @@
+{
+  "do_4cv": true,
+  "do_loo": true,
+  "do_save": true,
+  "i_SU": {
+    "N_test": 1,
+    "N_train": 5120,
+    "ZCA_bias": 1e-05,
+    "ZCA_transform": false,
+    "dataset_base_path": "/scratch/ag919/datasets/",
+    "dataset_name": "CIFAR10",
+    "dataset_treatment": "train_random_balanced",
+    "default_dtype": "float64",
+    "num_likelihood_samples": 10,
+    "sorted_dataset_path": "/scratch/ag919/datasets/interlaced_argsort",
+    "test_is_validation": true,
+    "train_idx_path": null
+  },
+  "kmp_override": null,
+  "predict_cv_acc": {
+    "N_classes": 10,
+    "N_files": 9999,
+    "apply_relu": false,
+    "eig_engine": "scipy",
+    "kernel_matrix_path": "/scratch/ag919/logs/save_new/166",
+    "multiply_var": false,
+    "n_grid_opt_points": 1000,
+    "n_splits": -1
+  },
+  "save_new": {
+    "batch_size": 4,
+    "internal_lengthscale": null,
+    "model": "CNTK14_sweep",
+    "n_workers": 1,
+    "print_interval": 2.0,
+    "save_variance": true,
+    "use_ntk": false,
+    "worker_rank": 0
+  },
+  "seed": 22157824
+}
