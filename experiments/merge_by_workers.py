@@ -6,7 +6,7 @@ from tqdm import tqdm
 from pathlib import Path
 import json
 
-from cnn_gp import ProductIterator
+from cnn_limits.iteration import ProductIterator
 import torch
 from torch.utils.data import TensorDataset
 

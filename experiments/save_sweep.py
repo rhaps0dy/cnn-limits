@@ -14,8 +14,8 @@ from torch.utils.data import DataLoader, Subset
 
 import cnn_limits.models
 import cnn_limits.sacred_utils as SU
-from cnn_gp import DiagIterator, ProductIterator, create_h5py_dataset
-from cnn_limits.tbx import PrintTimings
+from cnn_limits.iteration import (DiagIterator, ProductIterator,
+                                  create_h5py_dataset, PrintTimings)
 
 experiment = sacred.Experiment("save_sweep", [SU.ingredient])
 if __name__ == '__main__':
