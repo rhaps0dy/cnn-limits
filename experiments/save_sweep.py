@@ -108,9 +108,7 @@ def jax_model(model, internal_lengthscale):
 
 @experiment.capture
 def jitted_kernel_fn(kernel_fn, W_covs, i_SU, batch_size):
-    if W_covs is None:
-        W_covs = onp.ones(1)
-    else:
+    if W_covs is not None:
         W_covs = onp.stack(W.ravel() for W in W_covs)
     W_covs = np.asarray(W_covs, dtype=np.float64)
     def kern_(x1, x2, same, diag):
@@ -126,6 +124,8 @@ def jitted_kernel_fn(kernel_fn, W_covs, i_SU, batch_size):
         outs = np.stack(outs, axis=0)
         assert outs.dtype == np.float32
 
+        if W_covs is None:
+            return outs
         outs = outs.astype(np.float64)
         # assert outs.shape[1:] == (batch_size, batch_size, 8, 8, 8, 8)
         arr = outs.reshape((-1, W_covs.shape[-1], 1))

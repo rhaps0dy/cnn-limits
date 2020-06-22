@@ -23,6 +23,7 @@ setup(
         "tensorboardX>=2.0",
         "torch>=1.4<1.5",
         "torchvision>=0.5<0.6",
+        "h5py>=2.10<2.11",
     ],
     test_suite="testing",
 )
