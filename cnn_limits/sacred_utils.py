@@ -46,6 +46,8 @@ def config():
 @ingredient.pre_run_hook
 def log_dir_hook(_run):
     "Creates log_dir and makes sure configuration and code matches"
+    _run.debug = True  # let jug handle BarrierError correctly
+
     log_dir = base_dir()
     config = _run.config
 
@@ -69,7 +71,8 @@ def log_dir_hook(_run):
     else:
         log_dir.mkdir(parents=True)
         with open(log_dir/"config.json", "w") as f:
-            json.dump(config, f)
+            json.dump(config, f, sort_keys=True, indent=2)
+            f.write("\n")
         with open(log_dir/"git.head", "w") as f:
             f.write(head)
     with open(log_dir/"git.diff", "w") as f:

@@ -199,6 +199,7 @@ def main(chunk_size, do_Kxt, do_Kxx, N_train, N_test, i_SU, _seed, batch_size, m
         Kxt=((len_train_idx, len_test_idx), Kxt_chunks))
 
 
-print("File be running'")
-a = experiment.run_commandline()
+# Important that this be outside of an `if __name__ == "__main__"`
+# so it gets called when the module is imported.
+experiment.run_commandline()
 
