@@ -491,6 +491,17 @@ def CNTK14_split_cpu(channels=16):
     ), Wcovs)
 
 
+def CNTK14_base(channels=16, pooling=True):
+    relu = Relu()
+    conv = Conv(channels, filter_shape=(3, 3), strides=(1, 1), padding='SAME')
+    base = stax.serial(*([conv, relu] * 14))
+    if pooling:
+        return stax.serial(base, GlobalAvgPool())
+    else:
+        # return stax.serial(base, Flatten(), Dense(1))
+        return stax.serial(base, Conv(1, (32, 32), padding='VALID'), Flatten())
+
+
 def Myrtle10_split_cpu(channels=16):
     kern = gpytorch.kernels.MaternKernel(nu=3/2, lengthscale=2)
     log_lengthscales = onp.array([-0.5, 0., 0.25, *onp.linspace(0.5, 1.75, 11), 2., 2.5])

@@ -150,17 +150,17 @@ def test_kernels():
     X = torch.stack([train_set[0][0], train_set[1][0]], 0)
     k1 = all_kern(X, None, True, False)
 
-    (_, _, kernel_fn) = cnn_limits.models.Myrtle10_base(pooling=False)
+    (_, _, kernel_fn) = cnn_limits.models.CNTK14_base(pooling=False)
     dense_kern = jitted_kernel_fn(kernel_fn, None)
     k2 = dense_kern(X, None, True, False)
-    assert np.allclose(k1[0, :, :], k2[0])
-    assert np.allclose(k1[0, :, :] + k1[1, :, :], k2[1])
+    assert np.allclose(k1[4, :, :], k2[0])
+    assert np.allclose(k1[5, :, :], k2[1])
 
-    (_, _, kernel_fn) = cnn_limits.models.Myrtle10_base(pooling=True)
+    (_, _, kernel_fn) = cnn_limits.models.CNTK14_base(pooling=True)
     meanpool_kern = jitted_kernel_fn(kernel_fn, None)
     k3 = meanpool_kern(X, None, True, False)
     assert np.allclose(k1[-2, :, :], k3[-2])
-    assert np.allclose(k1[-2, :, :] + k1[-1, :, :], k3[-1])
+    assert np.allclose(k1[-1, :, :], k3[-1])
 
 
 @experiment.main
