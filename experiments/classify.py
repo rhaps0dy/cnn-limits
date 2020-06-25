@@ -20,8 +20,6 @@ import cnn_limits.sacred_utils as SU
 faulthandler.enable()
 
 experiment = sacred.Experiment("rbfmyrtle_v3", [SU.ingredient])
-if __name__ == '__main__':
-    SU.add_file_observer(experiment)
 
 
 def dataset_targets(dset):
