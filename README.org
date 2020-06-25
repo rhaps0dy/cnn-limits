@@ -1,6 +1,9 @@
 * Usage of new jug code: 
  #+BEGIN_SRC sh
-  jug execute  experiments/save_sweep.py -- --debug with i_SU.log_dir=/path/to/experiment N_train=40 N_test=20 model=Myrtle10_split_cpu seed=848335
+   # Env variables for jax
+   export JAX_ENABLE_X64=True 
+   export XLA_PYTHON_CLIENT_PREALLOCATE=false 
+   jug execute  experiments/save_sweep.py -- --debug with i_SU.log_dir=/path/to/experiment N_train=40 N_test=20 model=Myrtle10_split_cpu seed=848335
  #+END_SRC
   
 
@@ -14,6 +17,3 @@
    the current code source, in the ~log_dir_hook~ function of
    ~cnn_limits/sacred_utils.py~.
    
-** TODO prevent re-compilation of the jax_model for every task 
-   Since you can't pickle a Python function, I thought you can't have it as
-   output of the task
