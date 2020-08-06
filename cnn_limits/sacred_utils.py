@@ -45,6 +45,7 @@ def config():
 def gpytorch_pre_run_hook(num_likelihood_samples, default_dtype, _seed):
     gpytorch.settings.num_likelihood_samples._set_value(num_likelihood_samples)
     # disable CG, it makes the eigenvalues of test Gaussian negative :(
+    # It's also really slow for batched matrices for some reason
     gpytorch.settings.max_cholesky_size._set_value(1000000)
     torch.set_default_dtype(getattr(torch, default_dtype))
     torch.manual_seed(_seed)
@@ -54,7 +55,6 @@ def gpytorch_pre_run_hook(num_likelihood_samples, default_dtype, _seed):
 @ingredient.post_run_hook
 def print_experiment(_run):
     print(f"This was run {_run._id}")
-
 
 
 # File observer creation

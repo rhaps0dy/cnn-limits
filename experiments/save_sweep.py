@@ -112,7 +112,6 @@ def jitted_kernel_fn(kernel_fn, W_covs, i_SU, batch_size):
         W_covs = onp.stack(W.ravel() for W in W_covs)
     W_covs = np.asarray(W_covs, dtype=np.float64)
     def kern_(x1, x2, same, diag):
-        assert not diag
         x1 = np.moveaxis(x1, 1, -1)
         x2 = (None if same else np.moveaxis(x2, 1, -1))
         y = kernel_fn(x1, x2, get=('nngp', 'ntk'))
@@ -125,12 +124,16 @@ def jitted_kernel_fn(kernel_fn, W_covs, i_SU, batch_size):
         assert outs.dtype == np.float32
 
         if W_covs is None:
+            if diag:
+                return np.diagonal(outs, axis1=1, axis2=2)
             return outs
         outs = outs.astype(np.float64)
         # assert outs.shape[1:] == (batch_size, batch_size, 8, 8, 8, 8)
         arr = outs.reshape((-1, W_covs.shape[-1], 1))
         k = np.dot(W_covs, arr)
         k = k.reshape((W_covs.shape[0] * outs.shape[0], *outs.shape[1:3]))
+        if diag:
+            return np.diagonal(k, axis1=1, axis2=2)
         return k
     kern_ = jax.jit(kern_, static_argnums=(2, 3))
     # dtype = getattr(onp, i_SU["default_dtype"])
@@ -181,11 +184,19 @@ def main(worker_rank, print_interval, n_workers, save_variance, skip_iterations,
             desc=f"Kxx&Kxt (worker {worker_rank}/{n_workers})",
             print_interval=print_interval)
 
-        Kxx, Kxx_out = kern_iterator(
-            f, kern_name="Kxx", X=train_set, X2=None,     diag=False)
-        Kxt, Kxt_out = kern_iterator(
-            f, kern_name="Kxt", X=train_set, X2=test_set, diag=False)
-        timings = timings_obj(itertools.count(), len(Kxx) + len(Kxt))
+        Kx_diag, Kx_diag_out = kern_iterator(
+            f, kern_name="Kx_diag", X=train_set, X2=None,     diag=True)
+        for k in timings_obj(Kx_diag):
+            a, b = schedule_kernel(kern, k, diag=True, mask=None)
+            kern_save(a, b, W_covs, Kx_diag_out, diag=True, mask=None)
+
+        Kt_diag, Kt_diag_out = kern_iterator(
+            f, kern_name="Kt_diag", X=test_set, X2=None, diag=True)
+        for k in timings_obj(Kt_diag):
+            a, b = schedule_kernel(kern, k, diag=True, mask=None)
+            kern_save(a, b, W_covs, Kt_diag_out, diag=True, mask=None)
+
+        return
 
         assert f["Kxx"].dtype == onp.float64
 

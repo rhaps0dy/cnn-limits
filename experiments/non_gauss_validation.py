@@ -4,7 +4,6 @@ import warnings
 from pathlib import Path
 
 import h5py
-import gc
 import numpy as np
 import pandas as pd
 import sacred
@@ -14,14 +13,16 @@ from torch.utils.data import DataLoader
 
 import cnn_limits.sacred_utils as SU
 import gpytorch
-import nigp
-from cnn_limits.layers import proj_relu_kernel
+from cnn_limits.precomputed_kernel import PrecomputedKernel
 from gpytorch.distributions import MultivariateNormal, MultitaskMultivariateNormal
-from nigp.natural_variational_distribution import \
+from gpytorch.variational import \
     NaturalVariationalDistribution, TrilNaturalVariationalDistribution
 from nigp.torch_lbfgs import LBFGSScipy
 
-# from experiments.predict_cv_acc import accuracy_eig
+from cnn_limits.classify_utils import (dataset_targets, dataset_full,
+                                       centered_one_hot, fold_idx,
+                                       balanced_data_indices)
+
 
 experiment = sacred.Experiment("non_gauss_lik", [SU.ingredient])
 if __name__ == '__main__':
@@ -39,79 +40,16 @@ def config():
     apply_relu = False
     training_iter=20
     likelihood_type = "robustmax"
-    lr = 2560.
+    lr = 25.6
     optimizer_type = "sgd"
     line_search_fn=None
     variational_dist_type = "trilnat"
     variational_strategy_type = "unwhitened"
-    momentum = 0
+    momentum = 0.9
     load_file = None
 
     use_cuda = True
     sigy = 1.36301994e-05
-
-
-def dataset_full(dset):
-    X, y = next(iter(DataLoader(dset, batch_size=len(dset))))
-    return X, y
-
-def dataset_targets(dset):
-    return dataset_full(dset)[1]
-
-
-class PrecomputedKernel(gpytorch.kernels.Kernel):
-    def __init__(self, Kxx, Kxt, Kx_diag, Kt_diag):
-        super().__init__()
-
-        n_train, n_test = Kxt.shape
-        train_x = torch.arange(n_train)[:, None].to(Kxx.dtype)
-        test_x = torch.arange(n_train, n_train+n_test)[:, None].to(train_x)
-
-        if torch.any(torch.isnan(Kxx)):
-            mask = torch.triu(torch.ones(Kxx.shape, dtype=torch.bool))
-            Kxx[mask] = Kxx.t()[mask]
-
-        self.register_buffer("train_x", train_x)
-        self.register_buffer("test_x", test_x)
-        self.register_buffer("Kxx", Kxx)
-        self.register_buffer("Kxt", Kxt)
-        self.register_buffer("Kx_diag", Kx_diag)
-        self.register_buffer("Kt_diag", Kt_diag)
-
-    def forward(self, x1, x2, diag=False, last_dim_is_batch=False):
-        if diag:
-            if torch.equal(x1, self.train_x):
-                return self.Kx_diag
-            elif torch.equal(x1, self.test_x):
-                return self.Kt_diag
-        else:
-            if torch.equal(x1, self.train_x):
-                if torch.equal(x2, self.train_x):
-                    return self.Kxx
-                elif torch.equal(x2, self.test_x):
-                    return self.Kxt
-            elif torch.equal(x1, self.test_x):
-                if torch.equal(x2, self.train_x):
-                    return self.Kxt.t()
-                elif torch.equal(x1, self.test_x):
-                    sz = self.Kt_diag.size()
-                    K = torch.empty((*sz[:-1], sz[-1], sz[-1]))
-                    K[...] = np.nan
-                    K.diagonal(dim1=-2, dim2=-1).copy_(self.Kt_diag)
-                    return K
-            elif torch.equal(x1, torch.cat((self.train_x, self.test_x), 0))\
-                    and torch.equal(x1, x2):
-                n_train = self.train_x.size(0)
-                n_test = self.test_x.size(0)
-                n_total = n_train + n_test
-                K = torch.empty((n_total, n_total), dtype=self.Kxx.dtype, device=self.Kxx.device)
-                K[:n_train, :n_train] = self.Kxx
-                K[:n_train, n_train:] = self.Kxt
-                K[n_train:, :n_train] = self.Kxt.t()
-                K[n_train:, n_train:] = math.nan
-                K[n_train:, n_train:].diagonal(dim1=-2, dim2=-1).copy_(self.Kt_diag)
-                return K
-        raise NotImplementedError
 
 
 class NaturalClassifier(gpytorch.models.ApproximateGP):
@@ -131,7 +69,7 @@ class NaturalClassifier(gpytorch.models.ApproximateGP):
         elif variational_strategy_type == "whitened":
             v_strat_type = gpytorch.variational.WhitenedVariationalStrategy
         else:
-            raise ValueError(f"variational_strat_type={variational_strat_type}")
+            raise ValueError(f"variational_strategy_type={variational_strategy_type}")
 
         v_strat = gpytorch.variational.MultitaskVariationalStrategy(
             v_strat_type(
@@ -140,8 +78,9 @@ class NaturalClassifier(gpytorch.models.ApproximateGP):
 
         super().__init__(v_strat)
         self.mean_module = gpytorch.means.ZeroMean()
-        # self.covar_module = gpytorch.kernels.ScaleKernel(base_kernel)
-        self.covar_module = base_kernel
+        self.covar_module = gpytorch.kernels.ScaleKernel(base_kernel)
+        self.covar_module.outputscale = 4.
+        # self.covar_module = base_kernel
 
     def forward(self, x):
         return MultivariateNormal(self.mean_module(x),
@@ -196,14 +135,6 @@ def optimize(closure, parameters, model, likelihood, n_train, test_Y, optimizer_
             lr=lr,
             history_size=20,
             line_search_fn=line_search_fn)
-    elif optimizer_type == "lbfgsnat":
-        one_step = True
-        optimizer = LBFGSNat(
-            parameters,
-            max_iter=training_iter,
-            lr=lr,
-            history_size=0,
-            line_search_fn=line_search_fn)
     elif optimizer_type == "sgd":
         one_step = False
         gamma = 1.2
@@ -221,14 +152,15 @@ def optimize(closure, parameters, model, likelihood, n_train, test_Y, optimizer_
     else:
         raise ValueError(f"optimizer_type={optimizer_type}")
 
-    optimizer2 = torch.optim.Adam(likelihood.parameters(), lr=1.0)
+    # optimizer2 = torch.optim.Adam(likelihood.parameters(), lr=1.0)
     def _closure(i):
         optimizer.zero_grad()
-        optimizer2.zero_grad()
+        # optimizer2.zero_grad()
         loss = closure()
         loss.backward()
         grad_norm = 0.
         for group in optimizer.param_groups:
+            lr = group['lr']
             for p in group['params']:
                 _flat_grad = p.grad.view(-1)
                 grad_norm += (_flat_grad@_flat_grad).item()
@@ -239,7 +171,7 @@ def optimize(closure, parameters, model, likelihood, n_train, test_Y, optimizer_
             epsilon = likelihood.epsilon
         except AttributeError:
             epsilon = 0.
-        _log.info(f"i={i}, ELBO={-loss.item()}, grad_norm={grad_norm}, epsilon={epsilon}")
+        _log.info(f"i={i}, ELBO={-loss.item()}, grad_norm={grad_norm}, epsilon={epsilon}, lr={lr}")
         return loss
 
     if one_step:
@@ -249,33 +181,38 @@ def optimize(closure, parameters, model, likelihood, n_train, test_Y, optimizer_
         for i in range(training_iter):
             _closure(i)
             optimizer.step()
-            optimizer2.step()
+            # optimizer2.step()
             try:
+                # For NaturalVariationalDistribution only
                 model.variational_strategy.base_variational_strategy._variational_distribution.reparameterise()
             except AttributeError:
                 pass
             scheduler.step()
             for group in optimizer.param_groups:
-                group['lr'] = min(1280., group['lr'])
-            if i % 50 == 0:
-                model_ = model.cpu().eval()
+                group['lr'] = min(model.covar_module.base_kernel.train_x.size(0), group['lr'])
+            if i % 10 == 0:
+                device = next(iter(model.parameters())).device
+                model.cpu().eval()
                 with torch.no_grad(), gpytorch.settings.skip_posterior_variances(True):
-                    preds = model_(model_.covar_module.test_x).mean.cpu().numpy()
+                    try:
+                        del model.variational_strategy.base_variational_strategy._mean_cache
+                    except AttributeError as e:
+                        print("AttributeError when deleting:", e)
+                    preds = model(model.covar_module.test_x).mean.cpu().numpy()
                     acc = (preds.argmax(-1) == test_Y).mean()
                 _log.info(f"Accuracy at {i}: {acc}")
                 torch.save((model.state_dict(), likelihood.state_dict()), SU.base_dir()/f"model_{i}.pt")
-                model = model.cuda().train()
-
+                model.to(device=device).train()
 
 
 @experiment.capture
-def do_one_N(Kxx, Kxt, Kx_diag, Kt_diag, train_Y, test_Y, save_fname, _log, N_classes, N_quadrature_points, training_iter, use_cuda, likelihood_type, lr, optimizer_type):
+def do_one_N(Kxx, Kxt, Kx_diag, Kt_diag, train_Y, test_Y, save_fname, jitter, _log, N_classes, N_quadrature_points, training_iter, use_cuda, likelihood_type, lr, optimizer_type):
     # Use the SVGP. in GPytorch, it automatically does not recompute the
     # covariance matrix if you pass it the inducing points.
     n_train, n_test = Kxt.shape
 
     kernel = PrecomputedKernel(
-        *map(torch.from_numpy, (Kxx, Kxt, Kx_diag, Kt_diag)))
+        *map(torch.from_numpy, (Kxx, Kxt, Kx_diag, Kt_diag)), jitter=jitter)
     likelihood = build_likelihood()
     model = NaturalClassifier(kernel.train_x, N_classes, kernel)
     # model = ExactRegressor(kernel.train_x, torch.nn.functional.one_hot(train_Y).to(kernel.Kxx).t(), likelihood, kernel)
@@ -285,12 +222,12 @@ def do_one_N(Kxx, Kxt, Kx_diag, Kt_diag, train_Y, test_Y, save_fname, _log, N_cl
     # mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
     mll = gpytorch.mlls.VariationalELBO(likelihood, model, n_train)
 
+    train_Y = torch.from_numpy(train_Y)
     if use_cuda:
         model = model.cuda()
         likelihood = likelihood.cuda()
         mll = mll.cuda()
         train_Y = train_Y.cuda()
-    test_Y = test_Y.cpu().numpy()
     del kernel
     kernel = model.covar_module
 
@@ -315,6 +252,7 @@ def do_one_N(Kxx, Kxt, Kx_diag, Kt_diag, train_Y, test_Y, save_fname, _log, N_cl
     with torch.no_grad(), gpytorch.settings.skip_posterior_variances(True):
         preds = model(kernel.test_x).mean.numpy()
         acc = (preds.argmax(-1) == test_Y).mean()
+    import pdb; pdb.set_trace()
     return None, ((likelihood.noise.item() if likelihood_type == "gaussian" else ()), acc)
 
 
@@ -335,13 +273,13 @@ def debug():
     Kxx = rbf_k(X).evaluate()
     Kxt = rbf_k(X, Xt).evaluate()
 
-    acc = do_one_N(*(a.detach().numpy() for a in [Kxx, Kxt, Kx_diag, Kt_diag]),
-                   y, yt, "/tmp/shitt.pt", use_cuda=True)
+    acc = do_one_N(*(a.detach().numpy() for a in [Kxx, Kxt, Kx_diag, Kt_diag, y, yt]),
+                   "/tmp/shitt.pt", use_cuda=False)
     print("Accuracy: ", acc)
 
 
 @experiment.automain
-def main(kernel_matrix_path, multiply_var, _log, apply_relu, sigy):
+def main(kernel_matrix_path, _log):
     kernel_matrix_path = Path(kernel_matrix_path)
     train_set, test_set = SU.load_sorted_dataset(
         dataset_treatment="load_train_idx",
@@ -350,22 +288,29 @@ def main(kernel_matrix_path, multiply_var, _log, apply_relu, sigy):
     train_Y = dataset_targets(train_set)
     test_Y = dataset_targets(test_set)
 
+    with open(kernel_matrix_path/"config.json", "r") as src,\
+         open(SU.base_dir()/"old_config.json", "w") as dst:
+        dst.write(src.read())
+
     with h5py.File(kernel_matrix_path/"kernels.h5", "r") as f:
         N_layers, N_total, _ = f['Kxx'].shape
 
-        all_N = list(itertools.takewhile(
-            lambda a: a <= N_total,
-            (2**i * 10 for i in itertools.count(0))))
-        data = pd.DataFrame(index=range(N_layers), columns=all_N)
-        accuracy = pd.DataFrame(index=range(N_layers), columns=all_N)
+        all_N = [2560]
+        # all_N = list(itertools.takewhile(
+        #     lambda a: a <= N_total,
+        #     (2**i * 10 for i in itertools.count(0))))
+        data = pd.DataFrame(index=[40], columns=all_N)
+        accuracy = pd.DataFrame(index=data.index, columns=all_N)
 
         for layer in reversed(data.index):
+            _log.info("Reading Kxx...")
             Kxx = f['Kxx'][layer].astype(np.float64)
-            mask = np.triu(np.ones(Kxx.shape, dtype=np.bool), k=1)
+            # mask = np.triu(np.ones(Kxx.shape, dtype=np.bool), k=1)
+            mask = np.isnan(Kxx)
             Kxx[mask] = Kxx.T[mask]
-            assert np.array_equal(Kxx, Kxx.T)
-            assert np.all(np.isfinite(Kxx))
+            assert np.allclose(Kxx, Kxx.T)
 
+            _log.info("Reading Kxt...")
             Kxt = f['Kxt'][layer].astype(np.float64)
             try:
                 Kx_diag = f['Kx_diag'][layer].astype(np.float64)
@@ -373,31 +318,27 @@ def main(kernel_matrix_path, multiply_var, _log, apply_relu, sigy):
             except KeyError:
                 Kx_diag = np.diag(Kxx)
 
-            if multiply_var:
-                assert np.allclose(np.diag(Kxx), 1.)
-                Kxx *= np.sqrt(Kx_diag[:, None]*Kx_diag)
-                Kxt *= np.sqrt(Kx_diag[:, None]*Kt_diag)
-            else:
-                assert not np.allclose(np.diag(Kxx), 1.)
-
-            if apply_relu:
-                prod12 = Kx_diag[:, None] * Kx_diag
-                Kxx = np.asarray(proj_relu_kernel(Kxx, prod12, False))
-                Kxx = Kxx * prod12    # Use covariance, not correlation matrix
-                prod12_t = Kx_diag[:, None] * Kt_diag
-                Kxt = np.asarray(proj_relu_kernel(Kxt, prod12_t, False))
-                Kxt = Kxt * prod12_t
-
             for N in reversed(data.columns):
-                # Made a mistake, the same label are all contiguous in the training set.
-                train_idx = slice(0, N_total, N_total//N)
-                with gpytorch.settings.diagonal_jitter(0.0):
+                this_N_permutation = balanced_data_indices(train_Y)
+                train_idx = this_N_permutation[:N]
+                this_Kxx = Kxx[train_idx, :][:, train_idx]
+
+                min_eigval = float(np.linalg.eigvalsh(this_Kxx).min())
+                if min_eigval < 0:
+                    jitter = (1 + 1/128) * abs(min_eigval)
+                else:
+                    jitter = 0.
+                print(f"min_eigval={min_eigval}, jitter={jitter}")
+
+                with gpytorch.settings.diagonal_jitter(0.):
                     data.loc[layer, N], accuracy.loc[layer, N] = do_one_N(
-                        Kxx[train_idx, train_idx],
+                        this_Kxx,
                         Kxt[train_idx],
                         Kx_diag[train_idx], Kt_diag,
                         train_Y[train_idx], test_Y,
-                        f"layer_{layer}_N_{N}.pt")
+                        f"_{{step}}_layer_{layer}_N_{N}.pt",
+                        jitter=jitter)
+
                 (sigy, acc) = map(np.squeeze, accuracy.loc[layer, N])
                 _log.info(f"For layer={layer}, N={N}, sigy={sigy}; accuracy={acc}")
 

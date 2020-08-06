@@ -17,20 +17,13 @@ import torch
 from torch.utils.data import DataLoader, Subset
 
 import cnn_limits.sacred_utils as SU
+from cnn_limits.classify_utils import (dataset_targets, centered_one_hot,
+                                       fold_idx, balanced_data_indices)
 faulthandler.enable()
 
 experiment = sacred.Experiment("rbfmyrtle_v3", [SU.ingredient])
 if __name__ == '__main__':
     SU.add_file_observer(experiment)
-
-
-def dataset_targets(dset):
-    _, y = next(iter(DataLoader(dset, batch_size=len(dset))))
-    return np.asarray(y.numpy())
-
-
-def centered_one_hot(y, N_classes=10):
-    return np.eye(N_classes)[y] - 1/N_classes
 
 
 @experiment.config
@@ -195,31 +188,12 @@ def accuracy_eig(Kxx, Kxt, oh_train_Y, test_Y, sigy_grid, _log, FY=None,
     return sigy_grid, accuracies.t()
 
 
-# @experiment.capture
-# def fold_idx(n_samples, n_splits, device):
-#     for start in range(n_splits):
-#         test_idx = slice(start, n_samples, n_splits)
-#         idx = np.arange(n_samples)
-#         train_idx = np.delete(idx, idx[test_idx])
-#         yield torch.from_numpy(train_idx).to(device=device), test_idx
-
-@experiment.capture
-def fold_idx(n_samples, n_splits, device):
-    assert n_samples % n_splits == 0
-    split_size = n_samples//n_splits
-    for i in range(n_splits):
-        test_idx = slice(i*split_size, (i+1)*split_size)
-        idx = np.arange(n_samples)
-        train_idx = np.delete(idx, idx[test_idx])
-        yield torch.from_numpy(train_idx).to(device=device), test_idx
-
-
 @experiment.capture
 def do_one_N(Kxx, Kxt, oh_train_Y, test_Y, n_grid_opt_points, n_splits, device,
              FY=None, lower=True):
     assert n_splits > 1
     torch.cuda.empty_cache()
-    for train_idx, test_idx in fold_idx(Kxx.shape[1], n_splits):
+    for train_idx, test_idx in fold_idx(Kxx.shape[1], n_splits, device):
         print(collections.Counter(oh_train_Y[0, train_idx.cpu()].argmax(-1)))
         print(collections.Counter(oh_train_Y[0, train_idx.cpu()].argmax(-1)))
     print(collections.Counter(test_Y[0]))
@@ -234,7 +208,7 @@ def do_one_N(Kxx, Kxt, oh_train_Y, test_Y, n_grid_opt_points, n_splits, device,
     assert Kxx.dtype == torch.get_default_dtype()
 
     fold_eig = [eigdecompose(Kxx[:, train_idx, :][:, :, train_idx], lower=lower)
-                for train_idx, _ in fold_idx(Kxx.shape[1], n_splits)]
+                for train_idx, _ in fold_idx(Kxx.shape[1], n_splits, device)]
 
     all_eigvals = torch.stack([e.eigenvalues for e in fold_eig], dim=1)
     min_eigvals = all_eigvals.min(2).values.min(1).values
@@ -257,7 +231,7 @@ def do_one_N(Kxx, Kxt, oh_train_Y, test_Y, n_grid_opt_points, n_splits, device,
         all_sigy_grid[:, :] = all_sigy_grid[:, 0, None]
 
     folds = None
-    for (train_idx, test_idx), eig in zip(fold_idx(Kxx.shape[1], n_splits),
+    for (train_idx, test_idx), eig in zip(fold_idx(Kxx.shape[1], n_splits, device),
                                           fold_eig):
         _Kxt = Kxx[:, train_idx, :][:, :, test_idx]
         _oh_train_Y = oh_train_Y[:, train_idx, :]
@@ -296,7 +270,8 @@ def main_no_eig(kernel_matrix_path, _log, n_splits, i_SU):
     oh_train_Y = centered_one_hot(train_Y).astype(dtype)
     test_Y = dataset_targets(test_set)
 
-    with open(kernel_matrix_path/"config.json", "r") as src, open(SU.base_dir()/"old_config.json", "w") as dst:
+    with open(kernel_matrix_path/"config.json", "r") as src,\
+         open(SU.base_dir()/"old_config.json", "w") as dst:
         dst.write(src.read())
 
     with h5py.File(kernel_matrix_path/"kernels.h5", "r") as f:
@@ -327,7 +302,7 @@ def main_no_eig(kernel_matrix_path, _log, n_splits, i_SU):
             # mask = np.isnan(Kxx)
             Kxx[mask] = Kxx.T[mask]
             if not np.allclose(Kxx, Kxx.T):
-                print("Skiping layer {layer} for nans")
+                print(f"Skipping layer {layer} for nans")
                 continue
             # Kxx = (Kxx + Kxx.T)/2
 
@@ -335,14 +310,7 @@ def main_no_eig(kernel_matrix_path, _log, n_splits, i_SU):
             Kxt = f['Kxt'][layer].astype(dtype)
             for N in (r for r in reversed(data.columns) if r%4 == 0):
                 # Permute within classes
-                this_N_permutation = []
-                for i in range(10):
-                    perm = np.random.permutation(N_total//10)
-                    this_N_permutation.append(perm+(i*N_total//10))
-                this_N_permutation = np.stack(this_N_permutation, 0).T.copy().reshape(-1)
-                assert np.all(sorted(this_N_permutation) == np.arange(N_total))
-                for i in range(N_total//10):
-                    assert np.array_equal(train_Y[this_N_permutation[i*10:(i+1)*10]], np.arange(10))
+                this_N_permutation = balanced_data_indices(train_Y[:N_total])
 
                 data.loc[layer, N], accuracy.loc[layer, N] = [], []
                 # For this many data sets
