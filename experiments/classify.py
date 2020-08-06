@@ -22,8 +22,6 @@ from cnn_limits.classify_utils import (dataset_targets, centered_one_hot,
 faulthandler.enable()
 
 experiment = sacred.Experiment("rbfmyrtle_v3", [SU.ingredient])
-if __name__ == '__main__':
-    SU.add_file_observer(experiment)
 
 
 @experiment.config

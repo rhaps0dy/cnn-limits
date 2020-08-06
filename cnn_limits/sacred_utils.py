@@ -2,11 +2,15 @@ import collections
 import contextlib
 import os
 import pickle
+import warnings
+import git
+import json
 from pathlib import Path
 
 import numpy as np
 import sacred
 import torch
+import jug
 import torchvision
 from torch.utils.data import DataLoader, Subset, TensorDataset
 
@@ -25,12 +29,11 @@ def config():
     # Pytorch
     default_dtype = "float64"
 
+    log_dir="/scratches/huygens/ag919/jug/test"
+
     # Dataset loading
     dataset_base_path = "/scratch/ag919/datasets/"
     dataset_name = "CIFAR10"
-    sorted_dataset_path = os.path.join(dataset_base_path, "interlaced_argsort")
-    N_train = None
-    N_test = None
     ZCA_transform = False
     ZCA_bias = 1e-5
 
@@ -40,7 +43,43 @@ def config():
     train_idx_path = None
 
 
-# GPytorch
+@ingredient.pre_run_hook
+def log_dir_hook(_run):
+    "Creates log_dir and makes sure configuration and code matches"
+    _run.debug = True  # let jug handle BarrierError correctly
+
+    log_dir = base_dir()
+    config = _run.config
+
+    repo_path = Path(__file__).absolute().parent.parent
+    repo = git.Repo(repo_path)
+    diff = repo.git.diff()
+    head = repo.head.commit.hexsha
+
+    if log_dir.is_dir():
+        with open(log_dir/"config.json", "r") as f:
+            existing_config = json.load(f)
+        if config != existing_config:
+            raise ValueError(f"Not matching {str(log_dir/'config.json')}")
+
+        def file_equal(path, value):
+            with open(path, "r") as f:
+                existing = f.read()
+            if existing != value:
+                raise ValueError(f"Not matching {str(path)}")
+        file_equal(log_dir/"git.head", head)
+    else:
+        log_dir.mkdir(parents=True)
+        with open(log_dir/"config.json", "w") as f:
+            json.dump(config, f, sort_keys=True, indent=2)
+            f.write("\n")
+        with open(log_dir/"git.head", "w") as f:
+            f.write(head)
+    with open(log_dir/"git.diff", "w") as f:
+        f.write(diff)
+    jug.set_jugdir(str(log_dir/"jugdir/"))
+
+
 @ingredient.pre_run_hook
 def gpytorch_pre_run_hook(num_likelihood_samples, default_dtype, _seed):
     gpytorch.settings.num_likelihood_samples._set_value(num_likelihood_samples)
@@ -52,30 +91,16 @@ def gpytorch_pre_run_hook(num_likelihood_samples, default_dtype, _seed):
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(_seed)
 
+
 @ingredient.post_run_hook
 def print_experiment(_run):
     print(f"This was run {_run._id}")
 
 
-# File observer creation
-def add_file_observer(experiment, default_dir="/home/ag919/rds/hpc-work/logs"):
-    try:
-        log_dir = Path(os.environ['LOG_DIR'])
-    except KeyError:
-        log_dir = Path(os.environ['HOME'])/"rds/hpc-work/logs"
-    log_dir = log_dir/experiment.path
-    experiment.observers.append(
-        sacred.observers.FileStorageObserver(str(log_dir)))
-
-
 # File handling
 @ingredient.capture
-def base_dir(_run, _log):
-    try:
-        return Path(_run.observers[0].dir)
-    except IndexError:
-        _log.warning("This run has no associated directory, using `/tmp`")
-        return Path("/tmp")
+def base_dir(log_dir):
+    return Path(log_dir)
 
 
 @contextlib.contextmanager
@@ -86,18 +111,15 @@ def new_file(relative_path, mode="wb"):
 
 
 # Datasets and sorted data sets
-@ingredient.capture
-def load_dataset(dataset_name, dataset_base_path, ZCA_transform, additional_transforms=[]):
+def load_dataset(dataset_name, dataset_base_path, additional_transforms=[]):
     dataset_base_path = Path(dataset_base_path)
     if dataset_name == "CIFAR10_ZCA_wrong":
-        assert not ZCA_transform, "double ZCA"
         data = np.load(dataset_base_path/"CIFAR10_ZCA_wrong.npz")
         train = TensorDataset(*(torch.from_numpy(data[a]) for a in ("X", "y")))
         test = TensorDataset(*(torch.from_numpy(data[a]) for a in ("Xt", "yt")))
         return train, test
 
     elif dataset_name == "CIFAR10_ZCA_shankar_wrong":
-        assert not ZCA_transform, "double ZCA"
         data = np.load(dataset_base_path/"cifar_10_zca_augmented_extra_zca_augment_en9fKkGMMg.npz")
         train = TensorDataset(
             torch.from_numpy(data["X_train"]).permute(0, 3, 1, 2),
@@ -121,31 +143,6 @@ def load_dataset(dataset_name, dataset_base_path, ZCA_transform, additional_tran
     train = _dset(dataset_base_path, train=True, download=True, transform=trans)
     test = _dset(dataset_base_path, train=False, transform=trans)
     return train, test
-
-
-def interlaced_argsort(dset):
-    y = torch.tensor(dset.targets)
-    starting_for_class = [None] * len(dset.classes)
-    argsort_y = torch.argsort(y)
-    for i, idx in enumerate(argsort_y):
-        if starting_for_class[y[idx]] is None:
-            starting_for_class[y[idx]] = i
-
-    for i in range(len(starting_for_class)-1):
-        assert starting_for_class[i] < starting_for_class[i+1]
-    assert starting_for_class[0] == 0
-
-    init_starting = [a for a in starting_for_class] + [len(dset)]
-
-    res = []
-    while len(res) < len(dset):
-        for i in range(len(starting_for_class)):
-            if starting_for_class[i] < init_starting[i+1]:
-                res.append(argsort_y[starting_for_class[i]].item())
-                starting_for_class[i] += 1
-    assert len(set(res)) == len(dset)
-    assert len(res) == len(dset)
-    return res
 
 
 def whole_dset(dset):
@@ -240,89 +237,4 @@ def class_balanced_train_idx(train_set, N_train, forbidden_indices=None):
     for label in range(N_classes):
         assert count[label] == N_train // N_classes, "new set not balanced"
     assert len(set(train_idx)) == N_train, "repeated indices"
-    return train_idx
-
-
-@ingredient.capture
-def load_sorted_dataset(sorted_dataset_path, N_train, N_test, ZCA_transform, test_is_validation, ZCA_bias, dataset_treatment, _run, train_idx_path):
-    train_set, test_set = load_dataset()
-    if dataset_treatment == "no_treatment":
-        return train_set, test_set
-    elif dataset_treatment == "unsorted":
-        return load_unsorted_dataset()
-    elif dataset_treatment in ["sorted", "sorted_legacy"]:
-        with _run.open_resource(os.path.join(sorted_dataset_path, "train.pkl"), "rb") as f:
-            train_idx = pickle.load(f)
-        with _run.open_resource(os.path.join(sorted_dataset_path, "test.pkl"), "rb") as f:
-            test_idx = pickle.load(f)
-
-        if test_is_validation:
-            assert N_train+N_test <= len(train_set), "Train+validation sets too large"
-            if dataset_treatment == "sorted_legacy":
-                test_set = Subset(train_set, train_idx[-N_test-1:-1])
-            else:
-                test_set = Subset(train_set, train_idx[-N_test:])
-        else:
-            test_set = Subset(test_set, test_idx[:N_test])
-        train_set = Subset(train_set, train_idx[:N_train])
-
-    elif dataset_treatment == "train_random_balanced":
-        if N_test != len(test_set):
-            test_set = Subset(test_set, range(N_test))
-        train_y = torch.tensor(train_set.targets)
-        argsort_y = torch.argsort(train_y)
-        N_classes = len(train_set.classes)
-
-        starting_for_class = [None] * N_classes
-        train_idx = class_balanced_train_idx(train_set, N_train)
-        np.save(base_dir()/"train_idx.npy", train_idx.numpy())
-        train_set = Subset(train_set, train_idx)
-
-    elif dataset_treatment == "extend_train_random_balanced":
-        old_train_idx = np.load(Path(train_idx_path)/"train_idx.npy")
-        old_train_idx = torch.from_numpy(old_train_idx)
-        train_idx = class_balanced_train_idx(
-            train_set, N_train, forbidden_indices=set(old_train_idx.numpy()))
-        np.save(base_dir()/"train_idx.npy", train_idx.numpy())
-        np.save(base_dir()/"old_train_idx.npy", old_train_idx.numpy())
-        _train_set = train_set
-        train_set = Subset(_train_set, train_idx)
-        test_set = Subset(_train_set, old_train_idx)
-
-    elif dataset_treatment == "newtest_train_random_balanced":
-        old_train_idx = np.load(Path(train_idx_path)/"train_idx.npy")
-        old_train_idx = torch.from_numpy(old_train_idx)
-        np.save(base_dir()/"train_idx.npy", old_train_idx.numpy())
-        _train_set = train_set
-        train_set = Subset(_train_set, old_train_idx)
-        test_set = test_set
-
-    elif dataset_treatment == "extend_load_train_idx":
-        train_idx = np.load(Path(train_idx_path)/"train_idx.npy")
-        old_train_idx = np.load(Path(train_idx_path)/"old_train_idx.npy")
-        _train_set = train_set
-        train_set = Subset(_train_set, torch.from_numpy(train_idx))
-        test_set = Subset(_train_set, torch.from_numpy(old_train_idx))
-
-    elif dataset_treatment == "load_train_idx":
-        train_idx = np.load(Path(train_idx_path)/"train_idx.npy")
-        train_set = Subset(train_set, torch.from_numpy(train_idx))
-        if N_test != len(test_set):
-            test_set = Subset(test_set, range(N_test))
-    else:
-        raise ValueError(dataset_treatment)
-
-    train, test, _ = do_transforms(train_set, test_set)
-    return train, test
-
-
-@ingredient.capture
-def load_unsorted_dataset(test_is_validation, N_train, N_test):
-    train_set, test_set = load_dataset()
-    if test_is_validation:
-        assert N_train+N_test <= len(train_set), "Train+validation sets too large"
-        test_set = Subset(train_set, range(-N_test, 0, 1))
-    else:
-        test_set = Subset(test_set, range(N_test))
-    train_set = Subset(train_set, range(N_train))
-    return train_set, test_set
+    return train_idx.numpy()
