@@ -84,3 +84,119 @@ Improving the use of NN kernels as ``methods in their own right'' (Line 3) is on
 Regarding notation: $P,Q$ are taken from Arora et al., 2019, but $p,q$'s use is slightly inconsistent. Thank you for the corrections, they will be incorporated.
 
 \end{document}
+=======
+\documentclass{article}
+
+\usepackage{neurips_2020_author_response}
+
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+\usepackage[colorinlistoftodos]{todonotes}
+
+\newcommand{\markcomment}[1]{\todo[color=green]{#1}}
+\newcommand{\adriacomment}[1]{\todo[color=blue]{#1}}
+
+\begin{document}
+
+
+
+Thank you to all reviewers for your interesting comments. Regardless of the outcome, we believe our paper will be stronger afterwards.
+
+Emphasise that the aim of the paper was to address the issue of the
+disappearance of patch-induced correlations in the infinite limit, and that we
+show that this can be done without architectural changes. While we acknowledge
+that this does not require new proof techniques, we believe that this does
+contribute to the discussion surrounding infinite limits of NNs, as the
+disappearance of patch-induced correlations was noted as a puzzling and
+undesirable occurrence.
+
+L200-201, about computational complexity, have caused much confusion and will be reworked. The correlated priors, when applied anywhere in the network, are as expensive as mean pooling: both are 4D convolutions with a non-sparse 4d tensor. These lines concerned the view of layers with independent weights as 4d convolutions with a diagonal tensor: when naively applied, these are more expensive, but
+
+> While the authors allude this study could motivate using correlated weights in finite networks no analysis or support is given. For the kernels, it is not clear with more computation required than mean pooling (as claimed by the authors), whether improvement is worth it
+
+\paragraph{R2:}
+Thank you for your thorough review. We will fix the mistake with the colours of the left-hand side of Figure 3. The color gradient is hard to match visually, especially on grayscale prints, however the relative ordering of the training set sizes makes it possible to match. We will also document the code for the public release.
+
+There are two reasons why our Myrtle kernel has lower performance than Shankar
+et al [1]. First, [1] optimize the function noise hyperparameter on the test set
+(B.2,
+\href{https://proceedings.icml.cc/book/2020/file/6950aa02ae8613af620668146dd11840-Supplemental.pdf}{supplementary material}), and we use a validation set instead. Second, when training on a
+small data set, [1] use ZCA preprocessing for the full CIFAR-10 data set with
+data augmentation. This greatly increases their effective training set size
+(from 1280 to 50000, at least), and is the algorithm used in their paper to
+achieve some of the effects of data augmentation on kernel methods. The code in
+\href{https://github.com/modestyachts/neural_kernels_code/blob/master/preprocess.py}{preprocess.py}
+indicates that the data set \verb|"cifar-10"| is the ZCA-preprocessed one, and
+the one what is used for the small data experiments (c.f.
+\href{https://github.com/modestyachts/neural_kernels_code/blob/master/subsampled_cifar10/run_kernel_myrtle5_subsampled.sh}{\texttt{run\_kernel\_myrtle5\_subsampled.sh}}).
+In an email dated 24 May 2020, V. Shankar acknowledged this bug, but it has not
+been fixed in the ICML version of the paper. None of the experiments we included
+in our paper preprocess the images.
+
+The Matérn-3/2 kernel is stationary and functions drawn from it are almost surely smooth, however, the class of functions that can be sampled from it is larger. \adriacomment{What do we say here?} We will include a brief explanation.
+
+$\Sigma_{{pp'}}$ should be normalised. Thank you for pointing that out. We saw it in code, but the results should be unaffected by this: a constant factor for all dimensions of eq.~11 does not
+
+\paragraph{R3:}
+Everything in your review is technically correct. However, we believe you are
+evaluating our paper as a deep learning theory paper, which it is not. Our
+motivation is to improve the properties of kernel methods for image
+classification, and not to analyze the properties of finite networks. Our concern is with the undesirable properties that independent weights induce on the wide limit kernel, and not with finite networks (which do not strictly have this property).
+We believe the implications of this work to be interesting: We can obtain the similar/better performance with a different weight prior, as others get with architectural changes.
+%This motivates a closer look at the assumptions that are made when taking the infinite limit, which is a novel point.
+
+The only proof in our paper is very straightforward given the work of Yang, and
+we believe we acknowledged that in L159 (main) and L3-4 (supplement). To prevent
+future readers from assigning us more credit than we deserve, we will strengthen
+the language there. However, the proof is a necessary one: readers will rightly be
+skeptical of CLT-like claims when the prior involves correlations.
+
+
+\paragraph{R8:}
+We should try to get this reviewer to champion the paper.
+We agree that this paper sheds light on what properties of CNNs drive their good performance. They said "significant and novel"!
+Maybe point out that the computational barriers is shared with *all* other infinite limit kernels. We're not any worse. But we agree that it's mainly theoretical.
+
+> Maybe point out that the computational barriers is shared with *all*
+> other infinite limit kernels
+
+We really should do that. Lines 200-201 have done harm.  Our kernel is
+exactly as expensive as having average pooling of the same size.
+
+Sadly this review is pretty short, I don't think R8 thought too hard
+about it, so they're more likely to be convinced by the others...
+
+
+\paragraph{R9:}
+Agree that novelty is limited in the proof. However, the main point is that we should be challenging the assumptions that we make when taking the infinite limit, which come from finite NNs. This *is* novel.
+Emphasise that weaknesses (method is slow) is shared with all other infinite limit papers. We're no slower.
+We are committed to improve clarity.
+We agree with this reviewer that understanding properties of NNs was a strong motivation for this work. The main motivation was the curious disappearance of patch-induced correlations, which we provide new insight to. The emphasis placed on performance is mainly there to verify that our predictions of the importance of flexible patch-induced correlations are correct. We can clarify this in the paper (I think this is a really good point)
+
+I think we can turn this reviewer. Agreed with your points, especially
+the computational copmlexity one (I think we can write it in the "for
+all reviewers" section.) I disagree with this however:
+
+> understanding properties of NNs was a strong motivation for this
+> work.
+
+I think that R9's point is the exact opposite, it is the following:
+Most GP-NN work is about understanding NNs, but this one is purely
+about presenting methods with better properties (performance,
+uncertainty calibration). In that it is similar to Bayesian NNs, which
+do not seek to understand NNs, but rather to improve upon them.
+
+To restate the point: R9 does not see "understanding properties of NNs"
+as a motivation for this work at all. I think R9 has a point, since the
+fact that patch correlations matter is pretty well accepted, and we're
+just trying to bring this to kernel methods. Nevertheless finding out
+that they do improve things is some additional evidence for this
+hypothesis, a negative result would have been very interesting too.
+
+\end{document}
