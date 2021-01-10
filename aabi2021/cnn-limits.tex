@@ -391,8 +391,8 @@ We evaluate various models on class-balanced subsets of CIFAR-10 of size $2^i \c
 standard practice in the wide network literature, we reframe classification as
 regression to one-hot targets $\vY$. %$Y_{nk} = \indicator{t_n = k} - C$.
 We subtract $C=0.1$ from $\vY$ to make its mean zero, but we observed that this affects the results very little. The test
-predictions are the argmax over $k$ of the posterior Gaussian process mean
-\begin{equation}f(x_*) = \vK_{x_* \vX}\bra{\sigma^2\eye + \vK_{\vX\vX}}^{-1}\vY\,, \label{eq:mean-gp}\end{equation} where
+predictions are the argmax over $k$ of the posterior Gaussian process means
+\begin{equation}\text{label}(x_*) = \text{argmax}_k \,f_k(x_*) = \text{argmax}_k \,\vK_{x_* \vX}\bra{\sigma^2\eye + \vK_{\vX\vX}}^{-1}\vY_{[:k]}\,, \label{eq:mean-gp}\end{equation} where
 $\sigma^2$ is a hyperparameter, the variance of the observation noise of the GP regression. We perform cross-validation to find a setting for $\sigma^2$. We use the eigendecomposition of $\vK_{xx}$ to avoid the need to recompute the inverse for each value of $\sigma^2$.
 
 % \paragraph{Implementation}
@@ -425,7 +425,7 @@ Note that $p,p'$ are 2-d vectors representing patch locations. The ``extremes'' 
 
 In figure~\ref{ref:fig-last-layer}, we investigate how the 4-fold cross-validation accuracy on data sets of size $N=2^i \cdot 10$ varies with the lengthscale $\lambda$ of the Matérn-3/2 kernel, which controls the ``amount'' of spatial correlation in the weights of the last layer. For each data point in each line, we split the data set into 4 folds, and we calculate the test accuracy on 1 fold using the other 3 as training set, for each value of $\sigma$ that we try. We take the maximum accuracy over $\sigma$.
 
-We investigate how the effect above varies with data set size. As the data set grows larger, we observe that the advantage of having a structured covariance matrix in the output becomes more apparent. We can also see the optimal lengthscale $\lambda$  converging to a similar value, of about $\approx 17$, which is evidence for the hypothesis holding with more data. The optimal lengthscale is the same for both networks, so it may be a property of the CIFAR10 data set.
+We investigate how the effect above varies with data set size. As the data set grows larger, we observe that the advantage of having a structured covariance matrix in the output becomes more apparent. We can also see the optimal lengthscale $\lambda$  converging to a similar value, of about $\lambda \approx 17$, which is evidence for the hypothesis holding with more data. The optimal lengthscale is the same for both networks, so it may be a property of the CIFAR10 data set.
 
 The largest data set size in each part of the plot was run only once because of computational constraints. We transform one data set of size $N$ into two data sets of size $N/2$ by taking block diagonals of the stored kernel matrix, so we have more runs for the smallest sizes. This is a valid Monte-Carlo estimate of the true accuracy under the data distribution, with less variance than independent data sets, because the data sets taken are anti-correlated, since they have no points in common.
 
