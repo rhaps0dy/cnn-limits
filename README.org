@@ -1,0 +1,13 @@
+* Usage of new jug code: 
+ #+BEGIN_SRC sh
+   # Env variables for jax
+   export JAX_ENABLE_X64=True 
+   export XLA_PYTHON_CLIENT_PREALLOCATE=false 
+   jug execute experiments/save_sweep.py with i_SU.log_dir=/path/to/experiment \
+       N_train=40 N_test=20 model=Myrtle10_split_cpu seed=848335
+ #+END_SRC
+
+ Sacred is just an argument parser now.
+** TODO ensure there are no problems with storing many large kernel matrices in memory
+   in particular I'm uneasy about the ~save_hdf5~ function in
+   ~experiments/save_sweep.py~.

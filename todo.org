@@ -1,0 +1,1358 @@
+* Post-NeurIPS main paper 
+** Myrtle10, 10k examples 
+    | Host      | worker | hours | finished? | incorporated? |
+    |-----------+--------+-------+-----------+---------------|
+    | poisson:3 |      0 |     8 | y         |               |
+    | vapnik:3  |      1 |     8 | y         |               |
+    | gosset:3  |      2 |     8 | y         |               |
+    | julia:7   |      4 |     8 | y         |               |
+    | fields:3  |      3 |     8 | y         |               |
+    
+*** Rsync commands
+     rsync -r vapnik:/scratch/ag919/logs/save_sweep/3/ vapnik_3 &&\
+     rsync -r gosset:/scratch/ag919/logs/save_sweep/3/ gosset_3 &&\
+     rsync -r julia:/scratch/ag919/logs/save_sweep/7/ julia_7 &&\
+     rsync -r fields:/scratch/ag919/logs/save_sweep/3/ fields_3
+
+** Test set for 10k examples 
+*** CNTK14_split_cpu, save_sweep.py
+    | Host         |       worker | hours | finished? | incorporated? |
+    |--------------+--------------+-------+-----------+---------------|
+    | cartwright   |            0 |     5 | y         | y             |
+    | cartwright   |            1 |   5+5 | y         | y             |
+    | cartwright   |            2 | 5+5+5 | y         | y             |
+    | poisson      |            3 |     7 | y         | y             |
+    | poisson      |            4 |   7+7 | y         | y             |
+    | laplace      |            5 |     7 | y         | y             |
+    | laplace      |            6 |   7+7 | y         | y             |
+    | vapnik       |            7 |     7 | y         | y             |
+    | vapnik       |            8 |   7+7 | y         | y             |
+    | gosset       |            9 |     7 | y         | y             |
+    | gosset       |           10 |   7+7 | y         | y             |
+    | julia        |           11 |     7 | y         | y             |
+    | julia        |  2 + #276500 |       | y         | y             |
+    | julia        | 16 + #259200 |       | y         | y             |
+    | julia        | 18 + #259200 |       | y         | y             |
+    | ulam         |           12 |    14 | y         | y             |
+    | fields       |           13 |     7 | y         | MAIN          |
+    | fields       |           14 |   7+7 | y         | y             |
+    | jarvis       |           15 |     8 | y         | y             |
+    | jarvis       |           16 |   8+8 | y         | y             |
+    | robbins      |           17 |     8 | y         | y             |
+    | robbins      |           18 |   8+8 | y         | y             |
+    | ulam         |           19 |    12 | y         | y             |
+    | ulam         |           20 |    13 | y         | y             |
+    | ulam         |           21 |    13 | y         | y             |
+    | stroustrup   |           22 |    12 | y         | y             |
+    | vartak       |           23 | 11:44 | y         | y             |
+    | curie        |           24 |    11 | y         | y             |
+    | sagarmatha   |           25 | 11:30 | y         | y             |
+    | ariadne      |           27 |    13 | y         | y             |
+    | grothendieck |           26 |    14 | y         | y             |
+    
+    Total iter: 345645
+**** rsync commands 
+
+     rsync -r poisson:/scratch/ag919/logs/save_sweep/1/ poisson_1 &
+     rsync -r julia:/scratch/ag919/logs/save_sweep/1/ julia_1 &
+     rsync -r julia:/scratch/ag919/logs/save_sweep/2/ julia_2 &
+     rsync -r julia:/scratch/ag919/logs/save_sweep/3/ julia_3 &
+     rsync -r julia:/scratch/ag919/logs/save_sweep/4/ julia_4 &
+     
+     rsync -r ulam:/scratch/ag919/logs/save_sweep/ ulam && \
+     rsync -r laplace:/tmp/ag919/logs/save_sweep/1/ laplace_1 && \
+     rsync -r vapnik:/scratch/ag919/logs/save_sweep/1/ vapnik_1 && \
+     rsync -r gosset:/scratch/ag919/logs/save_sweep/1/ gosset_1 && \
+     rsync -r fields:/scratch/ag919/logs/save_sweep/1/ fields_1 && \
+     rsync -r jarvis:/scratch/ag919/logs/save_sweep/1/ jarvis_1 && \
+     rsync -r robbins:/scratch/ag919/logs/save_sweep/1/ robbins_1 && \
+     rsync -r stroustrup:/scratch/ag919/logs/save_sweep/1/ stroustrup_1 && \
+     rsync -r vartak:/tmp/ag919/logs/save_sweep/1/ vartak_1 && \
+     rsync -r curie:/scratch/ag919/logs/save_sweep/1/ curie_1 && \
+     rsync -r sagarmatha:/scratch/ag919/logs/save_sweep/1/ sagarmatha_1 && \
+     rsync -r ariadne:/scratch/ag919/logs/save_sweep/1/ ariadne_1
+    
+     rsync -r poisson:/scratch/ag919/logs/save_sweep/2/ poisson_2 && \
+     rsync -r laplace:/tmp/ag919/logs/save_sweep/2/ laplace_2 && \
+     rsync -r vapnik:/scratch/ag919/logs/save_sweep/2/ vapnik_2 && \
+     rsync -r gosset:/scratch/ag919/logs/save_sweep/2/ gosset_2 && \
+     rsync -r fields:/scratch/ag919/logs/save_sweep/2/ fields_2 && \
+     rsync -r jarvis:/scratch/ag919/logs/save_sweep/2/ jarvis_2 && \
+     rsync -r robbins:/scratch/ag919/logs/save_sweep/2/ robbins_2 && \
+     rsync -r grothendieck:/scratch/ag919/logs/save_sweep/1/ grothendieck_1
+    
+
+    
+* Final figures and tables
+** CNTK-14 bump and test set.
+*** DONE Big kernel file 
+    CLOSED: [2020-06-03 Wed 08:19]
+    Being processed in Cartwright
+    
+    cartwright:/scratch/ag919/logs/rbfmyrtle_v3/3/
+    cartwright:/scratch/ag919/logs/rbfmyrtle_v3/5/  (with off-by-one bug corrected)
+    
+    
+**** DONE run one more
+     CLOSED: [2020-06-02 Tue 23:40]
+     python ~/Programacio/cnn-limits/experiments/rbfmyrtle_v3.py with kernel_matrix_path=poisson:/scratch/ag919/logs/kernel_plus_learn/1/
+*** DONE Smaller kernel files 
+    CLOSED: [2020-06-03 Wed 08:18]
+    being processed in huygens
+    they end up in
+    huygens:final_figures/CNTK14/fig/rbfmyrtle_v3/
+    
+    poisson:/scratch/ag919/logs/rbfmyrtle_v3/8  (moved to huygens: ... poisson_8)
+*** DONE read files and write plotting code 
+    CLOSED: [2020-06-05 Fri 14:29]
+    Read all directories in 
+    huygens:final_figures/CNTK14/fig/rbfmyrtle_v3/
+    if they have a config.json
+*** DONE can we imrpove floaitng point precision???? 
+    CLOSED: [2020-06-05 Fri 14:29]
+    | dijkstra:11    |                0 | 11:30h |
+    | vartak:4       |                1 | 9:23h  |
+    | ulam:141       |                2 | 8:35h  |
+    | julia:12       |      (12000) 2.5 |        |
+    | gosset:12      |   (14864)    2.h |        |
+    | ulam:147       |      (11000) 2.1 |        |
+    | ulam:142       |                3 | 8:34h  |
+    | ulam:143       |                4 |        |
+    | vapnik:13      |     (10000)  4.5 |        |
+    | fields:18      |       13500 4.75 |        |
+    | sagarmatha:22  |                5 |        |
+    | neumann:1      |                6 | TODO   |
+    | julia:13       |      16500   6.5 |        |
+    | curie:3        |                7 | 8:30h  |
+    | robbins:40     |                8 |        |
+    | robbins:41     |              8.5 |        |
+    | grothendieck:3 |                9 | 13h    |
+    | jarvis:15      |              9.5 |        |
+    | ariadne:6      |               10 | y      |
+    | stroustrup:8   |               11 |        |
+    | huygens:224    |               12 | 13h    |
+    | jarvis:16      |             12.5 |        |
+    | enigma:4       |               13 | 15h    |
+    | jarvis:14      | (st. 11000) 13.5 |        |
+    | jarvis:8       |  (st. 5000) 13.5 | 4h     |
+    | jarvis:12      |  (st. 7500) 13.5 |        |
+    | ulam:144       |               14 |        |
+    | laplace:15     |               15 |        |
+    | laplace:16     |               16 |        |
+    | poisson:33     |               17 |        |
+    | poisson:34     |               18 |        |
+    | fields:16      |               19 |        |
+    | fields:16      |             2020 |        |
+    | vapnik:11      |               21 |        |
+    | vapnik:12      |               22 |        |
+    | gosset:10      |               23 |        |
+    | gosset:11      |               24 |        |
+    | ulam:146       |               25 |        |
+    | julia:10       |               26 |        |
+    | julia:11       |               27 |        |
+**** rsync     
+     rsync -r dijkstra:/scratch/ag919/logs/save_new/11/ dijkstra_11
+rsync -r      vartak:/tmp/ag919/logs/save_new/4/ vartak_4
+rsync -r      ulam:/scratch/ag919/logs/save_new/141/ ulam_141
+rsync -r      julia:/scratch/ag919/logs/save_new/12/ julia_12
+rsync -r      gosset:/scratch/ag919/logs/save_new/12/ gosset_12
+rsync -r      ulam:/scratch/ag919/logs/save_new/147/ ulam_147
+rsync -r      ulam:/scratch/ag919/logs/save_new/142/ ulam_142
+rsync -r      ulam:/scratch/ag919/logs/save_new/143/ ulam_143
+rsync -r      vapnik:/scratch/ag919/logs/save_new/13/ vapnik_13
+rsync -r      fields:/scratch/ag919/logs/save_new/18/ fields_18
+rsync -r      sagarmatha:/scratch/ag919/logs/save_new/22/ sagarmatha_22
+rsync -r      neumann:/scratch/ag919/logs/save_new/1/ neumann_1
+rsync -r      curie:/scratch/ag919/logs/save_new/3/ curie_3
+rsync -r      robbins:/scratch/ag919/logs/save_new/40/ robbins_40
+rsync -r      robbins:/scratch/ag919/logs/save_new/41/ robbins_41
+rsync -r      grothendieck:/scratch/ag919/logs/save_new/3 grothendieck_3
+rsync -r      jarvis:/scratch/ag919/logs/save_new/15/ jarvis_15
+rsync -r      ariadne:/scratch/ag919/logs/save_new/6/ ariadne_6
+rsync -r      stroustrup:/scratch/ag919/logs/save_new/8/ stroustrup_8
+rsync -r      huygens:/scratch/ag919/logs/save_new/224/ huygens_224
+rsync -r      jarvis:/scratch/ag919/logs/save_new/16/ jarvis_16
+rsync -r      enigma:/scratch/ag919/logs/save_new/4/ enigma_4
+rsync -r      jarvis:/scratch/ag919/logs/save_new/14/ jarvis_14
+rsync -r      jarvis:/scratch/ag919/logs/save_new/8/ jarvis_8
+rsync -r      jarvis:/scratch/ag919/logs/save_new/12/ jarvis_12
+rsync -r      ulam:/scratch/ag919/logs/save_new/144/ ulam_144
+rsync -r      laplace:/tmp/ag919/logs/save_new/15/ laplace_15
+rsync -r      laplace:/tmp/ag919/logs/save_new/16/ laplace_16
+rsync -r      poisson:/scratch/ag919/logs/save_new/33/ poisson_33
+rsync -r      poisson:/scratch/ag919/logs/save_new/34/ poisson_34
+rsync -r      fields:/scratch/ag919/logs/save_new/16/ fields_16
+rsync -r      fields:/scratch/ag919/logs/save_new/16/ fields_16
+rsync -r      vapnik:/scratch/ag919/logs/save_new/11/ vapnik_11
+rsync -r      vapnik:/scratch/ag919/logs/save_new/12/ vapnik_12
+rsync -r      gosset:/scratch/ag919/logs/save_new/10/ gosset_10
+rsync -r      gosset:/scratch/ag919/logs/save_new/11/ gosset_11
+rsync -r      ulam:/scratch/ag919/logs/save_new/146/ ulam_146
+rsync -r      julia:/scratch/ag919/logs/save_new/10/ julia_10
+rsync -r      julia:/scratch/ag919/logs/save_new/11/ julia_11
+    
+
+
+  fields:/scratch/ag919/logs/save_new/15
+  ulam:139
+ vapnik: 10
+ gosset 9
+ julia 9
+ jarvis 6
+   
+ 
+*** DONE Can we imrpove floating point precision? 
+    CLOSED: [2020-06-05 Fri 14:29]
+    | cartwright:36  |                0 | y  |
+    | cartwright:37  |                1 | y  |
+    | cartwright:38  |                2 | y  |
+    | poisson:10     |                3 | y  |
+    | poisson:11     |                4 | y  |
+    | huygens:223    |                5 | y  |
+    | vapnik:9       |  (start 15000) 5 | -- |
+    | laplace:9      |                6 | y  |
+    | laplace:10     |                7 | y  |
+    | laplace:11     |                8 | y  |
+    | stroustrup:7   |                9 | y  |
+    | ariadne:5      |               10 | y  |
+    | grothendieck:2 |               11 | y  |
+    | fields:14      | (start 14934) 11 | y  |
+    | jarvis:4       |               12 | y  |
+    | jarvis:5       |               13 | y  |
+    | curie:2        |               14 | y  |
+    | sagarmatha:13  |               15 | y  |
+    | ulam:134       |               16 | y  |
+    | ulam:136       |  (start 8763) 16 | y  |
+    | julia:5        |               17 | y  |
+    | julia:6        |               18 | y  |
+    | poisson:12     |               19 | y  |
+    | ulam:129       |               20 | y  |
+    | ulam:130       |               21 | y  |
+    | vartak:3       |               23 | y  |
+    | gosset:5       |               24 | y  |
+    | gosset:6       |               25 | y  |
+    | gosset:8       |               26 | y  |
+    | k              |               27 | y  |
+    | vapnik:8       |               28 | y  |
+    | fields:12      |               29 | y  |
+    | fields:13      |               22 | y  |
+**** rsync command 
+    # rsync -r vapnik:/scratch/ag919/logs/save_new/9/      worker_rank_(start 15000) 5 
+    # rsync -r poisson:/scratch/ag919/logs/save_new/12/     worker_rank_19 
+    # rsync -r gosset:/scratch/ag919/logs/save_new/8/       worker_rank_26 
+    rsync -r  cartwright:/scratch/ag919/logs/save_new/36   worker_rank_0  &\
+    rsync -r cartwright:/scratch/ag919/logs/save_new/37  worker_rank_1  &\
+    rsync -r cartwright:/scratch/ag919/logs/save_new/38  worker_rank_2  &\
+    rsync -r poisson:/scratch/ag919/logs/save_new/10     worker_rank_3  &\
+    rsync -r poisson:/scratch/ag919/logs/save_new/11     worker_rank_4  &\
+    rsync -r huygens:/scratch/ag919/logs/save_new/223    worker_rank_5  &\
+    rsync -r laplace:/tmp/ag919/logs/save_new/9      worker_rank_6  &\
+    rsync -r laplace:/tmp/ag919/logs/save_new/10     worker_rank_7  &\
+    rsync -r laplace:/tmp/ag919/logs/save_new/11     worker_rank_8  &\
+    rsync -r stroustrup:/scratch/ag919/logs/save_new/7   worker_rank_9  &\
+    rsync -r ariadne:/scratch/ag919/logs/save_new/5      worker_rank_10  &\
+    rsync -r grothendieck:/scratch/ag919/logs/save_new/2 worker_rank_11  &\
+    rsync -r fields:/scratch/ag919/logs/save_new/14      worker_rank_11.5 &\
+    rsync -r jarvis:/scratch/ag919/logs/save_new/4       worker_rank_12  &\
+    rsync -r jarvis:/scratch/ag919/logs/save_new/5       worker_rank_13  &\
+    rsync -r curie:/scratch/ag919/logs/final_figure_myrtle10_v3/save_new/2        worker_rank_14  &\
+    rsync -r sagarmatha:/scratch/ag919/logs/save_new/13  worker_rank_15  &\
+    rsync -r ulam:/scratch/ag919/logs/save_new/134       worker_rank_16  &\
+    rsync -r ulam:/scratch/ag919/logs/save_new/136       worker_rank_16.5 &\
+    rsync -r julia:/scratch/ag919/logs/save_new/5        worker_rank_17  &\
+    rsync -r julia:/scratch/ag919/logs/save_new/6        worker_rank_18  &\
+    rsync -r ulam:/scratch/ag919/logs/save_new/129       worker_rank_20  &\
+    rsync -r ulam:/scratch/ag919/logs/save_new/130       worker_rank_21  &\
+    rsync -r vartak:/tmp/ag919/logs/save_new/3       worker_rank_23  &\
+    rsync -r gosset:/scratch/ag919/logs/save_new/5       worker_rank_24  &\
+    rsync -r gosset:/scratch/ag919/logs/save_new/6       worker_rank_25  &\
+    rsync -r vapnik:/scratch/ag919/logs/save_new/7       worker_rank_27  &\
+    rsync -r vapnik:/scratch/ag919/logs/save_new/8       worker_rank_28  &\
+    rsync -r fields:/scratch/ag919/logs/save_new/12      worker_rank_29  &\
+    rsync -r fields:/scratch/ag919/logs/save_new/13      worker_rank_22  &\
+     
+*** DONE Can we improve floating point precision? UGH 
+    python ~/Programacio/cnn-limits/experiments/save_new.py with ~/Programacio/cnn-limits/precision.json worker_rank=
+**** list of hosts 
+     | cartwright:30  | worker_rank_00   |  3:30 |
+     | cartwright:31  | worker_rank_01   |       |
+     | poisson:7      | worker_rank_02   |  5:17 |
+     | huygens:222    | worker_rank_03   | 15:06 |
+     | laplace:6      | worker_rank_04   |  4:40 |
+     | laplace:7      | worker_rank_05   |       |
+     | stroustrup:5   | worker_rank_06   | 10:19 |
+     | ariadne:4      | worker_rank_07   | 11:35 |
+     | jarvis:2       | worker_rank_08   | 07:20 |
+     | enigma:2       | worker_rank_09   | 17:11 |
+     | curie:1        | worker_rank_10   |  9:52 |
+     | sagarmatha:12  | worker_rank_11   | 10:06 |
+     | banach:14      | worker_rank_12   |   --- |
+     | banach:15      | worker_rank_12.5 |  5:15 |
+     | banach:16      | worker_rank_13   |       |
+     | julia:3        | worker_rank_16   |  5:38 |
+     | julia:4        | worker_rank_17   |       |
+     | vartak:2       | worker_rank_18   | 11:16 |
+     | ulam:123       | worker_rank_19   |  9:52 |
+     | ulam:125       | worker_rank_21   |  9:50 |
+     | ulam:126       | worker_rank_22   |  9:50 |
+     | gosset:3       | worker_rank_20   |  5:23 |
+     | gosset:4       | worker_rank_23   |       |
+     | fields:9       | worker_rank_24   |  5:16 |
+     | fields:10      | worker_rank_25   |       |
+     | goedel:1       | worker_rank_26   | 15:45 |
+     | ulam:128       | worker_rank_27   |ABORTED |
+     | dijkstra:3     | worker_rank_27   | 13:00 |
+     | vapnik:3       | worker_rank_28   |  5:23 |
+     | vapnik:4       | worker_rank_29   |       |
+     | grothendieck:1 | worker_rank_30   | 15:44 |
+     | cartwright:32  | worker_rank_31   |       |
+     | cartwright:33  | worker_rank_14   |       |
+     | poisson:8      | worker_rank_15   |  5:17 |
+
+**** rsync commands
+     rsync -r cartwright:/scratch/ag919/logs/save_new/30/ worker_rank_00 &\
+     rsync -r cartwright:/scratch/ag919/logs/save_new/31/ worker_rank_01 &\
+     rsync -r poisson:/scratch/ag919/logs/save_new/7/ worker_rank_02 &\
+     rsync -r huygens:/scratch/ag919/logs/save_new/222/ worker_rank_03 &\
+     rsync -r laplace:/tmp/ag919/logs/save_new/6/ worker_rank_04 &\
+     rsync -r laplace:/tmp/ag919/logs/save_new/7/ worker_rank_05 &\
+     rsync -r stroustrup:/scratch/ag919/logs/save_new/5/ worker_rank_06 &\
+     rsync -r ariadne:/scratch/ag919/logs/save_new/4/ worker_rank_07 &\
+     rsync -r jarvis:/scratch/ag919/logs/save_new/2/ worker_rank_08 &\
+     rsync -r enigma:/scratch/ag919/logs/save_new/2/ worker_rank_09 &\
+     rsync -r curie:/scratch/ag919/logs/final_figure_myrtle10_v3/save_new/1/ worker_rank_10 &\
+     rsync -r sagarmatha:/scratch/ag919/logs/save_new/12/ worker_rank_11 &\
+     rsync -r banach:/scratch/ag919/logs/save_new/14/ worker_rank_12 &\
+     rsync -r banach:/scratch/ag919/logs/save_new/15/ worker_rank_12 &\
+     rsync -r banach:/scratch/ag919/logs/save_new/16/ worker_rank_13 &\
+     rsync -r julia:/scratch/ag919/logs/save_new/3/ worker_rank_16 &\
+     rsync -r julia:/scratch/ag919/logs/save_new/4/ worker_rank_17 &\
+     rsync -r vartak:/tmp/ag919/logs/save_new/2/ worker_rank_18 &\
+     rsync -r ulam:/scratch/ag919/logs/save_new/123/ worker_rank_19 &\
+     rsync -r ulam:/scratch/ag919/logs/save_new/125/ worker_rank_21 &\
+     rsync -r ulam:/scratch/ag919/logs/save_new/126/ worker_rank_22 &\
+     rsync -r gosset:/scratch/ag919/logs/save_new/3/ worker_rank_20  &\
+     rsync -r gosset:/scratch/ag919/logs/save_new/4/ worker_rank_23 &\
+     rsync -r fields:/scratch/ag919/logs/save_new/9/ worker_rank_24 &\
+     rsync -r fields:/scratch/ag919/logs/save_new/10/ worker_rank_25 &\
+     rsync -r goedel:/scratch/ag919/logs/save_new/1/ worker_rank_26     &\  
+     rsync -r vapnik:/scratch/ag919/logs/save_new/3/ worker_rank_28 &\
+     rsync -r vapnik:/scratch/ag919/logs/save_new/4/ worker_rank_29 &\
+     rsync -r grothendieck:/scratch/ag919/logs/save_new/1/ worker_rank_30        &\
+     rsync -r cartwright:/scratch/ag919/logs/save_new/32/ worker_rank_31 &\
+    
+
+
+**** DONE investigate bug in layer mismatch  
+     CLOSED: [2020-06-03 Wed 14:25]
+    
+** Myrtle-10 bump and test set 
+*** DONE 2560 + test set 
+    CLOSED: [2020-06-04 Thu 08:57]
+    gosset:/scratch/ag919/logs/save_new/2
+    julia:/scratch/ag919/logs/save_new/2
+    sagarmatha:/scratch/ag919/logs/save_new/21
+*** DONE run rbfmyrtle_v3.py 
+    CLOSED: [2020-06-04 Thu 14:26]
+    julia (because the file tehre is 45GB WTFFF)
+     
+    Running julia:/scratch/ag919/logs/rbfmyrtle_v3/6
+    
+     
+*** DONE 2560 points
+    CLOSED: [2020-06-03 Wed 14:31]
+    I interrupted this?
+    
+    fields:/scratch/ag919/logs/save_new/8   rbfmyrtle_v3/1
+    
+   
+*** DONE incorporate plots from 
+    CLOSED: [2020-06-05 Fri 14:29]
+    
+    robbins:/scratch/ag919/logs/rbfmyrtle_v3/2+
+    banach:/scratch/ag919/logs/rbfmyrtle_v3/1+
+    
+    checkout jarvis:/scratch/ag919/logs/rbfmyrtle_v3/4+
+    
+    cartwright window 5
+    carwright window 1
+** Myrtle10-Matern plot 
+*** DONE Calculate accuracies
+    CLOSED: [2020-06-03 Wed 09:30]
+    running on curie:/scratch/ag919/logs/final_figure_myrtle10_v3/rbfmyrtle_v3/
+
+    Sadly I removed the kernels from
+    /scratch/ag919/logs/myrtle10_matern/robbins_18
+    onwards, so the existing n_splits_4/grid_acc.pkl.gz
+    will have to do.
+   
+**** Constituent paths
+  rsync -r thom:/scratch/ag919/logs/kernel_plus_learn/50 thom_50 &\
+  rsync -r thom:/scratch/ag919/logs/kernel_plus_learn/51 thom_51 &\
+  rsync -r thom:/scratch/ag919/logs/kernel_plus_learn/52 thom_52 &\
+  rsync -r thom:/scratch/ag919/logs/kernel_plus_learn/53 thom_53 &\
+  rsync -r thom:/scratch/ag919/logs/kernel_plus_learn/54 thom_54 &\
+  rsync -r thom:/scratch/ag919/logs/kernel_plus_learn/55 thom_55 &\
+  rsync -r thom:/scratch/ag919/logs/kernel_plus_learn/56 thom_56 &\
+  rsync -r thom:/scratch/ag919/logs/kernel_plus_learn/57 thom_57 &\
+  rsync -r thom:/scratch/ag919/logs/kernel_plus_learn/58 thom_58 &\
+  rsync -r poisson:/scratch/ag919/logs/kernel_plus_learn/20 poisson_20 &\
+  rsync -r poisson:/scratch/ag919/logs/kernel_plus_learn/21 poisson_21 &\
+  rsync -r poisson:/scratch/ag919/logs/kernel_plus_learn/22 poisson_22 &\
+  rsync -r poisson:/scratch/ag919/logs/kernel_plus_learn/23 poisson_23 &\
+  rsync -r poisson:/scratch/ag919/logs/kernel_plus_learn/24 poisson_24 &\
+  rsync -r poisson:/scratch/ag919/logs/kernel_plus_learn/25 poisson_25 &\
+  rsync -r poisson:/scratch/ag919/logs/kernel_plus_learn/41 poisson_41 &\
+  rsync -r poisson:/scratch/ag919/logs/kernel_plus_learn/42 poisson_42 &\
+  rsync -r poisson:/scratch/ag919/logs/kernel_plus_learn/43 poisson_43 &\
+  rsync -r poisson:/scratch/ag919/logs/kernel_plus_learn/44 poisson_44 &\
+  rsync -r poisson:/scratch/ag919/logs/kernel_plus_learn/45 poisson_45 &\
+  rsync -r poisson:/scratch/ag919/logs/kernel_plus_learn/46 poisson_46 &\
+  rsync -r huygens:/scratch/ag919/logs/kernel_plus_learn/23 huygens_23 &\
+  rsync -r huygens:/scratch/ag919/logs/kernel_plus_learn/24 huygens_24 &\
+  rsync -r huygens:/scratch/ag919/logs/kernel_plus_learn/25 huygens_25 &\
+  rsync -r huygens:/scratch/ag919/logs/kernel_plus_learn/26 huygens_26 &\
+  rsync -r huygens:/scratch/ag919/logs/kernel_plus_learn/27 huygens_27 &\
+  rsync -r huygens:/scratch/ag919/logs/kernel_plus_learn/28 huygens_28 &\
+  rsync -r huygens:/scratch/ag919/logs/kernel_plus_learn/29 huygens_29 &\
+  rsync -r huygens:/scratch/ag919/logs/kernel_plus_learn/30 huygens_30 &\
+  rsync -r huygens:/scratch/ag919/logs/kernel_plus_learn/31 huygens_31 &\
+  rsync -r robbins:/scratch/ag919/logs/kernel_plus_learn/18 robbins_18 &\
+  rsync -r robbins:/scratch/ag919/logs/kernel_plus_learn/19 robbins_19 &\
+  rsync -r robbins:/scratch/ag919/logs/kernel_plus_learn/20 robbins_20 &\
+  rsync -r robbins:/scratch/ag919/logs/kernel_plus_learn/21 robbins_21 &\
+  rsync -r robbins:/scratch/ag919/logs/kernel_plus_learn/22 robbins_22 &\
+  rsync -r robbins:/scratch/ag919/logs/kernel_plus_learn/23 robbins_23 &\
+  rsync -r robbins:/scratch/ag919/logs/kernel_plus_learn/25 robbins_25 &\
+  rsync -r robbins:/scratch/ag919/logs/kernel_plus_learn/26 robbins_26 &\
+  rsync -r robbins:/scratch/ag919/logs/kernel_plus_learn/27 robbins_27 &\
+  rsync -r robbins:/scratch/ag919/logs/kernel_plus_learn/28 robbins_28 &\
+  rsync -r robbins:/scratch/ag919/logs/kernel_plus_learn/29 robbins_29 &\
+  rsync -r robbins:/scratch/ag919/logs/kernel_plus_learn/30 robbins_30 &\
+  rsync -r robbins:/scratch/ag919/logs/kernel_plus_learn/32 robbins_32 &\
+  rsync -r robbins:/scratch/ag919/logs/kernel_plus_learn/33 robbins_33 &\
+  rsync -r robbins:/scratch/ag919/logs/kernel_plus_learn/34 robbins_34 &\
+  rsync -r robbins:/scratch/ag919/logs/kernel_plus_learn/35 robbins_35 &\
+  rsync -r robbins:/scratch/ag919/logs/kernel_plus_learn/36 robbins_36 &\
+  rsync -r laplace:/tmp/ag919/logs/kernel_plus_learn/8 laplace_8 &\
+  rsync -r laplace:/tmp/ag919/logs/kernel_plus_learn/9 laplace_9 &\
+  rsync -r laplace:/tmp/ag919/logs/kernel_plus_learn/10 laplace_10 &\
+  rsync -r laplace:/tmp/ag919/logs/kernel_plus_learn/11 laplace_11 &\
+  rsync -r laplace:/tmp/ag919/logs/kernel_plus_learn/12 laplace_12 &\
+  rsync -r laplace:/tmp/ag919/logs/kernel_plus_learn/13 laplace_13 &\
+  rsync -r laplace:/tmp/ag919/logs/kernel_plus_learn/14 laplace_14 &\
+  rsync -r laplace:/tmp/ag919/logs/kernel_plus_learn/15 laplace_15 &\
+  rsync -r laplace:/tmp/ag919/logs/kernel_plus_learn/16 laplace_16 &\
+  rsync -r laplace:/tmp/ag919/logs/kernel_plus_learn/35 laplace_35 &\
+  rsync -r laplace:/tmp/ag919/logs/kernel_plus_learn/36 laplace_36 &\
+  rsync -r laplace:/tmp/ag919/logs/kernel_plus_learn/37 laplace_37 &\
+  rsync -r laplace:/tmp/ag919/logs/kernel_plus_learn/38 laplace_38 &\
+  rsync -r laplace:/tmp/ag919/logs/kernel_plus_learn/39 laplace_39 &\
+  rsync -r laplace:/tmp/ag919/logs/kernel_plus_learn/40 laplace_40 &\
+  rsync -r laplace:/tmp/ag919/logs/kernel_plus_learn/41 laplace_41 &\
+  rsync -r sagarmatha:/scratch/ag919/logs/kernel_plus_learn/7 sagarmatha_7 &\
+  rsync -r sagarmatha:/scratch/ag919/logs/kernel_plus_learn/8 sagarmatha_8 &\
+  rsync -r sagarmatha:/scratch/ag919/logs/kernel_plus_learn/9 sagarmatha_9 &\
+  rsync -r stroustrup:/scratch/ag919/logs/kernel_plus_learn/8 stroustrup_8 &\
+  rsync -r stroustrup:/scratch/ag919/logs/kernel_plus_learn/9 stroustrup_9 &\
+  rsync -r stroustrup:/scratch/ag919/logs/kernel_plus_learn/10 stroustrup_10 &\
+
+
+*** DONE read files and output plottable data
+    CLOSED: [2020-06-03 Wed 12:25]
+    Copied directory to
+    huygens:/scratch/ag919/logs/final_figures/M10-Matern/fig/rbfmyrtle_v3
+   
+*** DONE convert plottable data to nice plot 
+    CLOSED: [2020-06-05 Fri 14:30]
+** Myrtle10-RBF plot 
+    huygens:/scratch/ag919/logs/rbfmyrtle_v3/14+
+    
+    poisson?
+    huygens:/scratch/ag919/logs/rbfmyrtle_v3/20+
+    
+**** DONE Run more of these, esp. with 2560. 
+     CLOSED: [2020-06-04 Thu 07:31]
+     python experiments/save_new.py with model=RBFMyrtle_v3_tight i_SU.N_train=2560 i_SU.N_test=1 internal_lengthscale=
+     rsync -r ariadne:/scratch/ag919/logs/save_new/2/ ariadne_2 && \
+     rsync -r ariadne:/scratch/ag919/logs/save_new/3/ ariadne_3 && \
+     rsync -r enigma:/scratch/ag919/logs/save_new/1/ enigma_1 && \
+     rsync -r ulam:/scratch/ag919/logs/save_new/116/ ulam_116 && \
+     rsync -r ulam:/scratch/ag919/logs/save_new/117/ ulam_117 && \
+     rsync -r ulam:/scratch/ag919/logs/save_new/118/ ulam_118 && \
+     rsync -r ulam:/scratch/ag919/logs/save_new/119/ ulam_119 && \
+     rsync -r ulam:/scratch/ag919/logs/save_new/120/ ulam_120 && \
+     rsync -r ulam:/scratch/ag919/logs/save_new/121/ ulam_121
+     - 
+*** DONE read files and write plotting code 
+    CLOSED: [2020-06-03 Wed 12:25]
+    Copied directory to
+    huygens:/scratch/ag919/logs/final_figures/M10-RBF/fig/rbfmyrtle_v3
+     
+   
+*** DONE convert plottable data to nice plot 
+    CLOSED: [2020-06-05 Fri 14:30]
+* DONE Big inducing points
+  CLOSED: [2020-06-09 Tue 11:32]
+  thom 88
+  laplace 9
+  
+  python experiments/mask_sparse_classify.py -D save_inducing_points with i_SU.dataset_treatment='no_treatment' batch_size=1000 i_SU.dataset_base_path=/tmp/ag919/datasets/ do_only_inducing=False inducing_start=0 inducing_end=5000
+  
+  python experiments/mask_sparse_classify.py -D save_inducing_points with i_SU.dataset_treatment='no_treatment' batch_size=1000 do_only_inducing=False inducing_start=8000 inducing_end=11000
+laplace:10
+** Where are they
+   all inducign points
+   thom:107
+   
+   ulam:6 0-1000
+   ulam:7 1000-1270+? (test!)
+   ulam:8 2000-3000
+   ulam:9 1270-2000
+   NO banach:1 3000-5000
+   thom:109  5000-6864
+   sagarmatha:2  6864-8000
+   laplace:12  8000-11000
+   jarvis:10  11000-12000
+   NO huygens:6  12000-12800
+   ariadne:1  12800-13200
+   enigma:1  13200-13600
+   curie:1   13600-14000
+   goedel:1  14000-14334
+   neumann:1  14334-14667
+   sagarmatha:1  14667-15000
+*** rsync -r rsync commands   
+   rsync -r ulam:/scratch/ag919/logs/mask_sparse_classify/6/ ulam_6 &\
+   rsync -r ulam:/scratch/ag919/logs/mask_sparse_classify/7/ ulam_7 &\
+   rsync -r ulam:/scratch/ag919/logs/mask_sparse_classify/8/ ulam_8 &\
+   rsync -r ulam:/scratch/ag919/logs/mask_sparse_classify/9/ ulam_9 &\
+   rsync -r banach:/scratch/ag919/logs/mask_sparse_classify/1/ banach_1 &\
+   rsync -r cartwright:/scratch/ag919/logs/mask_sparse_classify/109/ cartwright_109 &\
+   rsync -r sagarmatha:/scratch/ag919/logs/mask_sparse_classify/2/ sagarmatha_2 &\
+   rsync -r laplace:/tmp/ag919/logs/mask_sparse_classify/12/ laplace_12 &\
+   rsync -r jarvis:/scratch/ag919/logs/mask_sparse_classify/10/ jarvis_10 &\
+   rsync -r huygens:/scratch/ag919/logs/mask_sparse_classify/6/ huygens_6 &\
+   rsync -r ariadne:/scratch/ag919/logs/mask_sparse_classify/1/ ariadne_1 &\
+   rsync -r enigma:/scratch/ag919/logs/mask_sparse_classify/1/ enigma_1 &\
+   rsync -r curie:/scratch/ag919/logs/mask_sparse_classify/1/ curie_1 &\
+   rsync -r goedel:/scratch/ag919/logs/mask_sparse_classify/1/ goedel_1 &\
+   rsync -r neumann:/scratch/ag919/logs/mask_sparse_classify/1/ neumann_1 &\
+   rsync -r sagarmatha:/scratch/ag919/logs/mask_sparse_classify/1/ sagarmatha_1 &\
+*** more inducing points 
+    Using inducing points cartwright:/scratch/ag919/logs/mask_sparse_classify/113/inducing_indices.pkl.gz
+    cartwright:/scratch/ag919/logs/mask_sparse_classify/115    (interrupted at 115440/180000)
+   
+
+   
+    
+* Experiments for Correlated NN
+ 
+** Final save new 
+   :LOGBOOK:
+   CLOCK: [2020-05-31 Sun 21:29]--[2020-05-31 Sun 21:29] =>  0:00
+   :END:
+   
+   - huygens:2  worker_rank=0      19h
+   - stroustrup:2 worker_rank=1    19h
+   - ariadne:1 worker_rank=2       23h
+   - grothendieck:1 worker_rank=3  32h
+   - robbins:2 worker_rank=4       23h
+   - jarvis:1 worker_rank=5        15h
+   - enigma:1 worker_rank=6        23h
+   - curie:1 worker_rank=7         21h
+   - goedel:1 worker_rank=8        20h
+   - neumann:1 worker_rank=9       21h
+   - sagarmatha:1 worker_rank=10   19h
+   - banach:1 worker_rank=11       10h FAST
+   - julia:1 worker_rank=12        10h FAST
+   - ulam:1 worker_rank=13         22h
+   - vartak:1 worker_rank=14       22h (/tmp)
+   - gosset:1 worker_rank=15       11h FAST
+   - thom:2  worker_rank=16        6h  DONE
+   - thom:3  worker_rank=17        6h
+   - poisson:1 worker_Rank=18      11h
+   - 
+** Final save new  v2
+   :LOGBOOK:
+   CLOCK: [2020-06-01 Mon 06:40]--[2020-06-01 Mon 06:40] =>  0:00
+   :END:
+   
+   - huygens:4  worker_rank=0      19h
+   - stroustrup:4 worker_rank=1    19h
+   - ariadne:3 worker_rank=2       23h
+   - grothendieck:3 worker_rank=3  32h   TODO
+   - robbins:3 worker_rank=4       23h   
+   - jarvis:2 worker_rank=5        15h
+   - enigma:2 worker_rank=6        23h
+   - curie:2 worker_rank=7         21h
+   - goedel:2 worker_rank=8        20h
+   - neumann:2 worker_rank=9       21h
+   - sagarmatha:2 worker_rank=10   19h
+   - banach:2 worker_rank=11       14h
+   - julia:2 worker_rank=12        10h FAST  15min
+   - ulam:2 worker_rank=13         22h
+   - vartak:2 worker_rank=14       22h (/tmp) DONE
+   - gosset:2 worker_rank=15       11h FAST  15min
+   - thom:6  worker_rank=16        6h 
+   - thom:7  worker_rank=17        6h
+   - poisson:2 worker_Rank=18      11h
+   - dijkstra:5 worker_rank=19     27h  (now on stroustrup because it was making noises)
+   - ulam:3 worker_rank=20         16h
+   - ulam:6 worker_rank=21         16h
+   - ulam:7 worker_rank=22         16h
+   - poisson:4 worker_rank=23      10h
+   - poisson:5 worker_rank=24   10+10h  TODO
+   - julia:3 worker_rank=25        10h
+   - julia:4 worker_rank=26     10+10h  TODO
+   - gosset:3 worker_rank=27       10h
+   - gosset:4 worker_rank=28    10+10h  TODO
+   - robbins:5 worker_rank=29      21h  TODO
+   - jarvis:3 worker_rank=30       14h
+   - banach:3 worker_rank=31       14h
+   - 
+
+
+   rsync huygens:/scratch/ag919/logs/final_save_new/4/kernels.h5 w00_kernels.h5 & \
+   rsync stroustrup:/scratch/ag919/logs/final_save_new/4/kernels.h5 w01_kernels.h5 & \
+   rsync ariadne:/scratch/ag919/logs/final_save_new/3/kernels.h5 w02_kernels.h5 & \
+   rsync robbins:/scratch/ag919/logs/final_save_new/3/kernels.h5 w04_kernels.h5 & \
+   rsync jarvis:/scratch/ag919/logs/final_save_new/2/kernels.h5 w05_kernels.h5
+   rsync enigma:/scratch/ag919/logs/final_save_new/2/kernels.h5 w06_kernels.h5 & \
+   rsync curie:/scratch/ag919/logs/final_save_new/2/kernels.h5 w07_kernels.h5 & \
+   rsync goedel:/scratch/ag919/logs/final_save_new/2/kernels.h5 w08_kernels.h5 & \
+   rsync neumann:/scratch/ag919/logs/final_save_new/2/kernels.h5 w09_kernels.h5 & \
+   rsync sagarmatha:/scratch/ag919/logs/final_save_new/2/kernels.h5 w10_kernels.h5 & \
+   rsync banach:/scratch/ag919/logs/final_save_new/2/kernels.h5 w11_kernels.h5 & \
+   rsync julia:/scratch/ag919/logs/final_save_new/2/kernels.h5 w12_kernels.h5 & \
+   rsync ulam:/scratch/ag919/logs/final_save_new/2/kernels.h5 w13_kernels.h5 & \
+   rsync vartak:/tmp/ag919/logs/final_save_new/2/kernels.h5 w14_kernels.h5 & \
+   rsync gosset:/scratch/ag919/logs/final_save_new/2/kernels.h5 w15_kernels.h5 & \
+   rsync cartwright:/scratch/ag919/logs/final_save_new/6/kernels.h5  w16_kernels.h5 & \
+   rsync cartwright:/scratch/ag919/logs/final_save_new/7/kernels.h5  w17_kernels.h5 & \
+   rsync poisson:/scratch/ag919/logs/final_save_new/2/kernels.h5 w18_kernels.h5 & \
+   rsync ulam:/scratch/ag919/logs/final_save_new/3/kernels.h5 w20_kernels.h5 & \
+   rsync ulam:/scratch/ag919/logs/final_save_new/6/kernels.h5 w21_kernels.h5 & \
+   rsync ulam:/scratch/ag919/logs/final_save_new/7/kernels.h5 w22_kernels.h5 & \
+   rsync poisson:/scratch/ag919/logs/final_save_new/4/kernels.h5 w23_kernels.h5 & \
+   rsync julia:/scratch/ag919/logs/final_save_new/3/kernels.h5 w25_kernels.h5 & \
+   rsync gosset:/scratch/ag919/logs/final_save_new/3/kernels.h5 w27_kernels.h5 & \
+   rsync jarvis:/scratch/ag919/logs/final_save_new/3/kernels.h5 w30_kernels.h5 & \
+   rsync banach:/scratch/ag919/logs/final_save_new/3/kernels.h5 w31_kernels.h5
+   
+   rsync grothendieck:/scratch/ag919/logs/final_save_new/3/kernels.h5 w03_kernels.h5 & \
+   rsync gosset:/scratch/ag919/logs/final_save_new/4/kernels.h5 w28_kernels.h5 & \
+   rsync julia:/scratch/ag919/logs/final_save_new/4/kernels.h5 w26_kernels.h5 & \
+   rsync poisson:/scratch/ag919/logs/final_save_new/5/kernels.h5 w24_kernels.h5 &
+   
+   rsync robbins:/scratch/ag919/logs/final_save_new/5/kernels.h5 w29_kernels.h5
+   
+   rsync dijkstra:/scratch/ag919/logs/final_save_new/5/kernels.h5 w19_kernels.h5
+
+
+
+     
+** Replicating small data CNTK
+   cite:arora2020harnessing
+*** CNTK-5 using nngp, no ZCA
+    huygens:/scratch/ag919/logs/save_new/203
+    huygens:/scratch/ag919/logs//8
+*** CNTK-5 using ntk, no ZCA
+    sagarmatha:/scratch/ag919/logs/save_new/7
+    sagarmatha:/scratch/ag919/logs/predict_cv_acc/2
+*** Myrtle10 no ZCA
+    robbins:/scratch/ag919/logs/save_new/6
+    robbins:/scratch/ag919/logs/predict_cv_acc/5
+*** CNTK-5 using nngp, ZCA
+    huygens:/scratch/ag919/logs/save_new/204
+    huygens:/scratch/ag919/logs/predict_cv_acc/10
+
+*** CNTK-5 using ntk, ZCA
+    sagarmatha:/scratch/ag919/logs/save_new/8
+    sagarmatha:/scratch/ag919/logs/predict_cv_acc/3
+
+*** CNTK-5 using nngp, no ZCA, using true test set
+    robbins:/scratch/ag919/logs/save_new/7/
+    robbins:/scratch/ag919/logs/predict_cv_acc/6/
+    
+*** CNTK-5 using ntk, no ZCA, true test set
+    sagarmatha:/scratch/ag919/logs/save_new/9/
+    sagarmatha:/scratch/ag919/logs/predict_cv_acc/4/
+
+** Replicating Myrtle10 / Myrtle5
+   Perhaps they used ZCA on the whole set and that is why it works so well?
+   Attempting to figure this out.
+
+*** Running original code: in Docker in huygens
+    The results are pretty good and consistent with the paper. Optimizing on the test set is not *super* powerful.
+        Reg: 1e-08
+        Train Accuracy: 1.0
+        Test Accuracy: 0.367
+        Reg: 1e-07
+        Train Accuracy: 1.0
+        Test Accuracy: 0.367
+        Reg: 1e-06
+        Train Accuracy: 1.0
+        Test Accuracy: 0.367
+        Reg: 1e-05
+        Train Accuracy: 1.0
+        Test Accuracy: 0.368
+        Reg: 0.0001
+        Train Accuracy: 1.0
+        Test Accuracy: 0.368
+        Reg: 0.001
+        Train Accuracy: 1.0
+        Test Accuracy: 0.376
+        Reg: 0.01
+        Train Accuracy: 0.90625
+        Test Accuracy: 0.341
+        Reg: 0.1
+        Train Accuracy: 0.59375
+        Test Accuracy: 0.293
+
+*** More complete log
+ ALPHA: 1.618033988749895
+BETA: 0.6180339887498948
+DATASET:
+  AUGMENTATIONS: [('FlipLR', 1)]
+  AUGMENTATION_PROB: 0.5
+  CORNERS: False
+  KERNEL_UUID: DEADBEEF
+  NAME: cifar-10
+  NUM_AUGMENTATIONS: 0
+  NUM_ZCA_EXTRA_AUGMENT: 5
+  RANDOM_TEST_SUBSET: False
+  RANDOM_TRAIN_SUBSET: False
+  RAND_AUGMENT_AUGS: ['FlipLR', 'Solarize', 'Color', 'Brightness', 'Contrast', 'Sharpness', 'Posterize', 'Equalize', 'Identity']
+  RAND_AUGMENT_N_MAX: 2
+  RAND_AUGMENT_RAND_N: False
+  RAND_AUGMENT_REPLACE: False
+  RAND_SEED: 0
+  RAW_TEST_NAME: cifar-10-test
+  RAW_TRAIN_NAME: cifar-10-train
+  SHARD_X_IDX: 0
+  SHARD_X_SIZE: 0
+  SHARD_Y_IDX: 0
+  SHARD_Y_SIZE: 0
+  STANDARD_PREPROCESS: True
+  TEST_FULL_SIZE: 0
+  TEST_SUBSET: 1000
+  TEST_SUBSET_START: 0
+  TRAIN_FULL_SIZE: 0
+  TRAIN_SUBSET: 160
+  TRAIN_SUBSET_START: 0
+  ZCA: True
+  ZCA_BIAS: 1e-05
+  ZCA_EXTRA_AUGMENT: False
+  ZCA_FULL: False
+EPSILON: 0.002
+KERNEL:
+  ARCH: [{'layer': 'conv3zp'}, {'layer': 'relu', 'store_norm': False},
+         {'layer': 'conv3zp'}, {'layer': 'relu', 'store_norm': False},
+         {'layer': 'pool2', 'store_norm': False}, {'layer': 'conv3zp'},
+         {'layer': 'relu', 'store_norm': False},
+         {'layer': 'pool2', 'store_norm': False},
+         {'layer': 'conv3zp', 'precision': 'float64'},
+         {'layer': 'relu', 'store_norm': False, 'precision': 'float64'},
+         {'layer': 'pool8', 'precision': 'float64', 'store_norm': True},
+         {'layer': 'relu_project', 'pr ecision': 'float64'}]
+
+  ARCH_DEFAULTS: [('relu', {'store_norm': False}), ('relu_project', {'store_norm': False}), ('quartic', {'store_norm': False}),
+                  ('quartic_project', {'store_norm': False}),
+                  ('pool2', {'store_norm': False}),
+                  ('pool8', {'store_norm': False}), ('quadratic', {'store_norm': False}),
+                  ('quadratic_project', {'store_norm': False}),
+                  ('exponential', {'store_norm': False}),
+                  ('exponential_shifted', {'store_norm': False, 'gamma': 1.0})]
+
+  CACHE_DIR: ./.kernel_cache
+    COATESNG:
+    BIAS: 1
+    FILTER_BATCH_SIZE: 2048
+    FILTER_SCALE: 0.0001
+    FILTER_BATCH_SIZE: 2048
+    FILTER_SCALE: 0.0001
+    FLIP_PATCHES: True
+    NORMALIZE_PATCHES: False
+    NUM_FILTERS: 1024
+    ON: False
+    PATCH_DISTRIBUTION: empirical
+    PATCH_SIZE: 5
+    POOL_SIZE: 1
+    POOL_STRIDE: 1
+    SEED: 0
+LINE_SEARCH: True
+SOLVE:
+  REGS: [1e-08, 1e-07, 1e-06, 1e-05, 0.0001, 0.001, 0.01, 0.1]
+SYSTEM:
+  AWS_BATCH_CORES: 0
+  BATCH_SIZE: 16
+  CACHE_PATH: tc_cache
+  FLOAT_32: True
+  NUM_GPUS: 1
+  NUM_WORKERS: 1
+  USE_AWS_BATCH: False
+  USE_TQDM: True
+  VERBOSE: False
+TEST_EVAL_ID:
+TRAIN_EVAL_ID:
+Loading dataset...
+Saving data
+(160, 32, 32, 3)
+(1000, 32, 32, 3)
+Layer KWARGS: [{}, {'store_norm': False}, {}, {'store_norm': False}, {'store_norm': False}, {}, {'store_norm': False}, {'store_norm': False}, {'precision': 'float64'}, {'store_norm': False, 'precision': 'float64'}, {'precision': 'float64',
+'store_norm': True}, {'precision': 'float64', 'store_norm': False}]
+Generating train kernel...
+using 1 gpus
+Batch Size  16
+Data_q size start 100
+  0%|...| 0/25600 [00:00<?, ?it/s]
+Context already set..
+STARTING KERNEL GEN HELP
+Layer KWARGS: [{}, {'store_norm': False}, {}, {'store_norm': False}, {'store_norm': False}, {}, {'store_norm': False}, {'store_norm': False}, {'precision': 'float64'}, {'store_norm': False, 'precision': 'float64'}, {'precision': 'float64',
+'store_norm': True}, {'precision': 'float64', 'store_norm': False}]
+TC "conv3_input" was not explicitly compiled for inputs of sizes:
+  torch.Size([8, 34, 34, 3]) torch.Size([8, 34, 34, 3])
+....Generate implicit MappingOptions
+Done compiling TC "conv3_input" (compile time: 797ms)
+TC "relu" was not explicitly compiled for inputs of sizes:
+  torch.Size([8, 8, 32, 32, 32, 32]) torch.Size([8, 8, 32, 32, 32, 32]) torch.Size([8, 8, 32, 32, 32, 32])
+....Generate implicit MappingOptions
+Done compiling TC "relu" (compile time: 921ms)
+TC "conv3_layer" was not explicitly compiled for inputs of sizes:
+  torch.Size([8, 8, 34, 34, 34, 34]) torch.Size([8, 8, 34, 34, 34, 34]) torch.Size([8, 8, 34, 34, 34, 34])
+....Generate implicit MappingOptions
+Done compiling TC "conv3_layer" (compile time: 724ms)
+TC "conv3_layer" was not explicitly compiled for inputs of sizes:
+  torch.Size([8, 8, 18, 18, 18, 18]) torch.Size([8, 8, 18, 18, 18, 18]) torch.Size([8, 8, 18, 18, 18, 18])
+....Generate implicit MappingOptions
+Done compiling TC "conv3_layer" (compile time: 917ms)
+TC "relu" was not explicitly compiled for inputs of sizes:
+Done compiling TC "conv3_layer" (compile time: 917ms)
+TC "relu" was not explicitly compiled for inputs of sizes:
+  torch.Size([8, 8, 16, 16, 16, 16]) torch.Size([8, 8, 16, 16, 16, 16]) torch.Size([8, 8, 16, 16, 16, 16])
+....Generate implicit MappingOptions
+Done compiling TC "relu" (compile time: 1196ms)
+TC "conv3_layer" was not explicitly compiled for inputs of sizes:
+  torch.Size([8, 8, 10, 10, 10, 10]) torch.Size([8, 8, 10, 10, 10, 10]) torch.Size([8, 8, 10, 10, 10, 10])
+....Generate implicit MappingOptions
+Done compiling TC "conv3_layer" (compile time: 744ms)
+TC "relu" was not explicitly compiled for inputs of sizes:
+  torch.Size([8, 8, 8, 8, 8, 8]) torch.Size([8, 8, 8, 8, 8, 8]) torch.Size([8, 8, 8, 8, 8, 8])
+....Generate implicit MappingOptions
+Done compiling TC "relu" (compile time: 833ms)
+TC "pool8" was not explicitly compiled for inputs of sizes:
+  torch.Size([8, 8, 8, 8, 8, 8]) torch.Size([8, 8, 8, 8, 8, 8]) torch.Size([8, 8, 8, 8, 8, 8])
+....Generate implicit MappingOptions
+Done compiling TC "pool8" (compile time: 1236ms)
+TC "relu_project" was not explicitly compiled for inputs of sizes:
+  torch.Size([8, 8, 1, 1, 1, 1]) torch.Size([8, 8, 1, 1, 1, 1]) torch.Size([8, 8, 1, 1, 1, 1])
+....Generate implicit MappingOptions
+Done compiling TC "relu_project" (compile time: 696ms)
+100% |...| 25600/25600 [13:08<00:00, 32.48it/s]
+Data_q size end 0
+gpu 0 called forward 55 times
+160 x 160 Train kernel took 798.8213183004409
+Generating test kernel...
+Batch Size  16
+Data_q size start 630
+  0%|...| 0/160000 [00:00<?, ?it/s]
+Context already set..
+STARTING KERNEL GEN HELP
+Layer KWARGS: [{}, {'store_norm': False}, {}, {'store_norm': False}, {'store_norm': False}, {}, {'store_norm': False}, {'store_norm': False}, {'precision': 'float64'}, {'store_norm': False, 'precision': 'float64'}, {'precision': 'float64',
+'store_norm': True}, {'precision': 'float64', 'store_norm': False}]
+TC "conv3_input" was not explicitly compiled for inputs of sizes:
+  torch.Size([8, 34, 34, 3]) torch.Size([8, 34, 34, 3])
+....Generate implicit MappingOptions
+Done compiling TC "conv3_input" (compile time: 1081ms)
+TC "relu" was not explicitly compiled for inputs of sizes:
+  torch.Size([8, 8, 32, 32, 32, 32]) torch.Size([8, 8, 32, 32, 32, 32]) torch.Size([8, 8, 32, 32, 32, 32])
+....Generate implicit MappingOptions
+Done compiling TC "relu" (compile time: 1180ms)
+TC "conv3_layer" was not explicitly compiled for inputs of sizes:
+  torch.Size([8, 8, 34, 34, 34, 34]) torch.Size([8, 8, 34, 34, 34, 34]) torch.Size([8, 8, 34, 34, 34, 34])
+....Generate implicit MappingOptions
+Done compiling TC "conv3_layer" (compile time: 1012ms)
+TC "conv3_layer" was not explicitly compiled for inputs of sizes:
+  torch.Size([8, 8, 18, 18, 18, 18]) torch.Size([8, 8, 18, 18, 18, 18]) torch.Size([8, 8, 18, 18, 18, 18])
+....Generate implicit MappingOptions
+Done compiling TC "conv3_layer" (compile time: 903ms)
+TC "relu" was not explicitly compiled for inputs of sizes:
+  torch.Size([8, 8, 16, 16, 16, 16]) torch.Size([8, 8, 16, 16, 16, 16]) torch.Size([8, 8, 16, 16, 16, 16])
+....Generate implicit MappingOptions
+Done compiling TC "relu" (compile time: 1054ms)
+TC "conv3_layer" was not explicitly compiled for inputs of sizes:
+  torch.Size([8, 8, 10, 10, 10, 10]) torch.Size([8, 8, 10, 10, 10, 10]) torch.Size([8, 8, 10, 10, 10, 10])
+....Generate implicit MappingOptions
+Done compiling TC "conv3_layer" (compile time: 756ms)
+TC "relu" was not explicitly compiled for inputs of sizes:
+Done compiling TC "conv3_layer" (compile time: 756ms)
+TC "relu" was not explicitly compiled for inputs of sizes:
+  torch.Size([8, 8, 8, 8, 8, 8]) torch.Size([8, 8, 8, 8, 8, 8]) torch.Size([8, 8, 8, 8, 8, 8])
+....Generate implicit MappingOptions
+Done compiling TC "relu" (compile time: 840ms)
+TC "pool8" was not explicitly compiled for inputs of sizes:
+  torch.Size([8, 8, 8, 8, 8, 8]) torch.Size([8, 8, 8, 8, 8, 8]) torch.Size([8, 8, 8, 8, 8, 8])
+....Generate implicit MappingOptions
+Done compiling TC "pool8" (compile time: 1143ms)
+TC "relu_project" was not explicitly compiled for inputs of sizes:
+  torch.Size([8, 8, 1, 1, 1, 1]) torch.Size([8, 8, 1, 1, 1, 1]) torch.Size([8, 8, 1, 1, 1, 1])
+....Generate implicit MappingOptions
+Done compiling TC "relu_project" (compile time: 864ms)
+Data_q size end 0
+gpu 0 called forward 630 times
+Saving kernels
+Solving Kernel....
+        Reg: 1e-08
+             Train Accuracy: 1.0
+        Test Accuracy: 0.367
+        Reg: 1e-07
+        Train Accuracy: 1.0
+        Test Accuracy: 0.367
+        Reg: 1e-06
+        Train Accuracy: 1.0
+        Test Accuracy: 0.367
+        Reg: 1e-05
+        Train Accuracy: 1.0
+        Test Accuracy: 0.368
+        Reg: 0.0001
+        Train Accuracy: 1.0
+        Test Accuracy: 0.368
+        Reg: 0.001
+        Train Accuracy: 1.0
+        Test Accuracy: 0.376
+        Reg: 0.01
+        Train Accuracy: 0.90625
+        Test Accuracy: 0.341
+        Reg: 0.1
+        Train Accuracy: 0.59375
+        Test Accuracy: 0.293
+
+
+       
+*** Learning from correlation matrix
+    huygens:/scratch/ag919/logs/predict_cv_acc/14
+    
+*** Calculating variances for the previous correlation matrix
+    huygens:/scratch/ag919/logs/save_new/215
+    huygens:/scratch/ag919/logs/predict_cv_acc/16  Covariance
+    huygens:/scratch/ag919/logs/predict_cv_acc/17  Correlation
+    
+*** Myrtle5, non-cheating ZCA, test is validation
+    sagarmatha:/scratch/ag919/logs/save_new/10
+    sagarmatha:/scratch/ag919/logs/predict_cv_acc/6 Covariance
+    sagarmatha:/scratch/ag919/logs/predict_cv_acc/5 Correlation
+    
+*** Myrtle5, no ZCA, test is validation
+    robbins:/scratch/ag919/logs/save_new/8
+    robbins:/scratch/ag919/logs/predict_cv_acc/8 Covariance
+    robbins:/scratch/ag919/logs/predict_cv_acc/7 Correlation
+    
+*** Myrtle5, ZCA with full train set (cheating), test is validation 
+    But only 1000 test examples
+    
+    robbins:/scratch/ag919/logs/save_new/10
+    robbins:/scratch/ag919/logs/predict_cv_acc/10 Covariance
+    robbins:/scratch/ag919/logs/predict_cv_acc/9  Correlation
+    
+*** Myrtle 10, no ZCA, full test set
+    ulam: 87 88 89 90 91 92 93 94   ; diagonal 105-112
+    robbins: 13, 14  diagonal 23 24
+    banach: 1, 2  diagonal 5, 6
+    euler: 1, 2
+    fields: 1, 2
+    thom: 1 2 ; Myrtle10_Gaussian 3 4   diagonal 7 8 ; Myrtle10_Gaussian 11 12
+    gauss: 1, 2
+    
+    thom has one extra experiment using Gaussian myrtle10  (3 and 4)
+    
+    for i in 1 2; do python experiments/save_new.py -D -l DEBUG with i_SU.N_train=1280 i_SU.N_test=10000 i_SU.test_is_validation=False model=Myrtle10 save_variance=True i_SU.dataset_treatment=load_train_idx i_SU.train_idx_path=/scratch/ag919/logs/save_new/$i; done
+    for i in 87 88 89 90 91 92 93 94; do sleep 1; JAX_ENABLE_X64=1 python experiments/predict_cv_acc.py -D -l DEBUG with i_SU.N_train=1280 i_SU.N_test=10000 i_SU.test_is_validation=False kernel_matrix_path=/scratch/ag919/logs/save_new/$i apply_relu=True & done
+
+   
+**** Buggy first attempt: training set used contiguous labels
+     ulam:/scratch/ag919/logs/predict_cv_acc/1
+     ulam:/scratch/ag919/logs/predict_cv_acc/2
+     ulam:/scratch/ag919/logs/predict_cv_acc/3
+     ulam:/scratch/ag919/logs/predict_cv_acc/4
+     ulam:/scratch/ag919/logs/predict_cv_acc/5
+     ulam:/scratch/ag919/logs/predict_cv_acc/6
+     ulam:/scratch/ag919/logs/predict_cv_acc/7
+     ulam:/scratch/ag919/logs/predict_cv_acc/8
+     robbins:/scratch/ag919/logs/predict_cv_acc/11
+     robbins:/scratch/ag919/logs/predict_cv_acc/12
+     banach:/scratch/ag919/logs/predict_cv_acc/1
+     banach:/scratch/ag919/logs/predict_cv_acc/2
+     euler:/scratch/ag919/logs/predict_cv_acc/1
+     euler:/scratch/ag919/logs/predict_cv_acc/2
+     fields:/scratch/ag919/logs/predict_cv_acc/1
+     fields:/scratch/ag919/logs/predict_cv_acc/2
+     gauss:/scratch/ag919/logs/predict_cv_acc/1
+     gauss:/scratch/ag919/logs/predict_cv_acc/2
+     thom:/scratch/ag919/logs/predict_cv_acc/1
+     thom:/scratch/ag919/logs/predict_cv_acc/2
+    
+     thom:/scratch/ag919/logs/predict_cv_acc/3
+     thom:/scratch/ag919/logs/predict_cv_acc/4
+    
+    
+**** Correct for Myrtle10 / _Gaussian
+     ["ulam:/scratch/ag919/logs/predict_cv_acc/17",
+    "ulam:/scratch/ag919/logs/predict_cv_acc/18",
+    "ulam:/scratch/ag919/logs/predict_cv_acc/19",
+    "ulam:/scratch/ag919/logs/predict_cv_acc/20",
+    "ulam:/scratch/ag919/logs/predict_cv_acc/21",
+    "ulam:/scratch/ag919/logs/predict_cv_acc/22",
+    "ulam:/scratch/ag919/logs/predict_cv_acc/23",
+    "ulam:/scratch/ag919/logs/predict_cv_acc/24",
+    "robbins:/scratch/ag919/logs/predict_cv_acc/15",
+    "robbins:/scratch/ag919/logs/predict_cv_acc/16",
+    "banach:/scratch/ag919/logs/predict_cv_acc/5",
+    "banach:/scratch/ag919/logs/predict_cv_acc/6",
+    "euler:/scratch/ag919/logs/predict_cv_acc/5",
+    "euler:/scratch/ag919/logs/predict_cv_acc/6",
+    "fields:/scratch/ag919/logs/predict_cv_acc/5",
+    "fields:/scratch/ag919/logs/predict_cv_acc/6",
+    "gauss:/scratch/ag919/logs/predict_cv_acc/5",
+    "gauss:/scratch/ag919/logs/predict_cv_acc/6",
+    "thom:/scratch/ag919/logs/predict_cv_acc/9",
+    "thom:/scratch/ag919/logs/predict_cv_acc/10"]
+   
+***** Myrtle10_Gaussian 
+    ["thom:/scratch/ag919/logs/predict_cv_acc/17",
+    "thom:/scratch/ag919/logs/predict_cv_acc/18"]
+   
+**** Correct for relu at the end
+     [
+    "ulam:/scratch/ag919/logs/predict_cv_acc/33",
+    #"ulam:/scratch/ag919/logs/predict_cv_acc/34",
+    #"ulam:/scratch/ag919/logs/predict_cv_acc/35",
+    #"ulam:/scratch/ag919/logs/predict_cv_acc/36",
+    #"ulam:/scratch/ag919/logs/predict_cv_acc/37",
+    #"ulam:/scratch/ag919/logs/predict_cv_acc/38",
+    #"ulam:/scratch/ag919/logs/predict_cv_acc/39",
+    #"ulam:/scratch/ag919/logs/predict_cv_acc/40",
+    "robbins:/scratch/ag919/logs/predict_cv_acc/17",
+    "robbins:/scratch/ag919/logs/predict_cv_acc/18",
+    "banach:/scratch/ag919/logs/predict_cv_acc/7",
+    "banach:/scratch/ag919/logs/predict_cv_acc/8",
+    "euler:/scratch/ag919/logs/predict_cv_acc/7",
+    "euler:/scratch/ag919/logs/predict_cv_acc/8",
+    "fields:/scratch/ag919/logs/predict_cv_acc/7",
+    "fields:/scratch/ag919/logs/predict_cv_acc/8",
+    "gauss:/scratch/ag919/logs/predict_cv_acc/7",
+    "gauss:/scratch/ag919/logs/predict_cv_acc/8",
+    "thom:/scratch/ag919/logs/predict_cv_acc/14",
+    "thom:/scratch/ag919/logs/predict_cv_acc/15"]
+
+***** Myrtle10_Gaussian 
+    ["thom:/scratch/ag919/logs/predict_cv_acc/13",
+    "thom:/scratch/ag919/logs/predict_cv_acc/16"]
+       
+   
+** Parameter sweep
+*** Only the last layer. dense + 102 settings + mean_pool
+    robbins:/scratch/ag919/logs/save_new/29-33 (inclusive)
+    banach:/scratch/ag919/logs/save_new/7-10
+    
+    Note: it looks like the mean_pool  kernel is divided by 64 with respect to all the others.
+     
+**** Without applying ReLU
+    "robbins:/scratch/ag919/logs/predict_cv_acc/19",
+    "robbins:/scratch/ag919/logs/predict_cv_acc/20",
+    "robbins:/scratch/ag919/logs/predict_cv_acc/21",
+    "robbins:/scratch/ag919/logs/predict_cv_acc/22",
+    "robbins:/scratch/ag919/logs/predict_cv_acc/23",
+    "banach:/scratch/ag919/logs/predict_cv_acc/12",
+    "banach:/scratch/ag919/logs/predict_cv_acc/13",
+    "banach:/scratch/ag919/logs/predict_cv_acc/14",
+    "banach:/scratch/ag919/logs/predict_cv_acc/15",
+   
+**** Applying ReLU at the end 
+    "robbins:/scratch/ag919/logs/predict_cv_acc/24",
+    "robbins:/scratch/ag919/logs/predict_cv_acc/25",
+    "robbins:/scratch/ag919/logs/predict_cv_acc/26",
+    # "robbins:/scratch/ag919/logs/predict_cv_acc/27",
+    # "robbins:/scratch/ag919/logs/predict_cv_acc/28",
+    "banach:/scratch/ag919/logs/predict_cv_acc/16",
+    "banach:/scratch/ag919/logs/predict_cv_acc/17",
+    "banach:/scratch/ag919/logs/predict_cv_acc/18",
+    "banach:/scratch/ag919/logs/predict_cv_acc/19",
+    
+**** No Relu, 4-fold cross-validation 
+    # "robbins:/scratch/ag919/logs/predict_cv_acc/30",
+    # "robbins:/scratch/ag919/logs/predict_cv_acc/31",
+    # "robbins:/scratch/ag919/logs/predict_cv_acc/32",
+    # "robbins:/scratch/ag919/logs/predict_cv_acc/33",
+    # "robbins:/scratch/ag919/logs/predict_cv_acc/34",
+    "banach:/scratch/ag919/logs/predict_cv_acc/27",
+    "banach:/scratch/ag919/logs/predict_cv_acc/28",
+    "banach:/scratch/ag919/logs/predict_cv_acc/29",
+    "banach:/scratch/ag919/logs/predict_cv_acc/30",
+   
+    for APP in False True; do for i in {29..33}; do python experiments/predict_cv_acc.py -l DEBUG -D with i_SU.N_train=1280 i_SU.N_test=1 i_SU.dataset_treatment=load_train_idx i_SU.train_idx_path=/scratch/ag919/logs/save_new/$i kernel_matrix_path=/scratch/ag919/logs/save_new/$i apply_relu=$APP; done; done
+*** Myrtle5 but only last layer
+    gauss:/scratch/ag919/logs/save_new/7
+    fields:/scratch/ag919/logs/save_new/7
+    euler:/scratch/ag919/logs/save_new/7
+    banach:/scratch/ag919/logs/save_new/11
+    thom:/scratch/ag919/logs/save_new/13
+    robbins:/scratch/ag919/logs/save_new/35
+**** LOO-CV 
+    "robbins:/scratch/ag919/logs/predict_cv_acc/35",
+    "thom:/scratch/ag919/logs/predict_cv_acc/20",
+    "banach:/scratch/ag919/logs/predict_cv_acc/24",
+    "gauss:/scratch/ag919/logs/predict_cv_acc/9",
+    "fields:/scratch/ag919/logs/predict_cv_acc/10",
+    "euler:/scratch/ag919/logs/predict_cv_acc/10",
+    
+**** 4-fold CV
+    "robbins:/scratch/ag919/logs/predict_cv_acc/37",
+    "thom:/scratch/ag919/logs/predict_cv_acc/24",
+    "banach:/scratch/ag919/logs/predict_cv_acc/26",
+    "gauss:/scratch/ag919/logs/predict_cv_acc/11",
+    "fields:/scratch/ag919/logs/predict_cv_acc/11",
+    "euler:/scratch/ag919/logs/predict_cv_acc/11",
+*** MyrtleBastard
+   "robbins:/scratch/ag919/logs/kernel_plus_learn/1/n_splits_-1",
+   "robbins:/scratch/ag919/logs/kernel_plus_learn/2/n_splits_-1",
+   "robbins:/scratch/ag919/logs/kernel_plus_learn/3/n_splits_-1",
+   "thom:/scratch/ag919/logs/kernel_plus_learn/1/n_splits_-1",
+   "thom:/scratch/ag919/logs/kernel_plus_learn/2/n_splits_-1",
+   "thom:/scratch/ag919/logs/kernel_plus_learn/3/n_splits_-1",
+   "euler:/scratch/ag919/logs/kernel_plus_learn/1/n_splits_-1",
+   "euler:/scratch/ag919/logs/kernel_plus_learn/2/n_splits_-1",
+   "euler:/scratch/ag919/logs/kernel_plus_learn/3/n_splits_-1",
+   
+   "robbins:/scratch/ag919/logs/kernel_plus_learn/1/n_splits_4",
+   "robbins:/scratch/ag919/logs/kernel_plus_learn/2/n_splits_4",
+   "robbins:/scratch/ag919/logs/kernel_plus_learn/3/n_splits_4",
+   "thom:/scratch/ag919/logs/kernel_plus_learn/1/n_splits_4",
+   "thom:/scratch/ag919/logs/kernel_plus_learn/2/n_splits_4",
+   "thom:/scratch/ag919/logs/kernel_plus_learn/3/n_splits_4",
+   "euler:/scratch/ag919/logs/kernel_plus_learn/1/n_splits_4",
+   "euler:/scratch/ag919/logs/kernel_plus_learn/2/n_splits_4",
+   "euler:/scratch/ag919/logs/kernel_plus_learn/3/n_splits_4",
+    
+*** CNTK14-sweep 
+    for i in {1..3}; do python experiments/kernel_plus_learn.py -D with i_SU.N_train=1280 i_SU.N_test=1 save_new.model=CNTK14_sweep save_new.batch_size=4; done
+    huygens:/scratch/ag919/logs/kernel_plus_learn/1-3
+    fields:/scratch/ag919/logs/kernel_plus_learn/2-4
+    gauss:/scratch/ag919/logs/kernel_plus_learn/2-4
+    
+   "huygens:/scratch/ag919/logs/kernel_plus_learn/1/n_splits_-1",
+   "huygens:/scratch/ag919/logs/kernel_plus_learn/2/n_splits_-1",
+   "huygens:/scratch/ag919/logs/kernel_plus_learn/3/n_splits_-1",
+   "fields:/scratch/ag919/logs/kernel_plus_learn/2/n_splits_-1",
+   "fields:/scratch/ag919/logs/kernel_plus_learn/3/n_splits_-1",
+   "fields:/scratch/ag919/logs/kernel_plus_learn/4/n_splits_-1",
+   "gauss:/scratch/ag919/logs/kernel_plus_learn/2/n_splits_-1",
+   "gauss:/scratch/ag919/logs/kernel_plus_learn/3/n_splits_-1",
+   "gauss:/scratch/ag919/logs/kernel_plus_learn/4/n_splits_-1",
+   
+   "huygens:/scratch/ag919/logs/kernel_plus_learn/1/n_splits_4",
+   "huygens:/scratch/ag919/logs/kernel_plus_learn/2/n_splits_4",
+   "huygens:/scratch/ag919/logs/kernel_plus_learn/3/n_splits_4",
+   "fields:/scratch/ag919/logs/kernel_plus_learn/2/n_splits_4",
+   "fields:/scratch/ag919/logs/kernel_plus_learn/3/n_splits_4",
+   "fields:/scratch/ag919/logs/kernel_plus_learn/4/n_splits_4",
+   "gauss:/scratch/ag919/logs/kernel_plus_learn/2/n_splits_4",
+   "gauss:/scratch/ag919/logs/kernel_plus_learn/3/n_splits_4",
+   "gauss:/scratch/ag919/logs/kernel_plus_learn/4/n_splits_4",
+  
+**** More data (kernels):
+     # These only contain accuracy data up to 1280 points
+    rsync -r fields:/scratch/ag919/logs/kernel_plus_learn/12/ fields_12 &\
+    rsync -r gauss:/scratch/ag919/logs/kernel_plus_learn/6/ gauss_6 &\
+    rsync -r banach:/scratch/ag919/logs/kernel_plus_learn/8/ banach_8 &\
+    rsync -r gauss:/scratch/ag919/logs/kernel_plus_learn/8/ gauss_8 &\
+    rsync -r fields:/scratch/ag919/logs/kernel_plus_learn/15/ fields_15 &\
+    thom:/scratch/ag919/logs/kernel_plus_learn/9/
+    # huygens:/scratch/ag919/logs/kernel_plus_learn/4/
+    # robbins:/scratch/ag919/logs/kernel_plus_learn/4
+    # euler:/scratch/ag919/logs/kernel_plus_learn/9/
+    poisson:/scratch/ag919/logs/kernel_plus_learn/1/
+
+
+***** Including the learning for all data sizes:
+    "banach:/scratch/ag919/logs/kernel_plus_learn/16/n_splits_4/",
+    "gauss:/scratch/ag919/logs/kernel_plus_learn/8/n_splits_4/",
+    "gauss:/scratch/ag919/logs/kernel_plus_learn/9/n_splits_4/",
+    "fields:/scratch/ag919/logs/kernel_plus_learn/14/n_splits_4/",
+    "fields:/scratch/ag919/logs/kernel_plus_learn/15/n_splits_4/",
+    "thom:/scratch/ag919/logs/kernel_plus_learn/9/n_splits_4/",
+    "poisson:/scratch/ag919/logs/kernel_plus_learn/1/n_splits_4/",
+    
+    
+   
+***** learning part only 5120 data points 
+    "fields:/scratch/ag919/logs/kernel_plus_learn/13/n_splits_4",
+    "gauss:/scratch/ag919/logs/kernel_plus_learn/7/n_splits_4",
+    "banach:/scratch/ag919/logs/kernel_plus_learn/9/n_splits_4",
+     
+    "fields:/scratch/ag919/logs/kernel_plus_learn/13/n_splits_-1",
+    "gauss:/scratch/ag919/logs/kernel_plus_learn/7/n_splits_-1",
+    "banach:/scratch/ag919/logs/kernel_plus_learn/9/n_splits_-1",
+
+**** DONE More data (10240 points)
+     CLOSED: [2020-06-02 Tue 22:13]
+     thom 0, 1, 8
+     huygens 2
+     poisson 3, 4
+     sagarmatha 5
+     robbins 6, 7 (after vapnik)
+     vapnik 7 (most of it)
+     
+     thom:/scratch/ag919/logs/save_new/20
+     thom:/scratch/ag919/logs/save_new/21
+     thom:/scratch/ag919/logs/save_new/23
+     huygens:/scratch/ag919/logs/save_new/221
+     poisson:/scratch/ag919/logs/save_new/2
+     poisson:/scratch/ag919/logs/save_new/3
+     sagarmatha:/scratch/ag919/logs/save_new/11
+     robbins:/scratch/ag919/logs/save_new/36
+     vapnik:/scratch/ag919/logs/save_new/1 (not complete)
+     stopped at 246160/273137
+     
+     joined in thom
+     thom:/scratch/ag919/logs/predict_cv_acc/28
+
+*** DONE Myrtle10_replaced_tick_v2_sweep  "pool_and_conv"
+    CLOSED: [2020-05-26 Tue 17:14]
+    
+    thom:/scratch/ag919/logs/kernel_plus_learn/12 onwards
+    More experiments now!
+    More experiments for ls=1.7 in thom 82+
+    ls=3.75 and 4.5 in huygens 33+
+   
+**** Doing it again 
+     thom 30+
+     sagarmatha 5+
+     robbins 9+
+     
+     laplace 1+ (note: logs are on /tmp)
+   
+*** DONE Myrtle10_replaced_tick_v1_sweep  "conv_and_pool"
+    CLOSED: [2020-05-25 Mon 23:41]
+    poisson:/scratch/ag919/logs/kernel_plus_learn/2 onwards
+   
+**** Doing it again 
+      poisson 9+
+     huygens 10+
+     
+thom
+    
+*** DONE Myrtle10_replaced_tick_v3_sweep  "pool_and_conv, corrected"
+    CLOSED: [2020-05-26 Tue 17:14]
+***** Investigate the upper range better 
+****** 2.3 2.792790625985782 3.391164991562634 4.117745130264034
+       poisson 41+
+       robbins 32+
+****** 2.534446377370667 3.077468732514967 3.736837316492238 4.537480099275386
+       Laplace 35+
+       stroustrup 8+
+****** 5 6
+       Sagarmatha 7+
+***** More samples for reducing stddev 
+******  1.65 1.7 1.75 1.8 1.85
+       thom 50+
+       poisson 20+
+       huygens 23+
+****** 1.9 2 2.1 2.3
+       robbins 18+ (not same range)
+****** 0.2 0.5 0.7 1.0 1.3 1.5
+       laplace 8+
+*** DONE Myrtle10_replaced_tick_v4_sweep just pool
+    CLOSED: [2020-05-26 Tue 13:16]
+    poisson 28+
+    laplace 22+
+    stroustrup 1+
+    for i in 1 2; do for ls in 0.22313016 0.30455948 0.41570568 0.56741367 0.77448611 1.05712774 1.44291687 1.96949621 2.68824587 3.66929667; do python experiments/kernel_plus_learn.py with i_SU.N_test=1 i_SU.N_train=1280 i_SU.dataset_treatment=train_random_balanced save_new.batch_size=10 save_new.model=Myrtle10_replaced_tick_v4_sweep save_new.internal_lengthscale=$ls save_new.save_variance=False; done; done
+*** DONE RBFMyrtle_v3 
+    CLOSED: [2020-06-03 Wed 00:16]
+    thom 87+ (except 95)
+    for i in 1 2; do for ls in 0.841 1.045 1.297 1.611 2.001 2.485 3.087 3.833 4.761 5.912; do python experiments/kernel_plus_learn.py with i_SU.N_test=1 i_SU.N_train=1280 i_SU.dataset_treatment=trai
+    
+    Test set in laplace: kernel_plus_learn 123 (kernel in 115)
+    # Worthless because I used the same seed:
+    # Cross-validation in kernel_plus_learn 124,125 (30min)
+    Cross-validation in kernel_plus_learn 126,127 (30min)
+    
+**** 
+
+*** DONE MyrtleBastard_v3_sweep 
+    CLOSED: [2020-06-02 Tue 22:12]
+    poisson 49+
+    for i in 1 2 3; do for ls in 2.001 0.841 1.045 1.297 1.611; do python experiments/kernel_plus_learn.py with i_SU.N_test=1 i_SU.N_train=1280 i_SU.dataset_treatment=train_random_balanced save_new.batch_size=10 save_new.model=MyrtleBastard_v3_sweep save_new.internal_lengthscale=$ls; done; done
+    
+    stroustrup 16+
+    for i in 1 2 3; do for ls in 2.485 3.087 3.833 4.761 5.912; do python experiments/kernel_plus_learn.py with i_SU.N_test=1 i_SU.N_train=1280 i_SU.dataset_treatment=train_random_balanced save_new.batch_size=10 save_new.model=MyrtleBastard_v3_sweep save_new.internal_lengthscale=$ls; done; done
+*** DONE BigMyrtle 
+    CLOSED: [2020-06-02 Tue 22:12]
+    huygens 37
+*** DONE MyrtleBastard_5x5 
+    CLOSED: [2020-06-02 Tue 22:12]
+    laplace 97+
+    for i in 1 2 3; do for ls in 0.538 0.672 0.840 1.049 1.310 1.635 2.042 2.551 3.185 3.978; do python experiments/kernel_plus_learn.py with i_SU.N_test=1 i_SU.N_train=1280 i_SU.dataset_treatment=train_random_balanced save_new.batch_size=10 save_new.model=BigMyrtleBastard save_new.internal_lengthscale=$ls; done; done
+*** PreResNet-32
+    thom:/scratch/ag919/logs/save_new/14
+**** LOO-CV 
+     thom:/scratch/ag919/logs/predict_cv_acc/22
+**** 4x cross-validation
+     thom:/scratch/ag919/logs/predict_cv_acc/24
+     _mean_sweep_myrtle5_loo, _var_sweep_myrtle5_loo, _N_sweep_myrtle5_loo, loo_acc_df = build_sweep(sweep_myrtle5_loo_paths)
+     _mean_sweep_preresnet32_loo, _var_sweep_preresnet32_loo, _N_sweep_preresnet32_loo, loo_acc_df = build_sweep(sweep_preresnet32_loo_paths)
+     mean_sweep_myrtle5_loo, error_sweep_myrtle5_loo = plottable_sweep(_mean_sweep_myrtle5_loo, _var_sweep_myrtle5_loo, _N_sweep_myrtle5_loo)
+     mean_sweep_preresnet32_loo, error_sweep_preresnet32_loo = plottable_sweep(_mean_sweep_preresnet32_loo, _var_sweep_preresnet32_loo, _N_sweep_preresnet32_loo)
+*** All the layers.
+    Running in the cluster. It gave an error but I don't know which! WTF!
+    
+    - 0.19952623  gauss:/scratch/ag919/logs/kernel_plus_learn/5
+    - 0.53088444 fields:/scratch/ag919/logs/kernel_plus_learn/5
+    - 1.41253754 banach:/scratch/ag919/logs/kernel_plus_learn/3
+    - 3.75837404  euler:/scratch/ag919/logs/kernel_plus_learn/4
+    - 10.0         thom:/scratch/ag919/logs/kernel_plus_learn/4
+
+    python3 experiments/kernel_plus_learn.py with i_SU.N_train=1280 i_SU.N_test=1 save_new.model=Myrtle10_fulltick_sweep save_new.internal_lengthscale=0.53088444 
+    
+
+
+    "gauss:/scratch/ag919/logs/kernel_plus_learn/5/n_splits_4",
+    "fields:/scratch/ag919/logs/kernel_plus_learn/5/n_splits_4",
+    "banach:/scratch/ag919/logs/kernel_plus_learn/3/n_splits_4",
+    "euler:/scratch/ag919/logs/kernel_plus_learn/4/n_splits_4",
+    "thom:/scratch/ag919/logs/kernel_plus_learn/4/n_splits_4",
+** Inducing patches 
+*** Using good lengthscale, random inducing points, CNTK14: 
+    python experiments/mask_sparse_classify.py  -D with i_SU.N_train=50000 i_SU.N_test=10000 model=CNTK_nopool model_args='{"depth": 14}' batch_size=1000 lengthscale=2.718281828459045
+    thom:/scratch/ag919/logs/mask_sparse_classify/42
+*** Using mean pooling, random inducing points, CNTK14:
+    thom:/scratch/ag919/logs/sparse_classify/102 (I think)
+    
+*** Using lengthscale=e, random inducing points, ResNet14
+     for depth in 14 20 8 32; do python experiments/mask_sparse_classify.py  -D with i_SU.N_train=50000 i_SU.N_test=10000 model=PreResNetNoPooling stride=4 "model_args={'depth': $depth}" batch_size=1000 lengthscale=2.718281828459045; done
+     poisson:/scratch/ag19/logs/mask_sparse_classify/3+
+    
+    for ls in 1.0; do for depth in 14 20 8 32; do python experiments/mask_sparse_classify.py  -D with i_SU.N_train=50000 i_SU.N_test=10000 model=PreResNetNoPooling stride=4 "model_args={'depth': $depth}" batch_size=1000 lengthscale=$ls; done; done
+    stroustrup: // 1+
+    
+    for ls in 4.0; do for depth in 14 20 8 32; do python experiments/mask_sparse_classify.py  -D with i_SU.N_train=50000 i_SU.N_test=10000 model=PreResNetNoPooling stride=4 "model_args={'depth': $depth}" batch_size=1000 lengthscale=$ls; done; done
+    huygens: //1+
+    
+*** Using mean pooling, random inducing points, ResNet14
+    for ls in None 1.0 4.0; do for depth in 14 20 8 32; do python experiments/mask_sparse_classify.py  -D with i_SU.N_train=50000 i_SU.N_test=10000 model=PreResNetNoPooling stride=4 "model_args={'depth': $depth}" batch_size=1000 lengthscale=$ls; done; done
+    laplace:/tmp/ag19/logs/mask_sparse_classify/1+
+    
+*** Testing conditional variance: 
+    - stroustrup:/scratch/ag19/logs/mask_sparse_classify/3, to be compared wwith 1
+    - laplace:/tmp/ag19/logs/mask_sparse_classify/3, to be compared wwith 1
+
+   
+* What is going on with non-Gaussian likelihoods 
+  on huygens:/scratch/ag919/logs/ulam_save_new_87/87/
+  
+  Baseline: test accuracy of 0.46680003, using noise 1.36301994e-05.
+  ELBO: -17278.38879043035 / 1280 = -13.5
+  
+  Using sgd, trilnat  with lr=n_data/100:
+  acc = 0.4523
+  acc = 0.4541 (when ELBO more converged)

@@ -1,0 +1,31 @@
+{
+  "N_classes": 10,
+  "N_quadrature_points": 20,
+  "apply_relu": false,
+  "i_SU": {
+    "N_test": 10000,
+    "N_train": 1280,
+    "ZCA_bias": 1e-05,
+    "ZCA_transform": false,
+    "dataset_base_path": "/scratch/ag919/datasets/",
+    "dataset_name": "CIFAR10",
+    "dataset_treatment": "train_random_balanced",
+    "default_dtype": "float64",
+    "num_likelihood_samples": 10,
+    "sorted_dataset_path": "/scratch/ag919/datasets/interlaced_argsort",
+    "test_is_validation": true,
+    "train_idx_path": null
+  },
+  "kernel_matrix_path": "/scratch/ag919/logs/ulam_save_new_87/87/",
+  "likelihood_type": "softmax",
+  "line_search_fn": "strong_wolfe",
+  "lr": 25.6,
+  "momentum": 0.9,
+  "multiply_var": false,
+  "optimizer_type": "sgd",
+  "seed": 385757376,
+  "sigy": 1.36301994e-05,
+  "training_iter": 50000,
+  "use_cuda": true,
+  "variational_dist_type": "trilnat"
+}

@@ -1,8 +1,10 @@
 import torch
 import math
+import gpytorch
+from gpytorch.lazy import CholLazyTensor, NonLazyTensor
 
 class PrecomputedKernel(gpytorch.kernels.Kernel):
-    def __init__(self, Kxx, Kxt, Kx_diag, Kt_diag):
+    def __init__(self, Kxx, Kxt, Kx_diag, Kt_diag, jitter=0.0):
         super().__init__()
 
         n_train, n_test = Kxt.shape
@@ -16,6 +18,7 @@ class PrecomputedKernel(gpytorch.kernels.Kernel):
         self.register_buffer("train_x", train_x)
         self.register_buffer("test_x", test_x)
         self.register_buffer("Kxx", Kxx)
+        self.register_buffer("Kxx_chol", NonLazyTensor(Kxx).add_jitter(jitter).cholesky().evaluate())
         self.register_buffer("Kxt", Kxt)
         self.register_buffer("Kx_diag", Kx_diag)
         self.register_buffer("Kt_diag", Kt_diag)
@@ -29,7 +32,7 @@ class PrecomputedKernel(gpytorch.kernels.Kernel):
         else:
             if torch.equal(x1, self.train_x):
                 if torch.equal(x2, self.train_x):
-                    return self.Kxx
+                    return CholLazyTensor(self.Kxx_chol)
                 elif torch.equal(x2, self.test_x):
                     return self.Kxt
             elif torch.equal(x1, self.test_x):

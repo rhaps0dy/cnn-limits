@@ -1,8 +1,31 @@
-main.aux
-main.bbl
-main.blg
-main.log
-main.out
+# LaTeX
+**/*.aux
+**/*.bbl
+**/*.blg
+**/*.log
+**/*.out
+**/*.synctex.gz
+**/*.bcf
+**/*.run.xml
 main.pdf
-main.synctex.gz
+neurips2020/supplementary_standalone.pdf
+## Emacs AucTeX
 **/auto
+
+# Python
+**/.mypy_cache
+**/__pycache__
+**/*.egg-info
+**/.ipynb_checkpoints
+
+# Mac
+**/.DS_Store
+
+# Python egg
+dist/
+build
+
+# Some experiment results
+figures
+train_idxes
+

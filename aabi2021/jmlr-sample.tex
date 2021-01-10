@@ -1,0 +1,1012 @@
+ % use the "wcp" class option for workshop and conference
+ % proceedings
+ %\documentclass[gray]{jmlr} % test grayscale version
+ %\documentclass[tablecaption=bottom]{jmlr}% journal article
+ \documentclass[tablecaption=bottom,wcp,nonatbib]{jmlr} % W&CP article
+
+ % The following packages will be automatically loaded:
+ % amsmath, amssymb, natbib, graphicx, url, algorithm2e
+
+ %\usepackage{rotating}% for sideways figures and tables
+ %\usepackage{longtable}% for long tables
+
+ % The siunitx package is used by this sample document
+ % to align numbers in a column by their decimal point.
+ % Remove the next line if you don't require it.
+ % \usepackage[load-configurations=version-1]{siunitx} % newer version
+ %\usepackage{siunitx}
+ 
+ 
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Useful packages
+% \usepackage{subcaption}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+
+
+\usepackage{graphicx}
+\usepackage[colorinlistoftodos]{todonotes}
+% \usepackage[colorlinks=true, allcolors=blue]{hyperref}
+\usepackage{paralist}
+\usepackage{cleveref}
+\creflabelformat{equation}{#2#1#3}
+% \usepackage{listings}
+% \lstset{
+%     showstringspaces=false,
+%     basicstyle=\ttfamily,
+%     breaklines=true,
+%     breakatwhitespace=true,
+% }
+% \usepackage{booktabs}
+\usepackage{cancel}
+\usepackage{import}  % Inkscape figures
+
+\usepackage[colorinlistoftodos]{todonotes}
+\newcommand{\markcomment}[1]{\todo[color=green]{#1}\xspace}
+\newcommand{\adriacomment}[1]{\todo[color=blue]{#1}\xspace}
+
+
+% Theorem environments
+% \usepackage{amsthm}
+% \newtheorem{theorem}{Theorem}[section]
+% \newtheorem{lemma}[theorem]{Lemma}
+% \newtheorem{corollary}[theorem]{Corollary}
+% \theoremstyle{definition}
+% \newtheorem{definition}[theorem]{Definition}
+\newtheorem{assumption}[theorem]{Assumption}
+
+
+
+% Algorithms
+% \usepackage{algorithm}
+% \usepackage{algpseudocode}
+% \usepackage{algorithmic}
+
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Mathematical commands
+\usepackage{MarkMathCmds}
+
+\newcommand{\vX}{\mathbf{X}}
+\newcommand{\vW}{\mathbf{W}}
+\newcommand{\vU}{\mathbf{U}}
+\newcommand{\vZ}{\mathbf{Z}}
+\newcommand{\vA}{\mathbf{A}}
+\newcommand{\vQ}{\mathbf{Q}}
+\newcommand{\vK}{\mathbf{K}}
+\newcommand{\vY}{\mathbf{Y}}
+\newcommand{\vL}{\mathbf{L}}
+\newcommand{\vSigma}{\boldsymbol{\Sigma}}
+\newcommand{\vLambda}{\boldsymbol{\Lambda}}
+\newcommand{\eye}{\mathbf{I}}
+
+\newcommand{\patchfun}[1]{{#1}\text{th patch}}
+\newcommand{\vecfun}{\text{vec}\bra}
+\newcommand{\simiid}{\overset{i.i.d.}{\sim}}
+
+\newcommand{\tp}{{\mathrm{\textsf{\tiny T}}}}
+\newcommand{\vbar}{{\,|\,}}
+
+% Brackets and super/sub -indices
+\newcommand{\bracket}[3]{{\left#1 #3 \right#2}}
+\newcommand{\bra}{\bracket{(}{)}}
+\newcommand{\cb}{\bracket{\{}{\}}}
+\newcommand{\sqb}{\bracket{[}{]}}
+\newcommand{\abs}{\bracket{|}{|}}
+\newcommand{\ceil}{\bracket{\lceil}{\rceil}}
+\newcommand{\floor}{\bracket{\lfloor}{\rfloor}}
+\DeclareMathOperator*{\ExpOperator}{\ExpSymb}
+
+\newcommand{\ssup}[1]{^{\bra{#1}}}
+\usepackage{dsfont}
+\newcommand{\indicator}[1]{{\mathds{1}}\left[#1\right]}
+
+
+ % The following command is just for this sample document:
+\newcommand{\cs}[1]{\texttt{\char`\\#1}}% remove this in your real article
+
+ % Define an unnumbered theorem just for this sample document for
+ % illustrative purposes:
+\theorembodyfont{\upshape}
+\theoremheaderfont{\scshape}
+\theorempostheader{:}
+\theoremsep{\newline}
+\newtheorem*{note}{Note}
+
+\jmlrproceedings{AABI 2020}{3rd Symposium on Advances in Approximate Bayesian Inference, 2020}
+
+ % The optional argument of \title is used in the header
+\title[Correlated Weights in Infinite Limits of Deep CNNs]{Correlated Weights in Infinite Limits \\ of Deep Convolutional Neural Networks}
+
+ % Anything in the title that should appear in the main title but 
+ % not in the article's header or the volume's table of
+ % contents should be placed inside \titletag{}
+
+ %\title{Title of the Article\titletag{\thanks{Some footnote}}}
+
+
+ % Use \Name{Author Name} to specify the name.
+ % If the surname contains spaces, enclose the surname
+ % in braces, e.g. \Name{John {Smith Jones}} similarly
+ % if the name has a "von" part, e.g \Name{Jane {de Winter}}.
+ % If the first letter in the forenames is a diacritic
+ % enclose the diacritic in braces, e.g. \Name{{\'E}louise Smith}
+
+ % \thanks must come after \Name{...} not inside the argument for
+ % example \Name{John Smith}\nametag{\thanks{A note}} NOT \Name{John
+ % Smith\thanks{A note}}
+
+ % Anything in the name that should appear in the title but not in the 
+ % article's header or footer or in the volume's
+ % table of contents should be placed inside \nametag{}
+
+% Anonymous authors (leave as is; do not reveal author names for your submission)
+% \author{\Name{Anonymous Authors}\\
+%   \addr Anonymous Institution}
+% THE SUBMISSION MUST REMAIN ANONYMOUS
+
+% Two authors with the same address
+% \author{\Name{Author Name1\nametag{\thanks{A note}}} \Email{abc@sample.com}\and
+%  \Name{Author Name2} \Email{xyz@sample.com}\\
+%  \addr Address}
+
+ % Three or more authors with the same address:
+ % \author{\Name{Author Name1} \Email{an1@sample.com}\\
+ %  \Name{Author Name2} \Email{an2@sample.com}\\
+ %  \Name{Author Name3} \Email{an3@sample.com}\\
+ %  \Name{Author Name4} \Email{an4@sample.com}\\
+ %  \Name{Author Name5} \Email{an5@sample.com}\\
+ %  \Name{Author Name6} \Email{an6@sample.com}\\
+ %  \Name{Author Name7} \Email{an7@sample.com}\\
+ %  \Name{Author Name8} \Email{an8@sample.com}\\
+ %  \Name{Author Name9} \Email{an9@sample.com}\\
+ %  \Name{Author Name10} \Email{an10@sample.com}\\
+ %  \Name{Author Name11} \Email{an11@sample.com}\\
+ %  \Name{Author Name12} \Email{an12@sample.com}\\
+ %  \Name{Author Name13} \Email{an13@sample.com}\\
+ %  \Name{Author Name14} \Email{an14@sample.com}\\
+ %  \addr Address}
+
+
+% Authors with different addresses:
+\author{\Name{Adrià Garriga-Alonso} \Email{ag919@cam.ac.uk}\\
+ \addr Department of Engineering, University of Cambridge, United Kingdom
+ \AND
+ \Name{Mark {van der Wilk}} \Email{m.vdwilk@imperial.ac.uk}\\
+ \addr Department of Computing, Imperial College London, United Kingdom
+}
+
+
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Infinite width limits of deep neural networks often have tractable forms. They have been used to analyse the behaviour of finite networks, as well as being useful methods in their own right. When investigating infinitely wide CNNs it was observed that the correlations arising from spatial weight sharing disappear in the infinite limit.
+This is undesirable, as spatial correlation is the main motivation behind CNNs. We show that the loss of this property is not a consequence of the infinite limit, but rather of choosing an independent weight prior. Correlating the weights maintains the correlations in the activations. 
+% We argue that this is undesirable, and remedy it by introducing spatial correlations in the prior over weights. This leads to correlated contributions being preserved in the wide limit.
+Varying the amount of correlation interpolates between independent-weight limits and mean-pooling. Empirical evaluation of the infinitely wide network shows that optimal performance is achieved between the extremes, indicating that correlations can be useful.
+\end{abstract}
+
+% Keywords may be removed
+%\begin{keywords}
+%List of keywords
+%\end{keywords}
+
+\section{Introduction}
+% Paragraph 1
+% - NN theory
+% - Infinite limits are often more tractable
+% - Infinite limits have given understanding, and new methods
+% - However, we lose certain properties
+Analysing infinitely wide limits of neural networks has long been used to provide insight into the properties of neural networks.
+\citet{neal1996bayesian} first noted such a relationship, through the correspondence between infinitely wide Bayesian neural networks and Gaussian processes (GPs). 
+The success of GPs raised the question of whether such a comparatively simple model could replace a complex neural network. \citet{mackay1998introgp} noted that taking the infinite limit resulted in a fixed feature representation, a key desirable property of neural networks. Since this property is lost due to the infinite limit, MacKay inquired: ``have we thrown the baby out with the bath water?''
+
+In this work, we follow the recent interest in infinitely wide convolutional neural networks \citep{garriga2018infiniteconv,novak2019infiniteconv}, to investigate another property that is lost when taking the infinite limit: correlation from patches in different parts of the image.
+Given that convolutions were developed to introduce these correlations, and that they improve performance \citep{arora2019exact}, it seems undesirable that they are lost when more filters are added.
+Currently, the only way of reintroducing these correlations is by changing the model architecture by introducing mean-pooling \citep{novak2019infiniteconv}. This raises two questions:
+\begin{enumerate}[\bf 1)]
+\itemsep0em
+\item Is the loss of patchwise correlations a necessary consequence of the infinite limit?
+\item Is an architectural change the only way of reintroducing patchwise correlations?
+\end{enumerate}
+
+We show that the answer to both these questions is "no". Correlations between patches can also be
+maintained in the limit without pooling by introducing correlations between the weights in the prior. The amount of correlation can be controlled,
+which allows us to interpolate between the existing approaches of full
+independence and mean-pooling. Our approach allows the discrete architectural choice of mean-pooling to be replaced with a more flexible continuous amount of correlation. Empirical evaluation on CIFAR-10 shows that this additional flexibility improves performance.
+
+Our work illustrates how choices that are made in the prior affect properties of the limit, and that good choices can improve performance. The success of this approach in the infinite limit also raises questions about whether correlated weights should be used in finite networks.
+
+
+
+% \begin{itemize}
+%     \item Motivate interest in infinitely wide neural networks
+%     \begin{itemize}
+%         \item Understand properties of neural networks (feature space, training dynamics)
+%         \item Simplify Bayesian inference (infinite width makes GP)
+%         \item Should read some of the other infinite width papers for more points
+%     \end{itemize}
+%     \item Mention that many different NN's have a GP equivalent, including CNNs.
+%     \item Introduce problem:
+%     \begin{itemize}
+%         \item Not long after the uncovering of infinite-width correspondences [Neal 1996], limitations were discovered. MacKay baby bathwater.
+%         \item Here we argue that a similar effect can be seen in infinite limits of CNNs. Independence over the weights removes correlations over distant patches.
+%     \end{itemize}
+%     \item Introduce our contribution:
+%     \begin{itemize}
+%         \item We investigate the effect of patch correlations on the performance of infinite-width models.
+%         \item We show that a different prior over weights re-introduces correlations.
+%         \item We discuss how mean-pooling (does max-pooling do this too? \adriacomment{yes, but nobody uses it in wide CNNs because nobody has bothered to figure out the expression for propagating the covariance forward}) has a similar effect, explaining why it has been used in other recent papers.
+%         \item We show how the correlated prior allows us to interpolate between the independent limit, and mean-pooling limits, an that often something in the middle performs best.
+%     \end{itemize}
+%     \item Speculate on what's next:
+%     \begin{itemize}
+%         \item Perhaps finite-width networks should go beyond independent initialisations?
+%     \end{itemize}
+% \end{itemize}
+
+
+
+\section{Spatial Correlations in Single-Layer Networks}
+\label{sec:single-layer}
+To begin, we will analyse the infinite limit of a single hidden layer
+convolutional neural network (CNN). We extend \citet{garriga2018infiniteconv} and \citet{novak2019infiniteconv} by considering weight priors with correlations. By adjusting the correlation we can interpolate between existing independent weight limits and mean-pooling, which previously had to be introduced as a discrete architectural choice. We also discuss how existing convolutional Gaussian processes \citep{vdw2017convgp,dutordoir2020} can be obtained from limits of correlated weight priors.
+
+% We first show how spatial correlations disappear
+% when using infinite weights \citep{garriga2018infiniteconv,novak2019infiniteconv}, and how mean pooling reintroduces them \citep{novak2019infiniteconv}. This leads to kernels with the same structure as \Citet{vdw2017convgp}. Next, we show how spatial correlations can be recovered by adding weight correlations instead of making the discrete architectural modification of adding mean pooling. This leads to the 
+% ``Translation Insensitive Convolutional Kernel'' (TICK) considered by \citet{dutordoir2020}. In the next section, we will generalise this to deep convolutional networks.
+
+\newcommand{\layerC}[1]{C^{(#1)}}
+\newcommand{\layerw}[1]{P^{#1}}
+\newcommand{\layerh}[1]{Q^{#1}}
+\newcommand{\layersize}[1]{\layerw{#1}\cdot\layerh{#1}}
+\newcommand{\patchw}[1]{p^{(#1)}}
+\newcommand{\patchh}[1]{q^{(#1)}}
+\newcommand{\patchsize}[1]{\patchw{#1}\patchh{#1}}
+\newcommand{\patchidx}{q}
+\newcommand{\W}[1]{\vW}
+\newcommand{\layerWs}[1]{W^{(#1)}}
+\newcommand{\layerW}[1]{\vW^{(#1)}}
+\newcommand{\priorWcov}[1]{\boldsymbol{\Sigma}^{(#1)}}
+\newcommand{\priorWcovs}[1]{\Sigma^{(#1)}}
+\newcommand{\layerA}[2]{\mathbf{Z}^{(#1)}_{#2}(\vX)}
+\newcommand{\layerAd}[2]{\mathbf{Z}^{(#1)}_{#2}(\vX')}
+\newcommand{\layerAs}[2]{Z^{\!(#1)}_{#2}\!(\vX)}
+\newcommand{\layerAsd}[2]{Z^{\!(#1)}_{#2}\!(\vX')}
+\newcommand{\layerNLAs}[2]{A^{\!#1}_{#2}(\vX)}
+\newcommand{\layerNLAsd}[2]{A^{\!#1}_{#2}(\vX')}
+\newcommand{\layerNLA}[2]{\vA^{\!#1}_{#2}\!(\vX)}
+\newcommand{\layerNLAd}[2]{\vA^{\!#1}_{#2}\!(\vX')}
+% These 4 are used for the picture below
+\newcommand{\chan}{c}
+\newcommand{\prevchan}{\gamma}   % <- Possibly use these for c, p, gamma? I've
+\newcommand{\patch}{p}               % been using \nu,\mu
+\newcommand{\nextpatch}{\mu}
+
+
+
+
+
+\begin{figure}[b]
+  % Width: 397.9pt
+  \centering
+{\renewcommand{\layerAs}[1]{\vZ^{(#1)}}
+  % \def\svgwidth{\textwidth}
+  \import{fig/}{net_diagram.pdf_tex}}
+  \caption{A deep convolutional neural network following our notation. Infinite limits are taken over the number of convolutional filters $\layerC{\ell}$. As the number of filters grow (vertical), the number of channels in the following layer (horizontal) grow as well.}
+    % {N.B.: We need to emphasise that the last layer $Z^{(3)}$ is $f(\cdot)$.}
+  \label{fig:fancy-cnn}
+\end{figure}
+
+\newcommand{\convpatch}[2]{{#1}^{[#2]}}
+A single-layer CNN (see \cref{fig:fancy-cnn} for a graphical representation of the notation) takes in an image input $\vX \in \Reals^{\layerC{0}\times \layersize{}}$ with width $\layerw{}$, height $\layerh{}$, and $\layerC{0}$ channels (e.g.~one per colour). The image is divided up into patches $\convpatch{\vX}{p} \in \Reals^{\layerC{0}\times\patchw{1}\patchh{1}}$, with $p$ representing a location of one of the $\layersize{}$ zero-padded patches. Weights are applied by taking an inner product with all patches, which we do $\layerC{1}$ times to give multiple channels in the next layer. By collecting all weights in the matrix $\layerW{1}\in\Reals^{\layerC1\times \layerC0\times \patchw1\patchh1}$ we can denote the computation of the pre- and post-nonlinearity activations as
+\begin{align}
+    \layerAs{1}{cp} = \sum_{\gamma=1}^{\layerC0}\sum_{q=1}^{\patchw0\patchh0} \convpatch{X}{p}_{\gamma q} \layerWs1_{c\gamma q} \,, && \layerNLAs{(1)}{cp} = \phi\big(\layerAs{1}{cp}\big)\,.
+\end{align}
+In a single-layer CNN, these activations are followed by a fully-connected layer with weights $\layerW{2} \in \Reals^{\layerC 1\times \layerw{}\layerh{}}$. Our final output is again given by a summation over the activations
+\begin{align}
+    f(\vX) = \sum_{c=1}^{\layerC1}\sum_{p=1}^{\layersize{}} \phi\big(\layerAs{1}{cp}\big) W^{(2)}_{cp} = \sum_{cp} \layerNLAs{(1)}{cp}\layerWs{2}_{cp} = \sum_p \layerNLAs{(f)}{p} \label{eq:single-layer-f} \,,
+\end{align}
+where $\layerNLAs{(f)}{p}$ denotes the result before the summation over the patch locations $p$. 
+
+We analyse the distribution on function outputs $f(\vX)$ for some Gaussian prior on the weights $p(\vW)$, where $\vW$ is the collection of the weights at all layers. In all the cases we consider, we take the prior to be independent over layers and channels. Here we extend on earlier work by allowing spatial correlation in the final layer's weights (we will consider all layers later) through the covariance matrix $\priorWcov1 \in \Reals^{\layersize{}\times\layersize{}}$. This gives the prior
+\begin{align}
+    p(\layerW1) = \prod_{c'=0}^{\layerC0}\prod_{c=1}^{\layerC1}\NormDist{\layerW1_{[cc':]}; 0, \eye} \,,
+    && p(\layerW2) = \prod_{c=1}^{\layerC1} \NormDist{\layerW2_{[c:]}; 0, \frac{1}{\layerC1}\priorWcov2} \,,
+\end{align}
+where we use square brackets to index into a matrix or tensor, using the Numpy colon notation for the collection of all variables along an axis.
+
+Independence between channels makes the collection of all activations\footnote{We use boldface variables to collect all subscripted tensors into a single matrix or tensor. This can then be indexed using square brackets, i.e.~$\layerNLA{(f)}{[p]} = \layerNLAs{(f)}{p}$.} $\layerNLA{(f)}{}$ a sum of i.i.d.~multivariate random variables, which allows us to apply the central limit theorem (CLT) as $\layerC1\to\infty$ \citep{neal1996bayesian}. The covariance between the final-layer activations for two inputs $\vX,\vX'$ becomes
+\begin{align}
+    \mathbb{C}_{\vW}\left[\layerNLAs{(f)}{p},\layerNLAsd{(f)}{p'}\right] &= \Exp{\vW}{\sum_{c=1}^{\layerC1}\sum_{c'=1}^{\layerC1} \layerNLAs{(1)}{cp}\layerWs{2}_{cp}\layerNLAsd{(1)}{c'p'}\layerWs{2}_{c'p'}} \nonumber \\
+    &= \sum_{c=1}^{\layerC1}\sum_{c'=1}^{\layerC1} \Exp{\layerW1}{\layerNLAs{(1)}{cp}\layerNLAsd{(1)}{c'p'}}\Exp{\layerW2}{\layerWs{2}_{cp} \layerWs{2}_{c'p'}} \nonumber \\
+    &= \sum_{c=1}^{\layerC1}\sum_{c'=1}^{\layerC1} \delta_{cc'} \Exp{\layerW1}{\layerNLAs{(1)}{cp}\layerNLAsd{(1)}{c'p'}}\frac{\priorWcovs{2}_{pp'}}{\layerC{\ell}} \nonumber \\
+    &= \sum_{c=1}^{\layerC1} \Exp{\layerW1}{\layerNLAs{(1)}{cp}\layerNLAsd{(1)}{cp'}} \frac{\priorWcovs{2}_{pp'}}{\layerC{\ell}} = k^{(1)}(\vX^{[p]}, {\vX'}{}^{[p']}) \priorWcovs{2}_{pp'} \,.
+\end{align}
+The limit of the sum of the final expectation over $\layerW1$ can be found (see \cref{sec:exp-nonlin} for details) in closed form and is denoted as $k^{(1)}(\vX^{[p]}, {\vX'}{}^{[p']})$.
+We find the final kernel for the GP by taking the covariance between function values $f(\vX)$ and $f(\vX')$ and performing the final sum in \cref{eq:single-layer-f}:
+\begin{align}
+    k(\vX, \vX') = \mathbb{C}\left[f(\vX), f(\vX')\right] = \sum_{pp'} k^{(1)}(\vX^{[p]}, {\vX'}{}^{[p']}) \priorWcovs{2}_{pp'} \label{eq:cov-kernel} \,.
+\end{align}
+We can now see how different choices for $\priorWcov2$ give different forms of spatial correlation.
+
+\paragraph{Independence} \citet{garriga2018infiniteconv} and \citet{novak2019infiniteconv} consider $\priorWcovs{2}_{pp'} = \delta_{pp'}$, i.e.~the case where all weights are independent. The resulting kernel simply sums components over patches, which implies an \emph{additive model} \citep{stone1985}, where a \emph{different} function is applied to each patch, after which they are all summed together: $f(\vX) = \sum_p f_p(\vX^{[p]})$. This structure has commonly been applied to improve GP performance in high-dimensional settings \citep[e.g.][]{duvenaud2011additive,durrande2012additive}. \citet{novak2019infiniteconv} point out that the same kernel can be obtained by taking an infinite limit of a \emph{locally connected network} (LCN) \citep{lecun1989generalization} where connectivity is the same as in a CNN, but without weight sharing, indicating that a key desirable feature of CNNs is lost.
+
+\paragraph{Mean-pooling} By taking $\priorWcovs2_{pp'} = 1$ we make the weights fully correlated over all locations, leading to identical weights for all $p$, i.e.~$\layerWs{2}_{cp} = \layerWs{2}_{c}$. This is equivalent to taking the mean response over all spatial locations (see \cref{eq:single-layer-f}), or mean-pooling. As \citet{novak2019infiniteconv} discuss, this reintroduces the spatial correlation that is the intended result of weight sharing. The ``translation invariant'' convolutional GP of \Citet{vdw2017convgp} can be obtained by this single-layer limit using Gaussian activation functions \citep{vdw2019thesis}. Since this mean-pooling was shown to be too restrictive in this single-layer case, \Citet{vdw2017convgp} considered pooling with constant weights $\alpha_p$ (i.e.~without a prior on them). In this framework, this is equivalent to placing a rank 1 prior on the final-layer weights by taking $\priorWcovs{2}_{pp'} = \alpha_p \alpha_{p'}$. This maintains the spatial correlations, but requirs the $\alpha_p$s to be learned by maximum \textit{marginal} likelihood (ML-II).
+
+% In the single-layer case with Gaussian activations \citep{vdw2019thesis}, this limit becomes the ``translation invariant'' convolutional GP of \Citep{vdw2017convgp}, who showed that that mean-pooling is too restrictive in this single-layer case. Pooling with a learned weights ${\alpha_p}$ for each patch was introduced as a remedy for this, which can be recovered by taking $\priorWcovs{2}_{pp'} = \alpha_p \alpha_{p'}$. These weights need to be learned by maximum marginal likelihood (ML-II), which departs slightly from the strict Bayesian framework.
+
+\paragraph{Spatially correlated weights} In the pooling examples above, the spatial covariance of weights is taken to be a rank-1 matrix. We can add more flexibility to the model by varying the strength of correlation between weights based on their distance in the image. We consider an exponential decay depending on the distance between two patches: $\priorWcovs{2}_{pp'} = \exp(-d(p, p')/l)$. We recover full independence by taking $l\to 0$, and mean-pooling with $l\to\infty$. Intermediate values of $l$ allow the rigid assumption of complete weight sharing to be relaxed, while still retaining spatial correlations between similar patches. This construction gives exactly the same kernel as investigated by \citet{dutordoir2020}, who named this property ``translation insensitivity'', as opposed to the stricter invariance that mean-pooling gives. The additional flexibility improved performance without needing to add many parameters that are learned in an non-Bayesian fashion.
+
+Our construction shows that spatial correlation can be retained in infinite limits without needing to resort to architectural changes. A simple change to the prior on the weights is all that is needed. This property is retained in wide limits of deep networks in a similar way, which we investigate next.
+
+
+
+% \subsection{Notes}
+
+% Give a high-level commentary on the infinite-width line of work. Summarise commentary on this line of work. As far as I see, the main point here is MacKay's point on the baby and the bathwater, and who else has discussed it (I know Matthews has).
+% \begin{itemize}
+%     \item Note MacKay's point about disappearing correlations. Have we thrown out the baby with the bathwater?
+%     \item Note that both \citet{garriga2018infiniteconv} and \citet{novak2019infiniteconv} show that correlations disappeard in infinite limit.
+%     \item Ask question: Is this really what we want? The whole point of CNNs was to have spatial correlations in different areas of the image!
+%     \item Compare and contrast to additive models in GPs and convolutional models in GPs, which were introduce specifically to gain these correlations.
+%     \item Discuss mean-pooling as a way to get back correlations. Raise point that this is a discrete non-learnable architectural choice!
+%     \item Note that \citet{vdw2019thesis} briefly discusses how ConvGP is an infinite limit.
+%     \item Can we construct an infinite limit of a CNN that has the correlations like the ConvGP, but also works for full deep networks?
+% \end{itemize}
+
+
+
+
+\section{Spatial Correlations in Deep Networks}
+In \cref{sec:correlated-weights}, we provide a detailed but informal extension of the previous section's results to deep networks. We also formulate the correlated weights prior in the framework provided by by \citet{yang2019wide}, which provides a formal justification for our results.
+
+The procedure for computing the kernel has a recursive form similar to existing analyses \citep{garriga2018infiniteconv,novak2019infiniteconv}. Negligable additional computational is needed to consider arbitrary correlations, compared to only considering mean-pooling \citep{novak2019infiniteconv,arora2019exact}. The main bottleneck is the need for computing covariances for all pairs of patches in the image, as in \cref{eq:cov-kernel}.
+
+
+
+
+
+
+
+\section{Experiments}
+We seek to test two hypotheses. 1) Can we eliminate architectural choices, and
+recover their effect using continuous hyperparameters instead? 
+2) In the additional search space we have uncovered, can we find a kernel that
+performs better than the existing ones?
+
+% \paragraph{Experimental setup}
+We evaluate various models on class-balanced subsets of CIFAR-10 of size $2^i \cdot 10$, following \citet{arora2020small}. As is
+standard practice in the wide network literature, we reframe classification as
+regression to one-hot targets. %$Y_{nk} = \indicator{t_n = k} - C$.
+We set $C=0.1$ to make the mean over the data set zero, but we observed that this affects the results very little. The test
+predictions are the argmax over $k$ of the posterior Gaussian process mean
+\begin{equation}f(x_*) = \vK_{x_* \vX}\bra{\sigma^2\eye + \vK_{\vX\vX}}^{-1}\vY_{[:k]}\,, \label{eq:mean-gp}\end{equation} where
+$\sigma^2$ is a hyperparameter, the variance of the observation noise of the GP regression. We perform cross-validation to find a setting for $\sigma^2$. We use an eigenvalue decomposition on $\vK_{xx}$ to avoid the need to recompute the decomposition for each value of $\sigma^2$.
+
+% \paragraph{Implementation}
+% To calculate the least-squares regression solution, common practice is to use the Cholesky decomposition of $\bra{\sigma^2\eye + \vK_{xx}}$ and a triangular solve. Since we need to cross-validate over many settings of $\sigma$, this would be costly, as it would require recomputation.
+% For our purposes, this has two disadvantages. First, it needs to be solved once for every different $\sigma^2$ that we try during cross-validation. Additionally, because of floating point rounding errors, $\vK_{xx}$ often has small negative eigenvalues, in which case the Cholesky decomposition needs to be attempted several times, usually with exponentially increasing values of $\sigma^2$.
+% Instead we use the eigendecomposition $\vK_{xx} = \vQ\vLambda\vQ^\tp$, calculated once, we solve both of these problems. The least-squares regression solution (GP mean) is $\vK_{*x}\vQ\bra{\sigma^2\eye + \vLambda}^{-1}\vQ^\tp\vY$, which only requires solving for a diagonal matrix, and an inner product. This allows us to search over many values of $\sigma$ very quickly. This also tells us what the smallest value of $\sigma^2$ has to be to make the kernel matrix positive definite.
+
+% For all experiments, we find the maximum cross-validation accuracy over 1000 values of $\log \sigma^2$ linearly spaced in $[\max(c, -36), 5]$, where $e^c$ is the smallest value such that $e^c + \lambda_i > 0$ in floating-point arithmetic, and $\lambda_i$ is the smallest eigenvalue.
+
+\begin{figure}[htpb]
+ \scalebox{1.0}{\input{fig/myrtle10.pgf}}
+  \caption{Cross-validation accuracy of the CNNGP-14 and Myrtle10 networks on subsets of CIFAR10, with varying lengthscale of the Matérn-$3/2$ kernel that determines the weight correlation in the last layer. With larger data set sizes $N$, the improvement is larger, and the optimal lengthscale converges to a similar value $(\approx 4)$. For all data sets except the largest, the values are averaged over several runs, and the thin lines represent the $\pm 2\sigma_n$, the estimated standard deviation of the mean. \label{ref:fig-last-layer}}
+\end{figure}
+
+\begin{figure}[htpb]
+  \scalebox{1.0}{\input{fig/internal_correlation.pgf}}.
+  \caption{Correlated weights in intermediate layers. We replace pooling layers in the Myrtle10 architecture with larger convolutional filters with correlated weights. The amount of correlation is varied along the x-axis. \label{ref:fig-all-layers}}
+\end{figure}
+
+
+\subsection{Correlated weights in the last layer}
+
+We start with two architectures used in the neural network kernel literature, the CNN-GP \citep{novak2019infiniteconv,arora2019exact} with 14 layers, and the Myrtle network \citep{shankar2020without} with 10 layers. The CNNGP-14 architecture $((\texttt{conv}, \texttt{relu})\times 14, \texttt{pool})$ has a $32 \times 32$-sized layer at the end, which is usually transformed into the $1 \times 1$ output using mean pooling. The Myrtle10 architecture $(((\texttt{conv},\texttt{relu})\times 2, \texttt{pool}_{2\times 2}) \times 3, \texttt{pool})$ has a $8\times 8$ pooling layer at the end.
+
+We replace the final pooling layers with a layer with correlated weights. Following \citet{dutordoir2020}, the covariance $\vSigma_{pp'}$ of the weights is given by the Matérn-3/2 kernel with lengthscale $\lambda$:
+\begin{equation}
+    \vSigma_{pp'} = \bra{1 + \frac{\sqrt{3}||p - p'||_2}{\lambda}} \exp\bra{-\frac{\sqrt{3}||p - p'||_2}{\lambda}}.
+\end{equation}
+Note that $p,p'$ are 2-d vectors representing patch locations. The ``extremes'' of independent weights and mean pooling are represented by setting $\vSigma_{pp'} = \delta_{pp'}$ and $\vSigma_{pp'} = {\boldsymbol 1\boldsymbol 1}^\tp$, respectively.
+
+In figure~\ref{ref:fig-last-layer}, we investigate how the 4-fold cross-validation accuracy on data sets of size $N=2^i \cdot 10$ varies with the lengthscale $\lambda$ of the Matérn-3/2 kernel, which controls the ``amount'' of spatial correlation in the weights of the last layer. For each data point in each line, we split the data set into 4 folds, and we calculate the test accuracy on 1 fold using the other 3 as training set, for each value of $\sigma$ that we try. We take the maximum accuracy over $\sigma$.
+
+We investigate how the effect above varies with data set size. As the data set grows larger, we observe that the advantage of having a structured covariance matrix in the output becomes more apparent. We can also see the optimal lengthscale $\lambda$ converging to a similar value, of $\approx 4$, which is evidence for the hypothesis holding with more data. 
+
+The largest data set size in each part of the plot was run only once because of computational constraints. We transform one data set of size $N$ into two data sets of size $N/2$ by taking block diagonals of the stored kernel matrix, so we have more runs for the smallest sizes. This is a valid Monte-Carlo estimate of the true accuracy under the data distribution, with less variance than independent data sets, because the data sets taken are anti-correlated, since they have no points in common. We have at least 1 other independent run for the second smallest data set size.
+
+\subsection{Correlated weights in intermediate layers}
+We take the same approach to the experiment in figure~\ref{ref:fig-all-layers}. This time, we replace the $2\times 2$ intermediate mean-pooling layer, together with the next $3\times 3$ convolution layer, in the Myrtle10 architecture with correlated weights. We change it to a $6 \times 6$ weight-correlated matrix. We observe that when the lengthscale is 0, the performance of the network is poor, suggesting that the mean-pooling layers in Myrtle10 are necessary. Additionally, we are able to recover the performance of the hand-selected architecture by varying the lengthscale parameter.
+
+
+\section{Conclusion}
+The disappearance of spatial correlations in infinitely wide limits of deep convolutional neural networks could be seen as another example of how Gaussian processes lose favourable properties of neural networks. While other work sought to remedy this problem by changing the architecture (mean-pooling), we showed that changing the weight prior could achieve the same effect. Our work has three main consequences:
+\begin{enumerate}
+    \item Weight correlation shows that locally connected models (without spatial correlation) and mean-pooling architectures (with spatial correlation) actually exist at ends of a spectrum. This unifies the two views in the neural network domain. We also unify to known convolutional architectures that were introduced from the Gaussian process community.
+    \item We show empirically that modest performance improvements can be gained by using weight correlations \emph{between} the extremes of locally connected networks or mean-pooling. We also show that the performance of mean-pooling in intermediate layers can be matched by weight correlation.
+    \item Using weight correlation may provide advantages during hyperparameter tuning. Discrete architectural choices need to be searched through simple evaluation, while continuous parameters can use gradient-based optimisation. While we have not taken advantage of this in our current work, this may be a fruitful direction for future research.
+\end{enumerate}
+% Firstly, 
+% Secondly, 
+% Finally, 
+
+% Implications
+% - Continuous parameter
+% - Bayesian priors
+
+
+
+
+
+
+
+
+\bibliography{ref}
+
+
+\appendix
+\section{Related work}
+Infinitely wide limits of neural networks are currently an important tool for creating approximations and analyses. Here we provide a background on the different infinite limits that have been developed, together with a brief overview of where they have been applied.
+
+Interest in infinite limits first started with research into properties of Bayesian priors on the weights of neural networks. \citet{neal1996bayesian} noted that prior function draws from a single hidden layer neural network with appropriate Gaussian priors on the weights tended to a Gaussian process as the width grew to infinity. The simplicity of performing Bayesian inference in Gaussian process models led to their widespread adoption soon after \citep{williams1996gpr,gpml}. Over the years, the wide limits of networks with different weight priors and activation functions have been analysed, leading to various \emph{kernels} which specify the properties of the limiting Gaussian processes \citep{williams1997inf,cho2009mkm}.
+
+With the increasing prominence of deep learning, recursive kernels were introduced in an attempt to obtain similar properties. \citet{cho2009mkm,mairal2014ckn} investigated such methods for fully-connected and convolutional architectures respectively. Despite similarities between recursive kernels and neural networks, the derivation did not provide clear relationships, or any equivalence in a limit. \citet{hazan2015} took initial steps to showing the wide limit equivalence of a neural network beyond the single layer case. Recently, \citet{matthews2018dnnlimit,lee2018dnnlimit} simultaneously provided general results for the convergence of the prior of deep fully-connected networks to a GP.\footnote{The derivation of the limiting kernel differs between the two papers, with the results being consistent. \citet{matthews2018dnnlimit} carefully take limits of realisable networks, while \citet{lee2018dnnlimit} take the infinite limit of each layer sequentially.%Follow-on work \citep{matthews2018dnnlimit2,novak2019infiniteconv} further relax technical restrictions.
+} 
+A different class of limiting kernels, the Neural Tangent Kernel (NTK), originated from analysis of the function implied by a neural network during optimisation \citep{jacot2018ntk}, rather than the prior implied by the weight initialisation. Just like the Bayesian prior limit, this kernel sheds light on certain properties of neural networks, as well as providing a method with predictive capabilities of its own. 
+The two approaches end up with subtly different kernels, which both can be computed as a recursive kernel.
+
+With the general tools in place, \citet{garriga2018infiniteconv,novak2019infiniteconv} derived limits of the prior of convolutional neural networks with infinite filters. %\footnote{This time with \citet{garriga2018infiniteconv} using the simpler sequential infinite limits, and \citet{novak2019infiniteconv} blah blah}
+These two papers directly motivated this work by noting that spatial correlations disappeared in the infinite limit. Spatial mean pooling at the last layer was suggested as one way to recover correlations, with \citet{novak2019infiniteconv} providing initial evidence of its importance. Due to computational constraints, they were limited to using a Monte Carlo approximation to the limiting kernel, while \citet{arora2019exact} performed the computation with the exact NTK. Very recent preprints provide follow-on work that pushes the performance of limit kernels \citep{shankar2020without} and demonstrated the utility of limit kernels for small data tasks \citep{arora2020small}. Extending on the results for convolutional architectures, \citet{yang2019wide} showed how infinite limits could be derived for a much wider range of network architectures.
+
+In the kernel and Gaussian process community, kernels with convolutional structure have also been proposed. Notably, these retained spatial correlation in either a fixed \citep{vdw2017convgp} or adjustable \citep{mairal2014ckn,dutordoir2020} way. While these methods were not derived using an infinite limit, \Citet{vdw2019thesis} provided an initial construction from an infinitely wide neural network limit. Inspired by these results, we propose limits of deep convolutional neural networks which retain spatial correlation in a similar way.
+
+
+
+% This needs to be good, and I will have to rely on you to a large degree Adrià.
+% \begin{itemize}
+%     \item Summarise work along the line of infinite-width models and results
+%     \begin{itemize}
+%         \item Early work, Neal. Single hidden layer
+%         \item More recent work. Matthews 2018 has good references
+%         \item Noticing specialised architectures: Convolutions. Adrià and Brain.
+%         \item Generalising: Greg Yang's paper showing how things can be done for general architectures, Neural Tangents package, ...
+%         \item NTK: A different kind of infinite limit relying on optimisation rather than Bayes rule.
+%         \item Recent uses of infinite width. Ben Recht, Arora.
+%     \end{itemize}
+%     \item Summarise parallel advancements in Gaussian processes (few sentences). ConvGP, TickGP. ``In parallel, there has been work on directly constructing Gaussian processes with properties that are known to be useful in NNs. In analogy, ConvGP has been shown to be infinite limit of single-layer convgp.''
+% \end{itemize}
+
+\section{Spatial Correlations in Infinitely Wide Deep Convolutional Networks\label{sec:correlated-weights}}
+The setup for the case of a deep neural network follows that of \cref{sec:single-layer}, but with weights applied to each patch of the activations in the previous layer as
+\begin{align}
+    \layerAs{\ell}{cp} = \sum_{\gamma=1}^{\layerC{\ell}}\sum_{q=1}^{\patchw{\ell}\patchh\ell} \layerNLAs{(\ell-1)[p]}{\gamma q} \layerWs{\ell}_{c\gamma q} \,, && \layerNLAs{(\ell)}{cp} = \phi\big(\layerAs{\ell}{cp}\big) \,. \label{eq:deep-recursion}
+\end{align}
+We use two ways to index into activations. We either index into the $p$th location as $\layerNLAs{(\ell)}{cp}$, or into the $q$th location in the $p$th patch as $\layerNLAs{(\ell)[p]}{cq}$. For regular convolutions, the number of patches is equal to the number of spatial positions in the layer before due to zero-padding, regardless of filter size. The only operation that changes the spatial size of the activations is a strided convolution. The one exception is the final layer, where we reduce all activations with their own weight. To unify notation, we see this as just another convolutional layer, but with a patch size equal to the activation size, and without zero padding. The final layer can have multiple output channels to allow e.g.~classification with multiple classes.
+
+As pointed out by \citet{matthews2018dnnlimit}, a straightforward application of the central limit theorem is not strictly possible for deep networks. Fortunately, \citet{yang2019wide} developed a general framework for expressing neural network architectures and finding their corresponding Gaussian process infinite limits. The resulting kernel is given by the recursion that can be derived from a more informal argument which takes the infinite width limit in a sequential layer-by-layer fashion, as was used in \citet{garriga2018infiniteconv}. We follow this informal derivation, as this more naturally illustrates the procedure for computing the kernel. A formal justification can be found in appendix C.
+
+\subsection{Recursive Computation of the Kernel}
+To derive the limiting kernel for the output of the neural network, we will derive the distribution of the activations for each layer. In our weight prior, we correlate weights \emph{within} a convolutional filter:
+\begin{align}
+    \NormDist{\layerW{\ell}_{[c\gamma :]}; 0, \frac{1}{\layerC{\ell-1}} \priorWcov{\ell}} \,.
+\end{align}
+Our derivation is general for any covariance matrix, so layers with correlated weights can be interspersed with the usual layers.
+% Following \citet{dutordoir2020}, we let the correlation decay exponentially with the distance between weights within the convolutional filter:
+% \begin{align}
+% \priorWcovs{2}_{pp'} = \exp(-d(p, p')/l) \,.
+% \end{align}
+
+A Gaussian process is determined by the covariance of function values for pairs of inputs $\vX,\vX'$. Since the activations at the top layer are the function values, we will compute covariances between activations from the bottom of the network up.
+Starting from the recursion in \cref{eq:deep-recursion}, we can find the covariance between any two pre-nonlinearity activations from a pair of inputs $\vX,\vX'$:
+\begin{align}
+    \mathbb{C}_{\vW}\left[\layerAs{\ell}{cp}, \layerAsd{\ell}{c'p'} \right] &= \sum_{\gamma=1}^{\layerC{\ell-1}} \sum_{\gamma'=1}^{\layerC{\ell-1}} \sum_{q=1}^{}\sum_{q'=1}^{} \Exp{\vW}{\layerNLAs{(\ell-1)[p]}{\gamma q}\layerWs{\ell}_{c\gamma q} \layerNLAsd{(\ell-1)[p']}{\gamma q'}\layerWs{\ell}_{c\gamma' q'}} \nonumber \\
+    &= \delta_{cc'} \frac{1}{\layerC{\ell-1}} \sum_{\gamma qq'} \Exp{\vW}{\layerNLAs{(\ell-1)[p]}{\gamma q} \layerNLAsd{(\ell-1)[p']}{\gamma q'}} \priorWcovs{\ell}_{qq'} \nonumber \\
+    &= \delta_{cc'} K^{(\ell)}_{pp'}(\vX, \vX') \label{eq:kernel-recursion} \,.
+\end{align}
+For $\ell=1$, the activations in the previous layer are the image inputs, i.e.~$\layerNLA{(0)}{} = \vX$, making the expectation a simple product between image patches. The pre-nonlinearity activations are Gaussian, because of the linear relationship with the weights. This allows us to find the covariance of the post-nonlinearity activations. Since $\layerA{\ell}{},\layerAd{\ell}{}$ are jointly Gaussian, the expectation will only depend on pairwise covariances. Here we represent this dependence through the function $F(\cdot, \cdot, \cdot)$ (see appendix B for details on the computation):
+\begin{align}
+    %\mathbb{C}_\vW\left[\layerNLAs{\ell}{cp}, \layerNLAsd{\ell}{cp'}\right] =
+    \Exp{\vW}{\layerNLAs{\ell}{cp}\layerNLAsd{\ell}{cp'}} &= \Exp{ \layerA{\ell}{}, \layerAd{\ell}{} }{\phi\big(\layerAs{\ell}{cp}\big) \phi\big(\layerAsd{\ell}{cp}\big)} \label{eq:post-nonlin} \nonumber \\
+    &= F(K^{(\ell)}_{pp}(\vX, \vX), K^{(\ell)}_{pp'}(\vX, \vX'), K^{(\ell)}_{p'p'}(\vX', \vX'))\nonumber\\
+    &= V_{pp'}^{(\ell)}(\vX, \vX')\,.
+\end{align}
+The pre- and post-nonlinearity activations are independent between different channels, and identical over all channels, so we omit denoting the channel indices.
+
+To compute the covariance of the pre-nonlinearity for $\ell\geq 2$, we can again apply \cref{eq:kernel-recursion}. \Cref{eq:post-nonlin} shows that the post-nonlinearity covariances are constant over channels, so we can simplify \cref{eq:kernel-recursion} further:
+\begin{align}
+    K_{pp'}^{(\ell)}(\vX, \vX') &= \frac{1}{\layerC{\ell-1}} \sum_{\gamma qq'} \Exp{\vW}{\layerNLAs{(\ell-1)[p]}{\gamma q} \layerNLAsd{(\ell-1)[p']}{\gamma q'}} \priorWcovs{\ell}_{qq'} \nonumber \\
+    &= \sum_{q \in p\text{th patch}}\sum_{q'\in p'\text{th patch}} V_{qq'}^{(\ell-1)[p]}(\vX,\vX') \priorWcovs{\ell}_{qq'} \,.
+\end{align}
+We next want to compute the post-nonlinearity activations for layer $\ell$. For finite $\layerC{1}$, $\layerA{2}{}$ will not be Gaussian, which is required by \cref{eq:post-nonlin}. However, if we take $\layerC{\ell-1}\to\infty$, $\layerA{\ell}{}$ will converge to a Gaussian by the central limit theorem, all while keeping the covariance constant. After taking the limit, we can then apply \cref{eq:post-nonlin}. This provides us with a recursive procedure to compute the covariances all the way up to the final layer, by sequentially taking limits of $\layerC\ell\to\infty$. % We summarise the process in algorithm 1.
+
+% We can now apply \cref{eq:kernel-recursion} to find the covariance of the pre-nonlinearity activations at layer $\ell=2$, given the covariance of the post-nonlinarity activations in layer $\ell=1$ (\cref{eq:post-nonlin}). For finite $\layerC{1}$, $\layerA{2}{}$ will not be Gaussian, and so \cref{eq:post-nonlin} can not be applied. However, if we take $\layerC1\to\infty$, $\layerA{2}{}$ will converge to a Gaussian by the central limit theorem, all while keeping the covariance constant. After taking the limit, we can then apply \cref{eq:post-nonlin}. This provides us with a recursive procedure to compute the covariances all the way up to the final layer, by sequentially taking limits of $\layerC\ell\to\infty$.
+
+
+% \begin{algorithm}[tb]
+% \begin{algorithmic}[1]
+% %\STATE \emph{Input}: two images, $\vX,\vX' \in \mathbb{R}^{C^{(0)} \times (H^{(0)}W^{(0)})}$.
+% %\STATE Compute $\bdiagcov_{\vX\vX}^{(1)}$, $\bdiagcov_{\vX\vX'}^{(1)}$, and
+% %$\bdiagcov_{\vX'\vX'}^{(1)}$; using \fref{eq:kernel-base}.
+% %\FOR{$\ell=1,2,\dots,L$}
+% %\STATE Compute $\E[\phi\phi]^{(\ell)}$, $\E[\phi\phi']^{(\ell)}$ and
+% %$\E[\phi'\phi']^{(\ell)}$ using equation (\ref{eq:nlin-relu}),
+% %(\ref{eq:nlin-erf}), or some other nonlinearity.
+% %\STATE Compute $\bdiagcov_{\vX\vX}^{(\ell+1)}$, $\bdiagcov_{\vX\vX'}^{(\ell+1)}$, and
+% %$\bdiagcov_{\vX'\vX'}^{(\ell+1)}$; using \fref{eq:kernel-recursive}.
+% %\ENDFOR
+% %\STATE Output $\diagcov_{\vX\vX'}^{(L+1)}$, which is a nonnegative scalar.
+% \State \emph{Input}: two images, $\vX,\vX' \in \mathbb{R}^{\layerC0 \times \layersize{}}$.
+% % \State Compute $K_\mu\ssup{1}(\vX, \vX)$, $K_\mu\ssup{1}(\vX, \vX')$, and
+% % $K_\mu\ssup{1}(\vX', \vX')$ \\\hspace{2em}for $\mu \in \{1,\dotsc,H\ssup{1}D\ssup{1}\}$; using Eq.~kernel-base.
+% \State Compute $K_{pp}^{(1)}(\vX, \vX)$ and $K_{pp}^{(1)}(\vX', \vX')$ for all patch locations $p$ in the input image $\vX$.
+% \State Compute $K_{pp'}^{(1)}(\vX, \vX')$ for all pairs of patch locations $p, p'$ in the input images $\vX$ and $\vX'$.
+% \For{$\ell=1,2,\dots,L$}
+% \State Compute $V_{pp'}^{(\ell)}(\vX, \vX')$ for all pairs of patch locations $p, p'$ in layer $\ell$.
+% \State Compute $K_{pp}^{(\ell)}(\vX, \vX)$ and $K_{pp}^{(1)}(\vX', \vX')$ for all patch locations $p$ in the activations of layer $\ell$.
+% \State Compute $K_{pp'}^{(\ell)}(\vX, \vX')$ for all pairs of patch locations $p, p'$ in the activations of layer $\ell$.
+% % \State Compute $V_\mu\ssup{\ell}(\vX, \vX')$, $V_\mu\ssup{\ell}(\vX, \vX')$ and
+% % $V_\mu\ssup{\ell}(\vX,\vX')$ \\\hspace{2em}for $\mu \in \{1,\dotsc,H\ssup{\ell}D\ssup{\ell}\}$; using Eq.~nlin-relu, or some other nonlinearity.
+% % \State Compute $K_\mu\ssup{\ell+1}(\vX,\vX)$, $K_\mu\ssup{\ell+1}(\vX,\vX')$, and
+% % $K_\mu\ssup{\ell+1}(\vX',\vX')$ \\\hspace{2em}for $\mu \in \{1,\dotsc,H\ssup{\ell+1}D\ssup{\ell+1}\}$; using Eq.~kernel-recursive.
+% \EndFor
+% \State Output the scalar $K_{11}\ssup{L}(\vX,\vX')$ (the only covariance left after the last layer).
+% \end{algorithmic}
+% \caption{Computation of correlated weight ConvNet kernel $k(\vX, \vX')$}
+% \label{alg:kernel}
+% \end{algorithm}
+
+\subsection{Computational Properties: convolutions double in dimensions}
+%- Independent layers -- We still need covariances :adria: what did you mean by this?
+
+% The "computational properties" section I thought was to discuss properties of the computational load of computing the kernel. E.g. needing the covariances all the way down the network, because of covariance in the top layer. And that this is computationally expensive.
+
+The core of the kernel computation for convolutional networks, whether or not they have spatial correlations, is the sum over pairs of elements of input patches $qq'$, for each pair of output locations $pp'$ in \cref{eq:kernel-recursion}. For a network that is built with convolutions of 2-dimensional inputs with 2-dimensional \emph{weights}, the sum in \ref{eq:kernel-recursion} is exactly a 4-dimensional convolution of the full second moment of the input distribution (for inputs $\vX$, the outer product), with the 4-dimensional \emph{covariance tensor} of the weights. In general, a $D$-dimensional convolution in weight space corresponds to a $2D$-dimensional convolution in covariance space, with the same strides, dilation and padding.
+
+With this framework, the expression for the covariance of the next layer when using independent weights becomes a 4-d convolution of the activations' second moment with a diagonal 4-d covariance tensor $\priorWcov{\ell}$. This is conceptually simpler, but computationally more complex, than the convolution-like sums over diagonals $pp'$ of \citet{arora2019exact}.
+
+% \subsubsection{Diagonal propagation of the covariance}
+%  Consider what is needed to compute the covariance at locationpp′in layer`,K(`)pp′(X,X′). If the202weights are independent (i.e. their covariance isΣ(`)qq′=δqq′σ2w), only the sum terms whereq=q′203are needed. If it is also the case that we only need the diagonal of the locationsK(`)pp′, for example204if the output only has one location, then we only need the diagonalK(`−1)qq′of the layer below.  If205the weight matrices of all the layers are independent, this propagates down the network until the206input, which implies that the covariance computation can be expressed as a 2-d convolution. This207was already noted by [Novak et al., 2019; Garriga-Alonso et al., 2019]
+% It is less well-known that the diagonal propagation also applies when not all the weights are independent. If we need $n$ diagonals for the covariance of layer $\ell$ (that is, $q-q'$ has $n$ possible values at $\ell$), and the weights $\layerW{\ell}$ are independent, then we only need $n$ diagonals for layer $\ell-1$, regardless of its size. This also propagates down the network, so long as the weights are independent. It also enables considerable computational savings for some architectures. For example, consider the ResNet-32 architecture \citep{he2016deep,garriga2018infiniteconv} which has mean pooling on a $8\times 8$ activation at the end. Since the reduction in size is created by convolutions with stride 2, if they have independent weights, we only need to consider an $8\times 8 \times 8 \times 8$ covariance tensor $K_{pp'}(\vX, \vX')$, as opposed to a $32 \times 32 \times 32 \times 32$, for a $256\times$ computational savings.
+
+\subsection{Implementation}
+We extend the \texttt{neural-tangents} \citep{neuraltangents2020} library with a convolution layer and a read-out layer, that admit a 4-dimensional covariance tensor for the weights. This allows interoperation with existing operators.
+% 4-dimensional convolutions are expressible in most common deep learning frameworks (Jax, Pytorch, Tensorflow). However, these libraries only implement 4-d convolutions in the CPU, because they are a very uncommon operation. We express the 4-d convolution with a size $k \times k \times k \times k$ convolutional kernel as a sum over $d$ 3-d convolutions \citep{funke4dconv}, which can be accelerated using the GPU. Because convolutional kernels are usually small ($\le 5 \times 5$), this still provides a speedup over the CPU.
+
+4d convolutions are uncommon in deep learning, so our implementation uses a sum over $d$ 3-d convolutions. While this enables GPU acceleration, computing the kernel is a computationally costly operation. Reproducing our results takes around 10 days using an nVidia RTX 2070 GPU. Access to computational resources limited our experiments to subsets of data on CIFAR-10.
+
+
+\section{Proof that a CNN with correlations in the weights converges to a GP\label{app:netsor}}
+{  % This bracket defines the scope for commands:
+  \newcommand{\Gva}{\mathsf{G}}
+  \newcommand{\Hva}{\mathsf{H}}
+  \newcommand{\Ava}{\mathsf{A}}
+  \newcommand{\MatMul}{{\texttt{MatMul} }}
+  \newcommand{\LinComb}{{\texttt{LinComb} }}
+  \newcommand{\Nonlin}{{\texttt{Nonlin} }}
+  \newcommand{\Netsor}{{\textsc{Netsor} }}
+
+
+In this section, we formally prove that a CNN with correlated weights converges
+to a Gaussian process in the limit of infinite width. Using the \Netsor
+programming language due to \citet{yang2019wide}, most of the work in the proof
+is done by
+one step: describe a CNN with correlated weights in \Netsor.
+
+For the reader's convenience, we informally recall the \Netsor programming language
+\citep{yang2019wide} and the key property of its programs (Corollary~\ref{corollary:netsor-gp}). The outline of our presentation here also closely follows
+\citet{yang2019wide}. Readers familiar with \Netsor should skip to
+\cref{sec:netsor-program}, where we show the program that proves Theorem~\ref{theorem:correlated-weights-nn}.
+
+
+We write $[n]$ to mean the set $\{1,\dots,n\}$.
+
+\subsection{The \Netsor programming language}
+There are three types of variables: $\Gva(n)$-vars, $\Ava(n_1,
+n_2)$-vars, and $\Hva(n)$-vars. Each of these have one or two
+parameters, which are the widths we will take to infinity. For a
+given index in $[n]$ (or $[n_1],[n_2]$), each of these variables is a \emph{scalar}. To
+represent vectors that do not grow to infinity, we need to use collections of variables.
+
+\begin{itemize}
+\item[$\Gva$-vars] (Gaussian-vars) are $n$-wise \emph{approximately}
+i.i.d. and Gaussian. By ``$n$-wise (approximately) independent'' we mean that there can be
+correlations between $\Gva$-vars, but only within a single index $i \in 1,\dots,n$.
+$\Gva$-vars will converge in
+distribution to an $n$-wise independent, identically distributed Gaussian in the limit of $n \to \infty$, if
+all widths are $n$.
+
+\item[$\Ava$-vars] represent matrices,
+like the weight matrices of a dense neural network. Their entries are always i.i.d.
+Gaussian with with zero mean, even for finite instantiations of the program
+(finite $n$).
+There are no correlations between different $\Ava$-vars, or elements of the same $\Ava$-var.
+
+\item[$\Hva$-vars] represent variables that become $n$-wise i.i.d. (not necessarily
+Gaussian) in the
+infinite limit. $\Gva$ is a subtype of $\Hva$, so all $\Gva$-vars are also $\Hva$-vars.
+\end{itemize}
+
+We indicate the type of a variable, or each variable in a
+collection, using ``$\text{var} : \text{Type}$''.
+
+
+\begin{definition}[Netsor program]
+A \textsc{Netsor} program consists of:
+\begin{itemize}
+  \item[\bf Input:]
+ A set of $\Gva$-vars or $\Ava$-vars.
+
+ \item[\bf Body:]
+New variables can be defined using the following rules:
+\begin{enumerate}
+  \item[\texttt{MatMul:}] $\Ava(n_1, n_2) \times \Hva(n_2) \to \Gva(n_1)$. Multiply an
+    an i.i.d. Gaussian matrix times an i.i.d. vector, which becomes a Gaussian
+    vector in the limit $n_2 \to \infty$.
+  \item[\texttt{LinComb:}] Given constants $\alpha_1,\dots,\alpha_K$, and $\Gva$-vars
+    $x_1,\dots,x_K$ of type $\Gva(n_1)$, their linear combination $\sum_{k=1}^K \alpha_k
+    x_k$ is a $\Gva$-var.
+  \item[\texttt{Nonlin:}] applying an elementwise nonlinear function $\phi : \Reals^k \to
+    \Reals$, we map
+    several $\Gva$-vars $x_1,\dots,x_K$ to one $\Hva$-var. 
+\end{enumerate}
+
+\item[\bf Output:]
+A tuple of scalars $(v_1^\tp x_1/\sqrt{n_1}, \;\dots, \; v_K^\tp
+x_K/\sqrt{n_K})$. The variables $v_k : \Gva(n)$ are input $\Gva$-vars used only
+in the output tuple of the program. It may be the case that $v_i = v_j$ for
+different $i, j$. Each $x_k : \Hva(n_k)$ is an $\Hva$-var.
+\end{itemize}
+\end{definition}
+
+\subsection{The output of a \Netsor program converges to a Gaussian process}
+\begin{definition}[Controlled function]
+  A function $\phi: \Reals^k \to \Reals$ is \emph{controlled} if
+  \[ \abs{\phi(\vx)} \le C\, \text{exp} \bra{\bracket{\|}{\|}{\vx}_2^\bra{2-\epsilon}}
+    + c \]
+  for 
+  $C,c,\epsilon > 0$, where $\|\cdot\|_2$ is the L2 norm.\end{definition}
+
+Intuitively, this means that the function $\phi$ grows
+more slowly than the rate at which the tail of a Gaussian decays. Recall that the tail of a
+mean zero, identity covariance Gaussian decays as 
+$\mathcal{N}\bra{\vx \vbar {\boldsymbol{0}}, \eye} \propto \exp\bra{-\bracket{\|}{\|}{\vx}_2^2}$.
+
+\begin{assumption}
+  All nonlinear functions $\phi(\cdot)$ in the \Netsor program are controlled.
+  \label{ass:controlled}
+\end{assumption}
+
+\begin{assumption}[Distribution of $\Ava$-var inputs]
+  Each element $W_{\chan,\prevchan} \in A^i(n, n)$ in each input $\Ava$-var is
+  sampled from the zero-mean, i.i.d. Gaussian, $W_{\chan,\prevchan} \sim \NormDist{0,
+    \sigma_\text{w}^2/n}.$
+  \label{ass:avar-inputs}
+\end{assumption}
+\begin{assumption}[Distribution of $\Gva$-var inputs]
+  Consider the input vector of all $\Gva$-vars for each channel $\chan \in [n]$,
+  that is the vector $\vz_\chan \eqdef [x_\chan : x\text{ is input
+  }\Gva\text{-var}]$. It is drawn from a Gaussian, $\vz_\chan \sim
+  \NormDist{\vmu^\text{in}, \vSigma^\text{in}}$.
+  The covariance $\vSigma^\text{in}$ may be
+  singular. The $\Gva$-vars $v$ that correspond to the output are sampled
+  independently from all other $\Gva$-vars, so they are excluded from each $\vz_\chan$
+  \label{ass:gvar-inputs}
+\end{assumption}
+
+\citet{yang2019wide} goes on to prove the \Netsor master theorem, from which
+the corollary of interest follows.
+
+\begin{corollary}[Corollary~5.5, abridged, \cite{yang2019wide}]
+  Fix a \Netsor program with controlled nonlinearities, and draw its inputs
+  according to assumptions \ref{ass:avar-inputs} and \ref{ass:gvar-inputs}. For simplicity, fix
+  the widths of all the variables to $n$. The program outputs are $(v_{1}^\tp x_1/\sqrt{n}, \;\dots, \; v_K^\tp
+  x_K/\sqrt{n})$, where
+  each $x_k$ is an $\Hva$-var, and each
+    $v_k$ is a $\Gva$-var independent from all others with variance
+    $\sigma^2_{\text{v}_k}$ (there can be some repeated indices, $v_i = v_j$).
+  Then, as $n \to \infty$, the output tuple
+  converges in distribution to a Gaussian $\NormDist{{\boldsymbol{0}}, \vK}$.
+  The value of $\vK$ is given by the recursive rules in equation~2 of \citet{yang2019wide}.
+  \label{corollary:netsor-gp}
+\end{corollary}
+
+ Informally, the rules consist of recursively calculating the covariances
+of the
+program's $\Gva$-vars and output, assuming at every step that the $\Gva$-vars are $n$-wise
+i.i.d. and Gaussian. This is the approach we employ in Section~4 %\cref{sec:correlated-weights}.
+of the main paper.
+
+\subsection{Description in \Netsor of a CNN with correlations in the weights\label{sec:netsor-program}}
+The canonical way to represent
+convolutional filters in \Netsor \citep[\Netsor program 4]{yang2019wide} is to
+use one $\Ava$-var for every spatial location
+of the weights. That is, if our convolutional patches have size $\patchw{\ell} \times \patchh{\ell}$,
+we define the input $\layerW{\ell}_\patchidx: \Ava(\layerC{\ell+1}, \layerC{\ell})$ for
+all $\patchidx \in [\patchsize{\ell}]$. But $\Ava$-vars have to be independent
+of each other, so how can we add correlation in the weights? We apply the
+correlation separately, using a \LinComb operation. For this, we will use the
+following well-known lemma, which is the $\vL\epsilon + \vmu$ expression of a
+Gaussian random variable.
+
+\begin{lemma}
+  Let $\vmu$, $\vSigma$ be an arbitrary mean vector and covariance matrix, respectively.
+  Let $u_1,\dots,u_K \sim \NormDist{0, 1}$ be a collection of i.i.d. Gaussian
+  random variables. Then, there exists a lower-triangular square matrix 
+  $\vL$ such that $\vL\vL^\tp = \vSigma$.
+  Furthermore, the random vector $\vw \in \mathbb{R}^K$, $\vw \eqdef \vL\vu + \vmu$ (equivalently, $w_k
+  = \sum_{j=1}^kL_{kj}u_j + \mu_k$ ) has a Gaussian distribution, $\vw \sim \NormDist{\vmu, \vSigma}$.
+  \label{lemma:L}
+\end{lemma}
+\begin{proof}
+  $\vSigma$ is a covariance matrix so it is positive semi-definite, thus
+  a lower-triangular square matrix $\vL$ s.t. $\vL\vL^\tp = \vSigma$ always exists. (If
+  $\vSigma$ is singular, $\vL$
+  might have zeros in the diagonal.) The vector $\vw$ is Gaussian because it is
+  a linear transformation of $\vu$. Calculating its moments finishes the proof.
+\end{proof}
+Thus, to express convolution in \Netsor with correlated weights $\vw$, we can use the
+following strategy. First, express several convolutions with uncorrelated
+weights $\vu$. Then, combine the output of the convolutions using \LinComb and coefficients of
+the matrix $\vL$.
+
+If the correlated weights have a non-zero mean, we can add an input $\Gva$-var
+with mean $\mu$ and variance 0, and use it in the \LinComb as well. Because we
+only use $\mu=0$ in the main text, we omit this step here.
+
+
+{  % program commands scope
+%   \newcommand{\Input}[1]{\State{\textbf{Input} #1}}
+%   \newcommand{\Output}[1]{\State{\textbf{Output} #1}}
+  \newcommand{\CommentC}[1]{\vspace{1ex}\State{\textit{// #1}}}
+  \newcommand{\SMatMul}[1]{{\texttt{MatMul}: #1}}
+  \newcommand{\SLinComb}[1]{{\texttt{LinComb}: #1}}
+  \newcommand{\SNonlin}[1]{{\texttt{Nonlin}: {#1}}}
+
+  \newcommand{\layerBs}[2]{B^{(#1)}_{#2}}
+  \newcommand{\layerBsp}[2]{B^{#1}_{#2}}
+  \newcommand{\layerB}[1]{\vB^{(#1)}}
+  \newcommand{\layerUs}[1]{U^{(#1)}}
+  \newcommand{\layerU}[1]{\vU^{(#1)}}
+  \newcommand{\layerAsm}[3]{Z^{\!(#1)}_{#2}\!\bra{#3}}
+  \newcommand{\layerNLAsm}[3]{A^{\!(#1)}_{#2}\!\bra{#3}}
+  \newcommand{\layerNLAsmp}[3]{A^{\!#1}_{#2}\!\bra{#3}}
+
+  \renewcommand{\layerw}[1]{P^{(#1)}}
+  \renewcommand{\layerh}[1]{Q^{(#1)}}
+  \renewcommand{\layersize}[1]{\layerw{#1}\layerh{#1}}
+  \newcommand{\priorLcov}[1]{\vL^{(#1)}}
+  \newcommand{\priorLscov}[1]{L^{(#1)}}
+
+\begin{algorithm}
+\SetKwInOut{Input}{Input}
+\SetKwInOut{Output}{Output}
+  \caption{\Netsor description of the CNN in Figure~1, with
+    correlated weights.\label{alg:correlated}}
+% \begin{algorithmic}
+  \tcc{Program for $M$ training + test points, $\vX_1,\dots,\vX_M$. The
+    activation nonlinearity is $\phi$.}
+  \tcc{$\Gva$-vars for the 1st layer pre-activations, for all spatial locations
+     $\patch$ and input points $\vX_m$.}
+  \Input{$\layerAsm{1}{\patch}{\vX_m} : \Gva(\layerC{1})$ for $\patch \in
+  \sqb{\layersize{1}}$ and $m \in [M]$.}
+  \tcc{$\Ava$-vars for the independent convolutional patches $\vU$, for
+  every location $i$ in a patch and layer $\ell$.}
+  \Input{$\layerU{\ell}_{i} : \Ava\bra{\layerC{\ell}, \layerC{\ell-1}}$
+      for $i \in [\patchsize{\ell}]$ and $\ell \in \{2\}$.}
+  \tcc{$\Gva$-vars for the output, for every location $i$}
+  \Input{$\layerU{3}_{i} : \Gva\bra{\layerC{2}}$ for $i \in [\layersize{2}]$}
+  \tcc{Construct the second layer's independent activations $\layerBsp{(2)[\patch]}{\patchidx}$,
+      for each spatial location $\patch$, location $\patchidx$  in a patch and
+      location $i$ in a patch.}
+     
+  \For{$m \in [M]$, $\patch \in \sqb{\layersize{1}}$, $\patchidx \in
+  \sqb{\patchsize{1}}$, $i \in \sqb{\patchsize{1}}$}{
+  \SNonlin{$\layerNLAsm{1}{\patch}{\vX_m} \eqdef
+  \phi(\layerAsm{1}{\patch}{\vX_m}) : \Hva(\layerC{1})$}
+  
+  \SMatMul{$\layerBsp{(2)[\patch]}{\patchidx i}(\vX_m) \eqdef
+  \layerU{2}_{i}\layerNLAsmp{(1)[\patch]}{\patchidx}{\vX_m} : \Gva(\layerC{2})$}
+}
+
+  \tcc{Correlate the activations according to $\priorWcov{2} = \priorLcov{2}\bra{\priorLcov{2}}^\tp $}
+  \For{$m \in [M]$, $\patch \in \sqb{\layersize{2}}$}{
+  \tcc{Convolution (sum in a patch, index $q$) with weights made dependent
+    with index $i$ (c.f. Lemma~\ref{lemma:L})}
+  \SLinComb{$\layerAsm{2}{\patch}{\vX_m} \eqdef
+    \sum_{\patchidx=1}^{\patchsize{1}} \sum_{i=1}^{\patchidx}
+    \priorLscov{2}_{\patchidx i} \layerBsp{(2)[\patch]}{\patchidx i}(\vX_m) : \Gva(\layerC{2})$}
+  }
+
+  \tcc{Repeat the last two for-loops as needed to create more layers}
+  \vspace{1ex}
+  \For{$m \in [M]$, $\patch \in \sqb{\layersize{2}}$}{
+  \SNonlin{$\layerNLAsm{2}{\patch}{\vX_m} \eqdef
+    \phi(\layerAsm{2}{\patch}{\vX_m}) : \Hva(\layerC{2})$}
+  }
+  \tcc{One output for every spatial location $\patch$, spatial location $i$ and data point $m$}
+  \Output{$\cb{\bra{\layerUs{3}_i}^\tp \layerNLAsm{2}{\patch}{\vX_m}/\sqrt{\layerC{2}} : \text{for
+      }\patch \in \sqb{\layersize{2}}, i \in \sqb{\layersize{2}}\text{ and }m \in [M]}$}
+  {{\bf Output postprocessing: } correlate the outputs (not strictly part
+    of \Netsor, c.f. Lemma~\ref{lemma:L})}
+  {$\cb{\layerAsm{3}{}{\vX_m} \eqdef
+    \sum_{\patch=1}^{\layersize{2}}\sum_{i=1}^\patch \bra{\layerUs{3}_i}^\tp
+    \layerNLAsm{2}{\patch}{\vX_m} : \text{ for }m \in [M]}$}
+% \end{algorithmic}
+\end{algorithm}
+
+\begin{lemma}[The convolution with $\vL$-trick is correct]
+  Consider the definitions in \cref{alg:correlated}. Define the correlated convolution
+  \[Y_{cp}^{(2)}(\vX_m) \eqdef \sum_{\gamma=1}^{\layerC{2}}
+    \sum_{q=1}^{\patchsize{2}} \layerNLAsmp{(1)[p]}{\gamma q}{\vX_m} W^{(2)}_{c\gamma q}\]
+  where $\vW^{(2)}_{c\gamma} \sim \NormDist{{\boldsymbol 0},
+    \frac{1}{\layerC{1}}\priorWcov{2}}$, for $\gamma \in [\layerC{1}]$ and $c \in [\layerC{2}]$, mirroring eqs.~(6)~and~(7) in the main text.
+  Then, conditioning on the value of
+  $\layerNLAsm{1}{\gamma\patch}{\vX_m}$ for all $\gamma \in \layerC{1}$, $\patch \in [\layersize{1}]$ and $m
+  \in [M]$, and for any widths $\layerC{1}, \layerC{2}$, the random variables $Y_{cp}^{(2)}(\vX_m)$ and $Z_{cp}^{(2)}(\vX_m)$
+  have the same distribution for all $c \in [\layerC{2}]$, $p \in
+  [\layersize{2}]$ and $m \in [M]$. 
+  \label{lemma:correlated-weights-nn}
+\end{lemma}
+(Note, we abused notation and used $c$ to index into the $\Gva$-var
+$Z_p^{(2)}(\vX_m)$, and $\gamma$ for $A_q^{(2)}(\vX_m)$.)
+\begin{proof}
+  Conditioned on $\vA^{(1)}(\vX)$, both $\vZ^{(2)}(\vX)$ and $\vY^{(2)}(\vX)$
+  are Gaussian, because they are linear combinations of Gaussians. Thus, we just
+  have to show their first two moments are equal. First, the mean.
+  $\ExpSymb\sqb{Z_{cp}^{(2)}(\vX_m)} = 0$ because each
+  $\ExpSymb\sqb{\layerU{2}_{c\gamma}} = {\boldsymbol 0}$, and
+  $\ExpSymb\sqb{Y_{cp}^{(2)}(\vX_m)} = 0$ because $\ExpSymb\sqb{\layerW{1}_{c\gamma}} = {\boldsymbol 0}$.
+
+  The covariance is more involved. First we rewrite $Z_{cp}^{(2)}(\vX_m)$ as a
+  function of $\vA^{(1)}(\vX_m)$, by substituting the definition of
+  $\layerBsp{(2)[\patch]}{\patchidx i}(\vX_m)$ into it and making the indices of
+  the \MatMul explicit
+  \begin{equation}
+    Z_{cp}^{(2)}(\vX_m) = \sum_{\patchidx=1}^{\patchsize{1}} \sum_{i=1}^{\patchidx}
+    \priorLscov{2}_{\patchidx i}  \sum_{\gamma=1}^{\layerC{1}} \layerUs{2}_{c\gamma i}
+    \layerNLAsmp{(1)[\patch]}{\gamma\patchidx}{\vX_m}
+  \end{equation}
+  Then we can write out the second moment:
+  \begin{equation}
+    \begin{aligned}
+    &\ExpSymb\sqb{Z_{cp}^{(2)}(\vX_m) Z_{c'p'}^{(2)}(\vX_{m'})} =  \\
+    &\hspace{1em} \sum_{\patchidx=1}^{\patchsize{1}} \sum_{\patchidx'=1}^{\patchsize{1}}
+                  \sum_{i=1}^{\patchidx}\sum_{i'=1}^{\patchidx'}
+                  \sum_{\gamma=1}^{\layerC{1}} \sum_{\gamma'=1}^{\layerC{1}} 
+                  \priorLscov{2}_{\patchidx i} \priorLscov{2}_{\patchidx' i'}
+                  \ExpSymb\sqb{\layerUs{2}_{c\gamma i}
+                  \layerUs{2}_{c'\gamma' i'}}
+                  \layerNLAsmp{(1)[\patch]}{\gamma\patchidx}{\vX_m}
+                  \layerNLAsmp{(1)[\patch']}{\gamma'\patchidx'}{\vX_{m'}}
+  \end{aligned}
+  \end{equation}
+  Because the $\layerU{2}_{i}$ are independent, that is
+  $ \ExpSymb\sqb{\layerUs{2}_{c\gamma i}
+    \layerUs{2}_{c'\gamma' i'}} = \delta_{cc'} \delta_{\gamma\gamma'}
+  \delta_{ii'} 1/\layerC{1}$ (assumption~\ref{ass:avar-inputs}),
+  the covariance across output channels $c, c'$ is zero if $c\neq c'$.
+  Furthermore, we can reduce some double sums to single sums:
+  \begin{align}
+    \ExpSymb\sqb{Z_{cp}^{(2)}(\vX_m) Z_{c'p'}^{(2)}(\vX_{m'})} &= \delta_{cc'}
+    \sum_{\patchidx=1}^{\patchsize{1}}
+    \sum_{\patchidx'=1}^{\patchsize{1}}
+    \frac{1}{\layerC{1}}\sum_{\gamma=1}^{\layerC{1}}
+    \sum_{i=1}^{\text{min}(\patchidx, \patchidx')}
+    \priorLscov{2}_{\patchidx i} \priorLscov{2}_{\patchidx' i'}
+    \layerNLAsmp{(1)[\patch]}{\gamma\patchidx}{\vX_m}
+    \layerNLAsmp{(1)[\patch']}{\gamma\patchidx}{\vX_{m'}} \\
+                                                              &= \delta_{cc'}\sum_{\patchidx=1}^{\patchsize{1}}
+    \sum_{\patchidx'=1}^{\patchsize{1}}
+    \frac{1}{\layerC{1}}\sum_{\gamma=1}^{\layerC{1}}
+    \priorWcovs{2}_{\patchidx \patchidx'}
+    \layerNLAsmp{(1)[\patch]}{\gamma\patchidx}{\vX_m}
+    \layerNLAsmp{(1)[\patch']}{\gamma\patchidx}{\vX_{m'}},
+  \end{align}
+  where we recognized $ \sum_{i=1}^{\text{min}(\patchidx, \patchidx')}
+  \priorLscov{2}_{\patchidx i} \priorLscov{2}_{\patchidx' i'}$ as lower-triangular matrix multiplication,
+  and recall that $\priorWcov{2} = \priorLcov{2}\bra{\priorLcov{2}}^\tp$.
+
+  The covariance $\ExpSymb\sqb{Y_{cp}^{(2)}(\vX_m)Y_{c' p'}^{(2)}(\vX_{m'})}$
+  (conditioned on $\vA^{(1)}(\vX_m)$)
+  has exactly the same expression. This can be derived in the same way as
+  equation~(8) in the main text.
+\end{proof}
+
+
+\begin{theorem}[Correlated CNN converges in distribution
+  to a GP]
+  Given a set of $M$ input points $\vX_1,\dots,\vX_M$,
+  the postprocessed output of the \Netsor program in algorithm~\ref{alg:correlated} correctly implements a
+  CNN with correlated weights and 3 layers, as described in
+  equations~(6)~and~(7) and figure~1 of the main text. Fix the widths of all channels
+  $\layerC{\ell} = n$.
+  Under assumptions~(\ref{ass:avar-inputs},\ref{ass:gvar-inputs},\ref{ass:controlled}),
+  as $n \to \infty$, the output of the correlated CNN
+  applied to the training set $\{\vX_m\}_{m=1}^M$ converges in distribution to a
+  Gaussian process with mean 0, and covariance $K^{(3)}(\vX_{m}, \vX_{m'})$
+  given by equation~(12) in appendix B.
+\label{theorem:correlated-weights-nn}
+\end{theorem}
+\begin{proof}
+We proceed in order of the claims.
+\begin{itemize}
+  \item\textbf{The program in algorithm~\ref{alg:correlated} is correct:}
+  the novel part of this program, compared to the CNNs with mean pooling of
+  \citet[appendix~B.2]{yang2019wide}, is the application of Lemma~\ref{lemma:L}
+  to correlate the convolution weights and the postprocessed output. Applying
+  Lemma~\ref{lemma:correlated-weights-nn} to both, we can see that
+  Algorithm~\ref{alg:correlated} implements a 3-layer CNN with correlated weights.
+
+  \item\textbf{The postprocessed output of the program converges to a GP} with
+      covariance in equation~(10) of the main text. Using
+      Corollary~\ref{corollary:netsor-gp}, we show the output tuple of the
+      \Netsor program in algorithm~\ref{alg:correlated} converges in
+      distribution to a GP, with mean zero and a covariance that is independent across the
+      index $i$ of the output $\Gva$-vars $U_i^{(3)}$. Using the same technique
+      as Lemma~\ref{lemma:correlated-weights-nn}, we can show that the
+      covariance of the postprocessed output $Z^{(3)}(\vX_m)$ is the correct one.
+
+      Now we need only show that the postprocessed outputs $\cb{Z^{(3)}(\vX_m)}_{m=1}^M$
+      converge to a GP in distribution. Convergence in distribution is
+      convergence of the expectation of all bounded functions. Since the
+      covariance $\priorWcov{3}$ of the last layer weights is fixed, the set of
+      bounded functions of $\cb{Z^{(3)}(\vX_m)}_{m=1}^M$ is the same as the set
+      of bounded functions of $\cb{\bra{\layerUs{3}_i}^\tp \layerNLAsm{2}{\patch}{\vX_m}/\sqrt{\layerC{2}}}_{i,m}$.
+\end{itemize}
+
+\end{proof}
+
+} % End program scope
+}% End command scope
+
+\section{Details of the expectation of the nonlinearities.}
+\label{sec:exp-nonlin}
+For details on the computation of the expectation for the second moment of 
+tanhs, see the appendix of \citep{lee2018dnnlimit}.
+
+For the balanced ReLU nonlinearity ($\phi(x) = \sqrt{2}\max(0, x)$), which we
+use in all the experiments in this paper, we can use the expression by \citet{cho2009mkm}:
+{
+\begin{equation}
+  %s_g\ssup{\ell}(\vX, \vX') = \frac{\sqrt{\diagcov_{\vX\vX}\diagcov_{\vX'\vX'}}}{\pi} \left(\sin \theta + (\pi - \theta) \cos \theta\right)
+  V_{pp'}\ssup{\ell}(\vX, \vX') = \frac{\sqrt{K_{pp}\ssup{\ell}(\vX,\vX)K_{p'p'}\ssup{\ell}(\vX',\vX')}}{\pi} \bra{\sin \theta_{pp'}\ssup{\ell} + (\pi - \theta_{pp'}\ssup{\ell}) \cos \theta_{pp'}\ssup{\ell}}
+  \label{eq:nlin-relu}
+\end{equation}
+where $\theta_{pp'}\ssup{\ell} = \cos^{-1}\left( K_{pp'}\ssup{\ell}(\vX,\vX') /
+  \sqrt{K_{pp}\ssup{\ell}(\vX,\vX)K_{p'p'}\ssup{\ell}(\vX',\vX')}\right)$.
+
+It also turns out that $V_{pp}\ssup{\ell}(\vX, \vX) = K_{pp}\ssup{\ell}(\vX,
+\vX)$ and $V_{p'p'}\ssup{\ell}(\vX', \vX') = K_{p'p'}\ssup{\ell}(\vX', \vX')$.
+}
+
+This was adopted from the start of the GP-NN literature by
+\citet{lee2018dnnlimit,matthews2018dnnlimit}. The 
+\texttt{neural-tangents} library \citep{neuraltangents2020} implements a
+numerically stable version of it.
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "supplementary_standalone"
+%%% End:
+
+
+\end{document}

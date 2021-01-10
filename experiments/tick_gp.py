@@ -9,6 +9,7 @@ from gpytorch.distributions import MultivariateNormal, MultitaskMultivariateNorm
 
 import math
 import sacred
+# This file requires the repository `nigp` at git+ssh://git@github.com/cambridge-mlg/nigp.git
 from nigp import artifacts, tbx, plot
 import nigp.variational, nigp.models
 import cnn_limits
