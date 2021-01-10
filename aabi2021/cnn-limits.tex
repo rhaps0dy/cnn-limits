@@ -315,7 +315,7 @@ convolutional neural network (CNN). We extend \citet{garriga2018infiniteconv} an
 \end{figure}
 
 \newcommand{\convpatch}[2]{{#1}^{[#2]}}
-A single-layer CNN (see \cref{fig:fancy-cnn} for a graphical representation of the notation) takes in an image input $\vX \in \Reals^{\layerC{0}\times \layersize{}}$ with width $\layerw{}$, height $\layerh{}$, and $\layerC{0}$ channels (e.g.~one per colour). The image is divided up into patches $\convpatch{\vX}{p} \in \Reals^{\layerC{0}\times\patchw{1}\patchh{1}}$, with $p$ representing a location of one of the $\layersize{}$ zero-padded patches. Weights are applied by taking an inner product with all patches, which we do $\layerC{1}$ times to give multiple channels in the next layer. By collecting all weights in the matrix $\layerW{1}\in\Reals^{\layerC1\times \layerC0\times \patchw1\patchh1}$ we can denote the computation of the pre- and post-nonlinearity activations as
+A single-layer CNN (see \cref{fig:fancy-cnn} for a graphical representation of the notation) takes in an image input $\vX \in \Reals^{\layerC{0}\times \layersize{}}$ with width $\layerw{}$, height $\layerh{}$, and $\layerC{0}$ channels (e.g.~one per colour). The image is divided up into patches $\convpatch{\vX}{p} \in \Reals^{\layerC{0}\times\patchw{1}\patchh{1}}$, with $p$ representing a location of one of the $\layersize{}$ zero-padded patches. Weights are applied by taking an inner product with all patches, which we do $\layerC{1}$ times to give multiple channels in the next layer. By collecting all weights in the tensor $\layerW{1}\in\Reals^{\layerC1\times \layerC0\times \patchw1\patchh1}$ we can denote the computation of the pre- and post-nonlinearity activations as
 \begin{align}
     \layerAs{1}{cp} = \sum_{\gamma=1}^{\layerC0}\sum_{q=1}^{\patchw0\patchh0} \convpatch{X}{p}_{\gamma q} \layerWs1_{c\gamma q} \,, && \layerNLAs{(1)}{cp} = \phi\big(\layerAs{1}{cp}\big)\,.
 \end{align}
@@ -339,7 +339,7 @@ Independence between channels makes the collection of all activations\footnote{W
     &= \sum_{c=1}^{\layerC1}\sum_{c'=1}^{\layerC1} \delta_{cc'} \Exp{\layerW1}{\layerNLAs{(1)}{cp}\layerNLAsd{(1)}{c'p'}}\frac{\priorWcovs{2}_{pp'}}{\layerC{\ell}} \nonumber \\
     &= \sum_{c=1}^{\layerC1} \Exp{\layerW1}{\layerNLAs{(1)}{cp}\layerNLAsd{(1)}{cp'}} \frac{\priorWcovs{2}_{pp'}}{\layerC{\ell}} = k^{(1)}(\vX^{[p]}, {\vX'}{}^{[p']}) \priorWcovs{2}_{pp'} \,.
 \end{align}
-The limit of the sum of the final expectation over $\layerW1$ can be found (see \cref{sec:exp-nonlin} for details) in closed form and is denoted as $k^{(1)}(\vX^{[p]}, {\vX'}{}^{[p']})$.
+The limit of the sum of the final expectation over $\layerW1$ can be found (see \cref{sec:exp-nonlin} for details) in closed form for many activations and is denoted as $k^{(1)}(\vX^{[p]}, {\vX'}{}^{[p']})$.
 We find the final kernel for the GP by taking the covariance between function values $f(\vX)$ and $f(\vX')$ and performing the final sum in \cref{eq:single-layer-f}:
 \begin{align}
     k(\vX, \vX') = \mathbb{C}\left[f(\vX), f(\vX')\right] = \sum_{pp'} k^{(1)}(\vX^{[p]}, {\vX'}{}^{[p']}) \priorWcovs{2}_{pp'} \label{eq:cov-kernel} \,.
@@ -377,12 +377,7 @@ Our construction shows that spatial correlation can be retained in infinite limi
 \section{Spatial Correlations in Deep Networks}
 In \cref{sec:correlated-weights}, we provide a detailed but informal extension of the previous section's results to deep networks. We also formulate the correlated weights prior in the framework provided by by \citet{yang2019wide}, which provides a formal justification for our results.
 
-The procedure for computing the kernel has a recursive form similar to existing analyses \citep{garriga2018infiniteconv,novak2019infiniteconv}. Negligable additional computational is needed to consider arbitrary correlations, compared to only considering mean-pooling \citep{novak2019infiniteconv,arora2019exact}. The main bottleneck is the need for computing covariances for all pairs of patches in the image, as in \cref{eq:cov-kernel}.
-
-
-
-
-
+The procedure for computing the kernel has a recursive form similar to existing analyses \citep{garriga2018infiniteconv,novak2019infiniteconv}. Negligible additional computation is needed to consider arbitrary correlations, compared to only considering mean-pooling \citep{novak2019infiniteconv,arora2019exact}. The main bottleneck is the need for computing covariances for all pairs of patches in the image, as in \cref{eq:cov-kernel}. For a $D$-dimensional convolutional layer, the corresponding kernel computation is a convolution with a $2D$-dimensional covariance tensor.
 
 
 \section{Experiments}
@@ -394,11 +389,11 @@ performs better than the existing ones?
 % \paragraph{Experimental setup}
 We evaluate various models on class-balanced subsets of CIFAR-10 of size $2^i \cdot 10$, following \citet{arora2020small}. As is
 standard practice in the wide network literature, we reframe classification as
-regression to one-hot targets. %$Y_{nk} = \indicator{t_n = k} - C$.
-We set $C=0.1$ to make the mean over the data set zero, but we observed that this affects the results very little. The test
+regression to one-hot targets $\vY$. %$Y_{nk} = \indicator{t_n = k} - C$.
+We subtract $C=0.1$ from $\vY$ to make its mean zero, but we observed that this affects the results very little. The test
 predictions are the argmax over $k$ of the posterior Gaussian process mean
-\begin{equation}f(x_*) = \vK_{x_* \vX}\bra{\sigma^2\eye + \vK_{\vX\vX}}^{-1}\vY_{[:k]}\,, \label{eq:mean-gp}\end{equation} where
-$\sigma^2$ is a hyperparameter, the variance of the observation noise of the GP regression. We perform cross-validation to find a setting for $\sigma^2$. We use an eigenvalue decomposition on $\vK_{xx}$ to avoid the need to recompute the decomposition for each value of $\sigma^2$.
+\begin{equation}f(x_*) = \vK_{x_* \vX}\bra{\sigma^2\eye + \vK_{\vX\vX}}^{-1}\vY\,, \label{eq:mean-gp}\end{equation} where
+$\sigma^2$ is a hyperparameter, the variance of the observation noise of the GP regression. We perform cross-validation to find a setting for $\sigma^2$. We use the eigendecomposition of $\vK_{xx}$ to avoid the need to recompute the inverse for each value of $\sigma^2$.
 
 % \paragraph{Implementation}
 % To calculate the least-squares regression solution, common practice is to use the Cholesky decomposition of $\bra{\sigma^2\eye + \vK_{xx}}$ and a triangular solve. Since we need to cross-validate over many settings of $\sigma$, this would be costly, as it would require recomputation.
@@ -409,12 +404,12 @@ $\sigma^2$ is a hyperparameter, the variance of the observation noise of the GP 
 
 \begin{figure}[htpb]
  \scalebox{1.0}{\input{fig/myrtle10.pgf}}
-  \caption{Cross-validation accuracy of the CNNGP-14 and Myrtle10 networks on subsets of CIFAR10, with varying lengthscale of the Matérn-$3/2$ kernel that determines the weight correlation in the last layer. With larger data set sizes $N$, the improvement is larger, and the optimal lengthscale converges to a similar value $(\approx 4)$. For all data sets except the largest, the values are averaged over several runs, and the thin lines represent the $\pm 2\sigma_n$, the estimated standard deviation of the mean. \label{ref:fig-last-layer}}
+  \caption{Cross-validation accuracy of the CNNGP-14 and Myrtle10 networks on subsets of CIFAR10, with varying lengthscale of the Matérn-$3/2$ kernel that determines the weight correlation in the last layer. With larger data set sizes $N$, the improvement is larger, and the optimal lengthscale $\lambda$ converges to a similar value $(\lambda \approx 17)$. For all data sets except the largest, the values are averaged over several runs, and the thin lines represent the $\pm 2\sigma_n$, the estimated standard deviation of the mean. We can improve the performance of the classifier by choosing an intermediate $\lambda$. \label{ref:fig-last-layer}}
 \end{figure}
 
 \begin{figure}[htpb]
   \scalebox{1.0}{\input{fig/internal_correlation.pgf}}.
-  \caption{Correlated weights in intermediate layers. We replace pooling layers in the Myrtle10 architecture with larger convolutional filters with correlated weights. The amount of correlation is varied along the x-axis. \label{ref:fig-all-layers}}
+  \caption{Correlated weights in intermediate layers. We replace pooling layers in the Myrtle10 architecture with larger convolutional filters with correlated weights. The lengthscale, and thus the amount of correlation, is varied along the x-axis. By adding correlations to a convolutional layer, we can recover the performance of the hand-selected architecture with mean-pooling. \label{ref:fig-all-layers}}
 \end{figure}
 
 
@@ -430,9 +425,9 @@ Note that $p,p'$ are 2-d vectors representing patch locations. The ``extremes'' 
 
 In figure~\ref{ref:fig-last-layer}, we investigate how the 4-fold cross-validation accuracy on data sets of size $N=2^i \cdot 10$ varies with the lengthscale $\lambda$ of the Matérn-3/2 kernel, which controls the ``amount'' of spatial correlation in the weights of the last layer. For each data point in each line, we split the data set into 4 folds, and we calculate the test accuracy on 1 fold using the other 3 as training set, for each value of $\sigma$ that we try. We take the maximum accuracy over $\sigma$.
 
-We investigate how the effect above varies with data set size. As the data set grows larger, we observe that the advantage of having a structured covariance matrix in the output becomes more apparent. We can also see the optimal lengthscale $\lambda$ converging to a similar value, of $\approx 4$, which is evidence for the hypothesis holding with more data. 
+We investigate how the effect above varies with data set size. As the data set grows larger, we observe that the advantage of having a structured covariance matrix in the output becomes more apparent. We can also see the optimal lengthscale $\lambda$  converging to a similar value, of about $\approx 17$, which is evidence for the hypothesis holding with more data. The optimal lengthscale is the same for both networks, so it may be a property of the CIFAR10 data set.
 
-The largest data set size in each part of the plot was run only once because of computational constraints. We transform one data set of size $N$ into two data sets of size $N/2$ by taking block diagonals of the stored kernel matrix, so we have more runs for the smallest sizes. This is a valid Monte-Carlo estimate of the true accuracy under the data distribution, with less variance than independent data sets, because the data sets taken are anti-correlated, since they have no points in common. We have at least 1 other independent run for the second smallest data set size.
+The largest data set size in each part of the plot was run only once because of computational constraints. We transform one data set of size $N$ into two data sets of size $N/2$ by taking block diagonals of the stored kernel matrix, so we have more runs for the smallest sizes. This is a valid Monte-Carlo estimate of the true accuracy under the data distribution, with less variance than independent data sets, because the data sets taken are anti-correlated, since they have no points in common.
 
 \subsection{Correlated weights in intermediate layers}
 We take the same approach to the experiment in figure~\ref{ref:fig-all-layers}. This time, we replace the $2\times 2$ intermediate mean-pooling layer, together with the next $3\times 3$ convolution layer, in the Myrtle10 architecture with correlated weights. We change it to a $6 \times 6$ weight-correlated matrix. We observe that when the lengthscale is 0, the performance of the network is poor, suggesting that the mean-pooling layers in Myrtle10 are necessary. Additionally, we are able to recover the performance of the hand-selected architecture by varying the lengthscale parameter.
@@ -441,7 +436,7 @@ We take the same approach to the experiment in figure~\ref{ref:fig-all-layers}. 
 \section{Conclusion}
 The disappearance of spatial correlations in infinitely wide limits of deep convolutional neural networks could be seen as another example of how Gaussian processes lose favourable properties of neural networks. While other work sought to remedy this problem by changing the architecture (mean-pooling), we showed that changing the weight prior could achieve the same effect. Our work has three main consequences:
 \begin{enumerate}
-    \item Weight correlation shows that locally connected models (without spatial correlation) and mean-pooling architectures (with spatial correlation) actually exist at ends of a spectrum. This unifies the two views in the neural network domain. We also unify to known convolutional architectures that were introduced from the Gaussian process community.
+    \item Weight correlation shows that locally connected models (without spatial correlation) and mean-pooling architectures (with spatial correlation) actually exist at ends of a spectrum. This unifies the two views in the neural network domain. We also unify two known convolutional architectures that were introduced from the Gaussian process community.
     \item We show empirically that modest performance improvements can be gained by using weight correlations \emph{between} the extremes of locally connected networks or mean-pooling. We also show that the performance of mean-pooling in intermediate layers can be matched by weight correlation.
     \item Using weight correlation may provide advantages during hyperparameter tuning. Discrete architectural choices need to be searched through simple evaluation, while continuous parameters can use gradient-based optimisation. While we have not taken advantage of this in our current work, this may be a fruitful direction for future research.
 \end{enumerate}
@@ -460,7 +455,7 @@ The disappearance of spatial correlations in infinitely wide limits of deep conv
 
 
 
-\bibliography{ref}
+\bibliography{cnn-limits}
 
 
 \appendix
@@ -591,7 +586,7 @@ With this framework, the expression for the covariance of the next layer when us
 We extend the \texttt{neural-tangents} \citep{neuraltangents2020} library with a convolution layer and a read-out layer, that admit a 4-dimensional covariance tensor for the weights. This allows interoperation with existing operators.
 % 4-dimensional convolutions are expressible in most common deep learning frameworks (Jax, Pytorch, Tensorflow). However, these libraries only implement 4-d convolutions in the CPU, because they are a very uncommon operation. We express the 4-d convolution with a size $k \times k \times k \times k$ convolutional kernel as a sum over $d$ 3-d convolutions \citep{funke4dconv}, which can be accelerated using the GPU. Because convolutional kernels are usually small ($\le 5 \times 5$), this still provides a speedup over the CPU.
 
-4d convolutions are uncommon in deep learning, so our implementation uses a sum over $d$ 3-d convolutions. While this enables GPU acceleration, computing the kernel is a computationally costly operation. Reproducing our results takes around 10 days using an nVidia RTX 2070 GPU. Access to computational resources limited our experiments to subsets of data on CIFAR-10.
+4d convolutions are uncommon in deep learning, so our implementation uses a sum over $q^{(\ell)}$ 3-d convolutions, where $q^{(\ell)}=3$ is the spatial size of the convolutional filter. While this enables GPU acceleration, computing the kernel is a costly operation. Reproducing our results takes around 10 days using an nVidia RTX 2070 GPU. Access to computational resources limited our experiments to subsets of data on CIFAR-10.
 
 
 \section{Proof that a CNN with correlations in the weights converges to a GP\label{app:netsor}}
@@ -994,7 +989,7 @@ use in all the experiments in this paper, we can use the expression by \citet{ch
 where $\theta_{pp'}\ssup{\ell} = \cos^{-1}\left( K_{pp'}\ssup{\ell}(\vX,\vX') /
   \sqrt{K_{pp}\ssup{\ell}(\vX,\vX)K_{p'p'}\ssup{\ell}(\vX',\vX')}\right)$.
 
-It also turns out that $V_{pp}\ssup{\ell}(\vX, \vX) = K_{pp}\ssup{\ell}(\vX,
+This expression implies that $V_{pp}\ssup{\ell}(\vX, \vX) = K_{pp}\ssup{\ell}(\vX,
 \vX)$ and $V_{p'p'}\ssup{\ell}(\vX', \vX') = K_{p'p'}\ssup{\ell}(\vX', \vX')$.
 }
 
