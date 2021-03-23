@@ -15,6 +15,93 @@
 \newcommand{\markcomment}[1]{\todo[color=green]{#1}}
 \newcommand{\adriacomment}[1]{\todo[color=blue]{#1}}
 
+\usepackage{lipsum} 
+\usepackage{../MarkBiblatexCmds}
+
+\begin{document}
+Thank you all for your thorough reviews. Regardless of the outcome, incorporating them makes this paper stronger.
+
+Infinitely wide limits of neural networks are investigated to determine, for example, what properties can be obtained in a shallow and wide architecture, and what properties are uniquely provided by depth.
+In this work, we investigate the disappearance of patch-induced correlations in the limit of infinitely wide CNNs.
+We contribute by:
+\vspace{-0.27cm}
+\begin{enumerate}
+    \item Showing that the loss of patch-induced correlations is \emph{not} an essential consequence of the infinite limit, and that architectural changes (e.g.~pooling) are not needed to maintain the correlations. Changing the prior suffices.
+    \vspace{-0.15cm}  %%% VSPAAAAACE
+    \item Empirically demonstrating that patch-correlations are important, and that the performance of pooling can be matched or improved by a correlated prior, in the infinite limit.
+    \vspace{-0.15cm}  %%% VSPAAAAACE
+    \item Connecting kernels obtained from limits of infinitely wide NNs to those studied in the GP community.
+\end{enumerate}
+\vspace{-1ex}
+While our argument does not require novel proof techniques, we believe it does make an important contribution to the discussion surrounding infinite limits of CNNs: the disappearance of patch-induced correlations was noted as a puzzling and undesirable occurrence by Novak et al. Our work shows that simply correlating weights in the prior avoids this occurrence, and moreover, can improve performance in the infinite limit regime.
+We believe that this raises questions about the usefulness of correlated weights in finite CNNs, but have opted to leave this line of inquiry for future work.
+We will clarify that these are our claims, and not more; since several reviewers have pointed out that we failed to convey this properly.
+
+% The disappearance of patch-induced correlations in the limit of infinitely wide CNNs has been seen as an example of a desirable property of a neural net that disappears when taking an infinite limit, and obtaining a Gaussian process.
+
+% The primary aim of this paper is to show that we can re-introduce and regulate patch-induced correlations in the GP that is the infinitely wide limit of a CNN, without architectural changes. This does not require novel proof techniques, but it does contribute to the discussion surrounding infinite limits of CNNs: the disappearance of patch-induced correlations was noted as a puzzling and undesirable occurrence, by Novak et al. We aim to show that this improves the empirical properties of algorithms for image data based on the corresponding kernel. We believe that this raises questions about the usefulness of correlated weights in finite CNNs, but have opted to leave this line of inquiry for future work.
+% We will clarify that these are our claims, and not more; since several reviewers have pointed out that we failed to convey this properly.
+
+Lines 200-201 have also been harmful to clarity. The correlated weight priors, when applied anywhere in the network, are exactly as expensive as mean pooling of the same size: both are 4D convolutions with a non-sparse 4D covariance tensor. The point made there corresponds to viewing layers with \emph{independent} weights also as 4D convolutions. Since the corresponding covariance tensors have sparse (diagonal) structure, we can (and do) convolve them more efficiently.
+
+\vspace{-1.5ex}
+\paragraph{R2:}
+%There are two reasons why the Myrtle kernel in our paper has lower performance than Shankar
+%et al [1]. First, [1] optimize the noise hyperparameter on the test set
+%(B.2,
+%\href{https://proceedings.icml.cc/book/2020/file/6950aa02ae8613af620668146dd11840-Supplemental.pdf}{supplementary material}), whereas we use a validation set. 
+
+The reason the Myrtle kernel has lower performance than in Shankar et al [1], is that when training on the small, $\le 1280$ point subsets of CIFAR-10, they use ZCA preprocessing calculated on the \emph{full}, 50k point, data set with data augmentation. This introduces information from the full data set into the classifier.
+In an email dated 24 May 2020, V. Shankar acknowledged that this is an error, both in their code and their paper. We have exactly replicated their results using their preprocessed data set, and our code. None of our included experiments preprocesses the training examples.
+
+The Figure 3 results are indeed flat. Our interpretation is that optimising the kernel lengthscale recovers (but does not improve) the performance of the hand-designed Myrtle10 (Line 261). We will add the parenthetical. % Also, see L17 of this document for a clarification of computational complexity.
+
+You are correct that Li et al. [3]'s local average pooling corresponds to Toeplitz 4D covariance tensors (though not, when flattened, Toeplitz matrices). We will acknowledge (in L143) that this interpolates between no pooling and full pooling. We chose to induce correlations with kernels because of the connection with the literature on GPs for images.
+
+The Matérn-3/2 kernel and RBF kernel both parameterise PSD matrices where the correlation smoothly decays with distance. The Matérn-3/2 kernel's functions are less smooth. The choice is heuristic and follows Dutordoir et al.
+
+%The Matérn-3/2 kernel is stationary and functions drawn from it are almost surely smooth, however, the class of functions that can be sampled from it is larger. \adriacomment{What do we say here?} We will include a brief explanation.
+$\Sigma_{{pp'}}$ should indeed be normalised. Thank you for pointing that out. We had caught it in the code, but will amend the paper to reflect this. The empirical results should be unaffected by this: multiplying all dimensions by a constant factor in eq.~11 does not change their relative ordering, and thus the models' predictive performance.
+
+Thank you for your thorough review, corrections and ``nits''. We will fix them, and the colors of Figure 3. We have cleaned up and will document the code for release.
+\vspace{-1.5ex}
+\paragraph{R3:}
+Everything in your review is technically correct. However, our paper's main contribution is not that the extension to correlated weights still induces a GP limit. Rather, it is that correlated weights preserve patch-induced correlations in the infinite limit, and this is useful as a kernel method, which we believe is nontrivial. Potentially, it is also useful for finite CNNs, but we do not investigate this. We ask you to please reconsider the paper in this light.
+
+We believe we acknowledge that Yang did most of the work for our proof in L159 (main) and L3-4 (supplement). We will strengthen
+the language there. In any case, the proof is a necessary one: readers will rightly be
+skeptical of CLT-like claims when the prior over NN weights involves correlations.
+
+\vspace{-1.5ex}
+\paragraph{R8:}
+We agree that this paper suggests that patch-induced correlation may be one of the drivers of CNN performance. We believe our kernel method is practical: see L17 in this document for the computational cost of correlated weights.
+
+\vspace{-1.5ex}
+\paragraph{R9:}
+Our proof is straightforward, but our novelty is elsewhere (c.f. R3).
+Improving the use of NN kernels as ``methods in their own right'' (Line 3) is one of our primary aims. Properly arguing that this approach is better than improving BNNs requires more empirical evidence than we have, and is a better fit for possible future work that explores the consequences of correlated weights in finite BNNs. We will point out that we take one of the two alternative paths around Line 44.
+
+Regarding notation: $P,Q$ are taken from Arora et al., 2019, but $p,q$'s use is slightly inconsistent. Thank you for the corrections, they will be incorporated.
+
+\end{document}
+=======
+\documentclass{article}
+
+\usepackage{neurips_2020_author_response}
+
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+\usepackage[colorinlistoftodos]{todonotes}
+
+\newcommand{\markcomment}[1]{\todo[color=green]{#1}}
+\newcommand{\adriacomment}[1]{\todo[color=blue]{#1}}
+
 \begin{document}
 
 
