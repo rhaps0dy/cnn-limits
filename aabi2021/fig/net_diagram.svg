@@ -639,17 +639,17 @@
      inkscape:cx="180.17387"
      inkscape:cy="60.032092"
      inkscape:document-units="px"
-     inkscape:current-layer="g5589"
+     inkscape:current-layer="layer1"
      showgrid="false"
      inkscape:snap-bbox="false"
      inkscape:snap-smooth-nodes="false"
      inkscape:object-nodes="true"
      inkscape:object-paths="false"
      inkscape:snap-nodes="true"
-     inkscape:window-width="1368"
-     inkscape:window-height="732"
-     inkscape:window-x="1922"
-     inkscape:window-y="706"
+     inkscape:window-width="1852"
+     inkscape:window-height="1035"
+     inkscape:window-x="58"
+     inkscape:window-y="0"
      inkscape:window-maximized="0"
      inkscape:snap-intersection-paths="false"
      inkscape:snap-global="true"
@@ -2211,24 +2211,24 @@
     <text
        sodipodi:linespacing="125%"
        id="text6207"
-       y="1047.527"
-       x="110.06496"
+       y="1051.527"
+       x="108.06496"
        style="font-style:normal;font-weight:normal;font-size:10px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
        xml:space="preserve"><tspan
-         y="1047.527"
-         x="110.06496"
+         y="1051.527"
+         x="108.06496"
          id="tspan6209"
          sodipodi:role="line">$\patchw{0}$</tspan></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-weight:normal;font-size:10px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
-       x="68.862175"
+       x="62.862175"
        y="1035.4038"
        id="text6211"
        sodipodi:linespacing="125%"><tspan
          sodipodi:role="line"
          id="tspan6213"
-         x="68.862175"
+         x="62.862175"
          y="1035.4038">$\patchh{0}$</tspan></text>
     <g
        id="g6045"
@@ -2986,7 +2986,7 @@
          sodipodi:role="line"
          id="tspan21070"
          x="176.59763"
-         y="946.03564">$\layerAs{1}(\vX)$</tspan></text>
+         y="946.03564">$\layerA{1}{}$</tspan></text>
     <text
        sodipodi:linespacing="125%"
        id="text21072"
@@ -2997,7 +2997,7 @@
          y="945.03564"
          x="338.84763"
          id="tspan21074"
-         sodipodi:role="line">$\layerAs{2}(\vX)$</tspan></text>
+         sodipodi:role="line">$\layerA{2}{}$</tspan></text>
     <text
        xml:space="preserve"
        style="font-style:normal;font-weight:normal;font-size:10px;line-height:125%;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
@@ -3008,7 +3008,7 @@
          sodipodi:role="line"
          id="tspan21770"
          x="463.40933"
-         y="984.63361">$\layerAs{3}(\vX)$</tspan></text>
+         y="984.63361">$\layerA{3}{}$</tspan></text>
     <text
        sodipodi:linespacing="125%"
        id="text22842"

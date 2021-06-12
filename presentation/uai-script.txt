@@ -1,0 +1,38 @@
+Hello everyone, I'm Adria and today I'll present our paper, Correlated weights in infinite limits of deep convolutional nerual netowrks.
+My collaborator is Mark van der Wilk, you can see him on the left. Check out the description below for links to the paper, references and slides.
+--
+Take a Bayesian nerual netowrk of any architecture, with an independent, zero-mean prior over the weighnts. We now know that, if you take the limit of its width to infinity, it converges in distribution to a corresponding Gaussian process, with a mean and covariance functions that depend on the architecture of the network.
+
+This was first noted by Radford Neal back in 1996, and it is what inspired the paper that made Gaussian processes popular in the machine learning community.
+--
+The great advantage of Gaussian processes is that, for regression, its posterior can be written in closed form, so it's much easier to do inference with it than with a Bayesian neural network.
+
+However, Gaussian processes have one conceptual problem:
+they do not learn features based on the data, because the kernel function completely determines the nonlinear features they use. This is in contrast to neural networks, which we believe work by extracting good features from the data.
+
+In the late 90s, it seemed that Gaussian processes were taking over: they had much better performance that the multi-layer perceptrons of the time. And still, David MacKay wondered:
+--
+Can  a Gaussian process, a simple smoothing machine, really replace a neural network?
+
+When taking the infinite limit, we lose the correlations between the hidden units of a Bayesian neural network. Have we lost something that was crucial?
+--
+Have we thrown the baby out with the bathwater? We still do not have a definitive answer. Neural networks and gaussian processes each do well in the large and small data regimes, respectively. This suggests that NNs can learn useful things from the extra data, so we do lose something; but that is inconclusive.  
+--
+In this paper, we take a look at what we lose when we take the infinite-width limit of a Bayesian convolutional neural network with an independent prior over the weights.
+
+
+At each layer, a Bayesian CNN applies the same random function to each patch of the image. Thus, its activations at different spatial points are correlated.
+
+However, its corresponding GP limit is *also* the GP limit for a neural network that applies a *different* random function to each patch. This is called a locally connected network, and that we get it was noted by Novak et al. The resulting Gaussian process has no spatial correlations.
+--
+Can we avoid throwing out the spatial correlations baby with the infinite limit bathwater?
+--
+The answer is yes: we can do it by adding spatial correlations in the prior over the weights of the CNN. Note that we do not add correlations between channels, so we still have an infinite-width GP limit, and one that does not throw away the spatial correlation between the activations.
+
+If a neural network layer has a D-dimensional convolution of weights, the way to calculate the corresponding GP kernel is to perform a 2D-dimensional convolution of covariance tensors. That is, if the neural network layer has a 2d convolution, we calculate its kernel by doing 4d convolutions.
+--
+We generalize independent weights, with identity covariance, and mean pooling,  which is equivalent to weights with all-ones covariance, and are able to interpolate between them. Our formulation also includes other GPs with convolutional structure from the literature.
+--
+Finally, we have some empirical results for CIFAR-10 classification with the correlated-weight kernels. We specify the correlation structure using a Matern kernel with some lengthscale. For each data-set size, which is increasing with the lines of darker color, we show the performance of each lengthscale from zero, i.e. independent weights, to infinity, i.e. mean-pooling. We can see that the optimum, the asterisk, is in the middle, and that it is the same for all the larger data sets.
+--
+Thank you for listening. Check out the description below for a link to the paper and the references if you're interested. If you have any questions or remarks, you can write a comment below or a tweet to us. Thank you.
