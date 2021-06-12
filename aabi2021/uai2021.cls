@@ -34,7 +34,7 @@
     }
 \DeclareBoolOption{accepted} % NOTE: shows authors/changes footer text
 \DeclareStringOption{startpage}[1] % NOTE: changes footer text
-\DeclareStringOption{mathfont}[ptmx] % NOTE: for math font selection
+\DeclareStringOption{mathfont}[cm] % NOTE: for math font selection
 \ProcessKeyvalOptions*
 
 %%% PACKAGES
@@ -87,18 +87,19 @@
 \ifthenelse{\equal{\UAI@mathfont}{newtx}}{
     \RequirePackage[tighter]{newtxtext} % TODO: add options; version
     \RequirePackage[slantedGreek]{newtxmath} % TODO: add options; version
-}{  % cm
+}{  % cm or ptmx
     \RequirePackage[T1]{fontenc}[2018/08/11]
     \RequirePackage{textcomp}[2018/08/11]
-    \ifthenelse{\equal{\UAI@mathfont}{cm}}{
-        \RequirePackage{times} % NOTE: reverts to Computer Modern math
-    }{  % ptmx (or something unkown that we replace with ptmx)
+    \ifthenelse{\equal{\UAI@mathfont}{ptmx}}{  % ptmx
         \RequirePackage{mathptmx}[2005/04/12] % NOTE: Greek has wrong size
+    }{  % cm (or something unkown that we replace with cm)
+        \RequirePackage{times} % NOTE: reverts to Computer Modern math
     }
-    \RequirePackage[scaled]{helvet}[2005/04/12] % NOTE: may give harmless
+    \RequirePackage[scaled]{helvet}[2005/04/12] % NOTE: may give harmless warnings
 }
 \RequirePackage{courier}[2005/04/12]
 %% Section styles
+\RequirePackage[overload]{textcase}
 \RequirePackage[bf,raggedright,small,pagestyles]{titlesec}[2019/10/16]
     \titleformat*{\section}{\raggedright\large\bfseries\MakeUppercase}
     \titleformat*{\subsection}{\raggedright\bfseries\MakeUppercase}
@@ -169,7 +170,7 @@
     \renewcommand{\Authands}{\leading{18pt}\hspace{1em plus 1fil}}
 %% Abstract
 \renewenvironment{abstract}{
-    \begin{adjustbox}{minipage=2.75in,center}
+    \begin{adjustbox}{minipage=\linewidth-0.5in,center}
     \centerline{\large\bfseries Abstract}
     \vspace{2\baselineskip}
 }{

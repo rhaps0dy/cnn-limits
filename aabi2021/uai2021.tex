@@ -297,7 +297,7 @@ $\nextpatch\in\countto{\layersize{\ell}}$,\footnote{For some number
   $\countto{\patchsizebase} = \countto{\patchsizebases_{1}}\times \dots \times \countto{\patchsizebases_{D}}$.}
  the patch function
 $\patchf{\nextpatch}{\cdot}: \countto{\patchsize{\ell}} \to \countto{\layersize{\ell-1}}$
-iterates over the elements of the patch \crefp{def:patchf}. Weights are applied by taking an inner product with all patches, which we do $\layerC{\ell}$ times to give multiple channels in the next layer. By collecting all weights in the tensor $\layerW{\ell}\in\sR^{\layerC{\ell}\times \layerC{\ell-1}\times \patchsize{\ell}}$ the pre- and post-nonlinearity activations are respectively, for $\ell\in\countto{L},$
+iterates over the elements of the patch \crefp{eq:little-patchf}. Weights are applied by taking an inner product with all patches, which we do $\layerC{\ell}$ times to give multiple channels in the next layer. By collecting all weights in the tensor $\layerW{\ell}\in\sR^{\layerC{\ell}\times \layerC{\ell-1}\times \patchsize{\ell}}$ the pre- and post-nonlinearity activations are respectively, for $\ell\in\countto{L},$
 \begin{equation}
     % \layerAs{1}{cp} &= \sum_{\gamma=1}^{\layerC0}\sum_{q=1}^{\patchw0\patchh0} \convpatch{X}{p}_{\gamma q} \layerWs1_{c\gamma q} \,,
     \layerAs{\ell}{\chan,\nextpatch} = \sum_{\prevchan=1}^{\layerC{\ell-1}} \sum_{\patch=\1}^{\patchsize{\ell}} \layerWs{\ell}_{\chan,\prevchan,\patch}\, \layerNLAs{\ell-1}{\prevchan,\patchf{\nextpatch}{\patch}}\,,
@@ -308,6 +308,13 @@ iterates over the elements of the patch \crefp{def:patchf}. Weights are applied 
   \label{eq:deep-activations}
 \end{equation}
 \Cref{eq:deep-recursion} is a channel-wise sum of $D$-dimensional convolutions, and $\phi$ denotes the elementwise nonlinearity.
+
+For layer $\ell\in\countto{L}$, stride $s$, dilation $h$, the patch function is $\patchf{\nextpatch}{\patch} \eqdef \bra{\patchf{\nextpatchs_{1}}{\patchs_{1}}, \dots, \patchf{\nextpatchs_{D}}{\patchs_{D}}}$, where
+\begin{equation}
+  \patchf{\nextpatchs_{d}}{\patchs_{d}} = s\nextpatchs_{d} -  h\bra{\patchs_{d} - \ceil{\patchsizebases_{d}/2}}\,.
+  \label{eq:little-patchf}
+\end{equation}
+Using \cref{eq:little-patchf}, it is possible to verify that \cref{eq:deep-recursion} is the usual deep learning convolution \crefp{app:patchf}.
 
 In a single hidden layer CNN, these activations are followed by a fully-connected layer with weights $\layerW{2} \in \sR^{\layerC 1\times \patchsize{2}}$, where $\patchsize{2} = \layersize{1}$. Our final output is again given by a summation over the activations
 \begin{align}
@@ -426,10 +433,13 @@ A Gaussian process is determined by the mean and covariance of function values f
     \layerWs{\ell}_{\chan,\prevchan,\patch}\layerNLAs{\ell-1}{\prevchan,\patchf{\nextpatch}{\patch}}\; \layerWs{\ell}_{\chan',\prevchan',\patch'}\layerNLAsd{\ell-1}{\prevchan',\patchf{\nextpatch'}{\patch'}}}\,, \nonumber \\
   \intertext{substituting the expression for the weight covariance,}
   &= \delta_{\chan,\chan'} \sum_{\patch,\patch'}
-    \Expect{\gW}{\frac{1}{\layerC{\ell-1}}\sum_{\prevchan=1}^{\layerC{\ell-1}}
+    \priorWcovs{\ell}_{\patch,\patch'}
+    \E_{\gW} \bigg[\nonumber\\
+  &\hspace{4em}
+ \frac{1}{\layerC{\ell-1}}\sum_{\prevchan=1}^{\layerC{\ell-1}}
     \layerNLAs{\ell-1}{\prevchan,\patchf{\nextpatch}{\patch}}\,
     \layerNLAsd{\ell-1}{\prevchan,\patchf{\nextpatch'}{\patch'}}
-    } \priorWcovs{\ell}_{\patch,\patch'} \nonumber \\
+    \bigg] \nonumber \\
   &= \delta_{\chan,\chan'} \covf{\ell}_{\nextpatch,\nextpatch'}\bra{\mX,\mX'}\,.\label{eq:kernel-recursion}
 \end{align}
 We can see that the covariance of activations in different channels
@@ -472,7 +482,7 @@ provides us with a recursive procedure to compute the covariances all the way up
 For the balanced ReLU nonlinearity ($\phi(x) = \sqrt{2}\max(0, x)$), which we
 use in all the experiments in this paper, we can use the expression by \citet{cho2009mkm}:
 \begin{multline}
-  F_{\phi}\bra{\Sigmax, \Sigmay, \Sigmaxy} = \\\frac{1}{\pi} \sqrt{\Sigmax\Sigmay - \Sigmaxy^{2}} + \bra{1 - \frac{1}{\pi}\cos^{-1}\bra{\frac{\Sigmaxy^{2}}{\Sigmax\Sigmay}}} \Sigmaxy.
+  F_{\phi}\bra{\Sigmax, \Sigmay, \Sigmaxy} = \frac{1}{\pi} \sqrt{\Sigmax\Sigmay - \Sigmaxy^{2}} \\+ \bra{1 - \frac{1}{\pi}\cos^{-1}\bra{\frac{\Sigmaxy^{2}}{\Sigmax\Sigmay}}} \Sigmaxy.
 \end{multline}
 
 This expression implies that
@@ -557,7 +567,7 @@ $D$-dimensional, bringing the memory and computational cost down to $O(\absshort
 We extend the \texttt{neural-tangents} \citep{neuraltangents2020} library with a convolution layer and a fully connected layer, that admit a 4-dimensional covariance tensor for the weights. This allows interoperation with existing layers.
 % 4-dimensional convolutions are expressible in most common deep learning frameworks (Jax, Pytorch, Tensorflow). However, these libraries only implement 4-d convolutions in the CPU, because they are a very uncommon operation. We express the 4-d convolution with a size $k \times k \times k \times k$ convolutional kernel as a sum over $d$ 3-d convolutions \citep{funke4dconv}, which can be accelerated using the GPU. Because convolutional kernels are usually small ($\le 5 \times 5$), this still provides a speedup over the CPU.
 
-Since 4d convolutions are uncommon in deep learning, our implementation uses a sum over $q^{(\ell)}$ 3-d convolutions, where $q^{(\ell)}=3$ is the spatial size of the convolutional filter. While this enables GPU acceleration, computing the kernel is a costly operation. Reproducing our results takes around 10 days using an nVidia RTX 2070 GPU. Access to computational resources limited our experiments to subsets of data on CIFAR-10.
+Since 4d convolutions are uncommon in deep learning, our implementation uses a sum over $\patchh{\ell}$ 3-d convolutions, where $\patchh{\ell}=3$ is the spatial height of the convolutional filter. While this enables GPU acceleration, computing the kernel is a costly operation. Reproducing our results takes around 10 days using an nVidia RTX 2070 GPU. Access to computational resources limited our experiments to subsets of data on CIFAR-10.
 
 \section{Experiments}
 By considering different amounts of correlation, we can interpolate between existing architectures that use independent weights or full mean-pooling. We consider two possible benefits of using this larger, continuously parameterised space of models:
@@ -681,12 +691,11 @@ AGA was supported by a UK Engineering and Physical Sciences Research Council stu
 \end{acknowledgements}
 
 \bibliography{cnn-limits}
-\balance
 
 \cleardoublepage
 
 \appendix % UAI wants the appendices in the same pdf
-\section{Patch functions and discrete convolutions}
+\section{Patch functions and discrete convolutions} \label{app:patchf}
 Usually, convolutions are defined explicitly by subtracting the indices of one input tensor from the other one, and not using patch functions. To make this paper clearer, it is convenient to abstract the details of a convolution, so we introduced the patch function.
 
 \begin{definition}[Discrete convolution]
@@ -868,10 +877,10 @@ as $O\bra{e^{x^{2}}}$.
 
 \begin{theorem}[\Netsor master theorem, \citealp{yang2019wide}]
   Fix any \Netsor program satisfying \cref{asm:controlled,asm:avar-inputs,asm:gvar-inputs,asm:ovar-inputs}. If $g\ssup{1},\dots,g\ssup{M}$ are all the $\Gva$-vars in the entire program, then for any controlled $\psi : \sR^{M} \to \sR$, as $n\to\infty$,
-  \begin{equation}
-    \frac{1}{n}\sum_{\chan=1}^{n} \psi\bra{g\ssup{1}_{\chan},\dots,g\ssup{M}_{\chan}} \asconverges \Expect{\vz \sim \Normal{\vm, \mK}}{\psi\bra{z\ssup{1}, \dots, z\ssup{M}}}.
+  \begin{multline}
+    \frac{1}{n}\sum_{\chan=1}^{n} \psi\bra{g\ssup{1}_{\chan},\dots,g\ssup{M}_{\chan}}\\\asconverges \Expect{\vz \sim \Normal{\vm, \mK}}{\psi\bra{z\ssup{1}, \dots, z\ssup{M}}}.
     \label{eq:strong-lln-psi}
-  \end{equation}
+  \end{multline}
   Here $\asconverges$ is almost sure convergence \citep[sec.~5.2]{probability-theory-intro}. The mean $\vm$ and covariance $\mK$ are calculated under the assumption that all the $\Gva$-vars are jointly Gaussian, like in \cref{sec:deep-correlations}.
   \label{thm:netsor-master}
 \end{theorem}
@@ -991,7 +1000,7 @@ $\gX\eqdef\sqb{\mX_{1},\dots,\mX_{M}}$.
   \SMatMul{$\Gva\bra{\layerC{\ell}}$ \newline $\mH\ssup{\ell}_{:,\vs,\patch}\bra{\mX_{m}} \eqdef \layerU{\ell}_{\vs}\layernlasm{\ell-1}{\patch}{\mX_{m}}$}
   } }
   \For{$\nextpatch=\1,\dots,\layersize{\ell}$ (spatial location $\nextpatch$)}{
-  \SLinComb{$ \Gva\bra{\layerC{\ell}}$ \newline $\layeram{\ell}{:,\nextpatch}{\mX_{m}} \eqdef
+  \SLinComb{$ \Gva\bra{\layerC{\ell}}: \layeram{\ell}{:,\nextpatch}{\mX_{m}}$ \newline $\eqdef
 \sum_{\patch=\1}^{\patchsize{\ell}} \sum_{\vs=\1}^{\patchsize{\ell}}
 R\ssup{\ell}_{\patch,\vs}\;
 \mH\ssup{\ell}_{:,\vs,\patchf{\nextpatch}{\patch}}\bra{\mX_{m}} $}
@@ -1053,12 +1062,12 @@ R\ssup{\ell}_{\patch,\vs}\;
 
   Finally, we have to show that the postprocessed output has the correct kernel.
   The output tuple and the activations have mean zero, which is correct. We thus compute the covariance of the output tuple in \cref{alg:netsor-cnn}, for $\mX,\mX' \in \tilde\gX$:
-  \begin{equation}
+  \begin{multline}
     \Cov\sqb{
       \vo_{\chan,\vs}^\tp \layernlasm{L-1}{:,\patch}{\mX},
       \vo_{\chan',\vs'}^\tp \layernlasm{L-1}{:,\patch'}{\mX'}
-    } = \delta_{\chan,\chan'} \delta_{\vs,\vs'} \nlinf{L-1}_{\patch,\patch'}\bra{\mX,\mX'}.
-  \end{equation}
+    } \\= \delta_{\chan,\chan'} \delta_{\vs,\vs'} \nlinf{L-1}_{\patch,\patch'}\bra{\mX,\mX'}.
+  \end{multline}
   The delta functions appear because the $\Ova$-vars and their elements are all independent. Using this, we can calculate the covariance function of the activations
   \begin{multline}
 \Cov\sqb{
@@ -1071,20 +1080,17 @@ R\ssup{L}_{\patch,\vs} R\ssup{L}_{\patch',\vs'}
     }.
 \end{multline}
 Substitute the value of the expectations and eliminate one of the sums due to $\delta_{\vs,\vs'}$,
-\begin{multline}
-\Cov\sqb{
-  \layerAsm{L}{\chan,\nextpatch}{\vX}, \layerAsm{L}{\chan',\nextpatch'}{\vX'}} =\\
-\delta_{\chan,\chan'} \bra{\sum_{\patch,\patch'}^{\patchsize{L}^{2}}\sum_{\vs=\1}^{\patchsize{L}}
-   R\ssup{L}_{\patch,\vs} R\ssup{L}_{\patch',\vs} \nlinf{L-1}_{\patchf{\nextpatch}{\patch},\patchf{\nextpatch'}{\patch'}}\bra{\mX,\mX'} }.
-\end{multline}
-
-Finally, noting that $\priorWcov{L}_{\patch,\patch'} = \sum_{\vs=\1}^{\patchsize{L}} R\ssup{L}_{\patch,\vs} R\ssup{L}_{\patch',\vs} $ \crefp{lemma:R}, and using the definition of $\covf{L}_{\nextpatch,\nextpatch'}\bra{\mX,\mX'}$ \eqparref{eq:cnn-kernel-recursive}, we obtain the claim.
 \begin{align}
 &\Cov\sqb{
-  \layerAsm{L}{\chan,\nextpatch}{\vX}, \layerAsm{L}{\chan',\nextpatch'}{\vX'}}\nonumber\\
-  &= \delta_{\chan,\chan'} \bra{
+  \layerAsm{L}{\chan,\nextpatch}{\vX}, \layerAsm{L}{\chan',\nextpatch'}{\vX'}} \nonumber\\
+&=\delta_{\chan,\chan'} \big(\sum_{\patch,\patch'}^{\patchsize{L}^{2}}\sum_{\vs=\1}^{\patchsize{L}}
+   R\ssup{L}_{\patch,\vs} R\ssup{L}_{\patch',\vs} \nlinf{L-1}_{\patchf{\nextpatch}{\patch},\patchf{\nextpatch'}{\patch'}}\bra{\mX,\mX'} \big).
+\intertext{
+Finally, noting that $\priorWcov{L}_{\patch,\patch'} = \sum_{\vs=\1}^{\patchsize{L}} R\ssup{L}_{\patch,\vs} R\ssup{L}_{\patch',\vs} $ \crefp{lemma:R}, and using the definition of $\covf{L}_{\nextpatch,\nextpatch'}\bra{\mX,\mX'}$ \eqparref{eq:cnn-kernel-recursive}, we obtain the claim.
+}
+  &= \delta_{\chan,\chan'} \big(
 \sum_{\patch,\patch'}^{\patchsize{L}^{2}} \priorWcov{L}_{\patch,\patch'} \nlinf{L-1}_{\patchf{\nextpatch}{\patch},\patchf{\nextpatch'}{\patch'}}\bra{\mX,\mX'}
-}  \nonumber\\
+\big)  \nonumber\\
 &= \delta_{\chan,\chan'} \covf{L}_{\nextpatch,\nextpatch'}\bra{\mX,\mX'}.
 \end{align}
 \end{proof}
