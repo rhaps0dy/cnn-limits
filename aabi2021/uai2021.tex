@@ -72,7 +72,6 @@
 
 
 \usepackage{graphicx}
-\usepackage[colorinlistoftodos]{todonotes}
 % \usepackage[colorlinks=true, allcolors=blue]{hyperref}
 % \usepackage{paralist}
 % \usepackage{listings}
@@ -225,7 +224,7 @@
 \maketitle
 
 \begin{abstract}
-Infinite width limits of deep neural networks often have tractable forms. They have been used to analyse the behaviour of finite networks, as well as being useful methods in their own right. When investigating infinitely wide CNNs, it was observed that the correlations arising from spatial weight sharing disappear in the infinite limit.
+Infinite width limits of deep neural networks often have tractable forms. They have been used to analyse the behaviour of finite networks, as well as being useful methods in their own right. When investigating infinitely wide convolutional neural networks (CNNs), it was observed that the correlations arising from spatial weight sharing disappear in the infinite limit.
 This is undesirable, as spatial correlation is the main motivation behind CNNs. We show that the loss of this property is not a consequence of the infinite limit, but rather of choosing an independent weight prior. Correlating the weights maintains the correlations in the activations. 
 Varying the amount of correlation interpolates between independent-weight limits and mean-pooling. Empirical evaluation of the infinitely wide network shows that optimal performance is achieved between the extremes, indicating that correlations can be useful.
 \end{abstract}
@@ -528,7 +527,7 @@ for all $\mX$ and $\patch$ \citep{lee2018dnnlimit,matthews2018dnnlimit}.
 
 \subsection{Computational complexity, diagonal propagation}
 To handle the covariance tensor for $\covf{\ell}\bra{\mX,\mX'}$, we need to compute and represent $\absshort{\layersize{\ell}}^{2}$ entries. This can be considerably more expensive than the forward pass of the corresponding CNN, where the activations have size $\absshort{\layersize{\ell}}$.
-In special cases, the computation or memory costs can be reduced, compared to the $2D$-dimensional convolution in \cref{eq:cnn-kernel-recursive}.
+In special cases, the computation or memory costs can be reduced, compared to the $2D$-dimensional convolution in \cref{eq:cnn-kernel-recursive}, which is a generalisation of previous algorithms.
 
 If weights are independent, only the diagonal of $\priorWcov{\ell}$ has nonzero entries, so $\priorWcovs{\ell}_{\patch,\patch'} = \delta_{\patch,\patch'}\priorWcovs{\ell}_{\patch,\patch'}$. One of the sums in the \cref{eq:cnn-kernel-recursive} can then be removed,
 \begin{equation}
