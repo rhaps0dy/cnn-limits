@@ -1,4 +1,9 @@
-* Usage of new jug code: 
+* Correlated Weights in Infinite Limits of Deep Convolutional Neural Networks
+
+Code for the UAI 2021 paper [Correlated weights in infinite limits of deep convolutional neural networks](https://proceedings.mlr.press/v161/garriga-alonso21a.html)
+
+
+** Usage of new jug code: 
  #+BEGIN_SRC sh
    # Env variables for jax
    export JAX_ENABLE_X64=True 
@@ -8,6 +13,6 @@
  #+END_SRC
 
  Sacred is just an argument parser now.
-** TODO ensure there are no problems with storing many large kernel matrices in memory
+*** TODO ensure there are no problems with storing many large kernel matrices in memory
    in particular I'm uneasy about the ~save_hdf5~ function in
    ~experiments/save_sweep.py~.
